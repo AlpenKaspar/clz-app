@@ -4,13 +4,837 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CLZ App</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f8;
+      --panel: #ffffff;
+      --line: #d9dee4;
+      --text: #17202a;
+      --muted: #66717e;
+      --accent: #0f766e;
+      --accent-soft: #dff3f0;
+      --warn: #a16207;
+      --warn-soft: #fef3c7;
+      --shadow: 0 14px 40px rgba(23, 32, 42, .08);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .92);
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar {
+      max-width: 1420px;
+      margin: 0 auto;
+      padding: 18px 24px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .field {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .field input,
+    .field select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 7px 10px;
+      background: #fff;
+      color: var(--text);
+      min-width: 150px;
+    }
+
+    .icon-button {
+      min-height: 38px;
+      border: 1px solid #0b5f58;
+      border-radius: 7px;
+      padding: 8px 13px;
+      color: white;
+      background: var(--accent);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .icon-button:disabled {
+      cursor: wait;
+      opacity: .72;
+    }
+
+    main {
+      max-width: 1420px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 22px 24px 34px;
+      display: grid;
+      grid-template-columns: 430px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .list-panel {
+      position: sticky;
+      top: 92px;
+      max-height: calc(100vh - 116px);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .panel-head {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: baseline;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .count {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .service-list {
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .service-row {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      padding: 11px 12px;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      display: grid;
+      gap: 7px;
+      color: var(--text);
+    }
+
+    .service-row:hover {
+      background: #f1f5f6;
+    }
+
+    .service-row.active {
+      border-color: #89c7c1;
+      background: var(--accent-soft);
+    }
+
+    .row-title {
+      font-weight: 760;
+      line-height: 1.25;
+    }
+
+    .row-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #eef2f5;
+      color: #40505f;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.ready {
+      color: #0b5f58;
+      background: var(--accent-soft);
+    }
+
+    .badge.missing {
+      color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .detail {
+      min-height: 520px;
+    }
+
+    .detail-empty,
+    .error-state {
+      padding: 44px 30px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .detail-top {
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 23px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .metrics {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 14px 0;
+      overflow-x: auto;
+    }
+
+    .tab {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      padding: 10px 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      padding: 18px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 8px;
+    }
+
+    .plan-item {
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr) 62px;
+      gap: 12px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      align-items: start;
+    }
+
+    .plan-item.heading {
+      background: #f3f6f7;
+      border-color: #cbd5dc;
+      font-weight: 820;
+    }
+
+    .plan-time,
+    .plan-duration {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .plan-title {
+      font-weight: 760;
+      line-height: 1.3;
+    }
+
+    .plan-song {
+      color: var(--accent);
+      font-size: 13px;
+      margin-top: 3px;
+      font-weight: 720;
+    }
+
+    .plan-description {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 5px;
+      line-height: 1.45;
+    }
+
+    .group-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .team-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 13px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .team-title {
+      font-size: 14px;
+      font-weight: 840;
+    }
+
+    .person {
+      display: grid;
+      gap: 2px;
+      padding-top: 8px;
+      border-top: 1px solid #edf0f2;
+    }
+
+    .person:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .person-name {
+      font-weight: 730;
+    }
+
+    .person-role {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .song-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .song-row {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 12px;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: baseline;
+    }
+
+    .song-row strong {
+      line-height: 1.25;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    @media (max-width: 980px) {
+      .topbar,
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: stretch;
+      }
+
+      .field,
+      .field input,
+      .field select,
+      .icon-button {
+        width: 100%;
+      }
+
+      .list-panel {
+        position: static;
+        max-height: 420px;
+      }
+
+      .plan-item {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .plan-duration {
+        grid-column: 2;
+      }
+    }
+  </style>
 </head>
 <body>
-  <main style="font-family: system-ui, -apple-system, Segoe UI, sans-serif; max-width: 720px; margin: 48px auto; padding: 0 20px;">
-    <h1>CLZ App Migration</h1>
-    <p>Das Metanet/Plesk-Grundgeruest ist bereit. Als naechstes wird das bestehende Frontend hier eingebaut und von Google Apps Script auf PHP-API umgestellt.</p>
-    <p><a href="/api/ping.php">API Ping testen</a></p>
-  </main>
+  <div class="app">
+    <header>
+      <div class="topbar">
+        <div>
+          <h1>CLZ Gottesdienste</h1>
+          <div class="subtitle" id="subtitle">Ablauf, Songs und Teams aus Elvanto</div>
+        </div>
+        <form class="toolbar" id="filters">
+          <label class="field">
+            Von
+            <input type="date" id="startDate" name="start">
+          </label>
+          <label class="field">
+            Bis
+            <input type="date" id="endDate" name="end">
+          </label>
+          <label class="field">
+            Ansicht
+            <select id="rangePreset">
+              <option value="30">30 Tage</option>
+              <option value="90" selected>90 Tage</option>
+              <option value="180">180 Tage</option>
+            </select>
+          </label>
+          <button class="icon-button" id="refreshButton" type="submit">Aktualisieren</button>
+        </form>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel list-panel" aria-label="Gottesdienste">
+        <div class="panel-head">
+          <div class="panel-title">Gottesdienste</div>
+          <div class="count" id="serviceCount">0 Eintraege</div>
+        </div>
+        <div class="service-list" id="serviceList"></div>
+      </section>
+
+      <section class="panel detail" id="detail">
+        <div class="detail-empty">Gottesdienst auswaehlen</div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      services: [],
+      selected: null,
+      detail: null,
+      tab: 'plan',
+    };
+
+    const els = {
+      filters: document.querySelector('#filters'),
+      startDate: document.querySelector('#startDate'),
+      endDate: document.querySelector('#endDate'),
+      rangePreset: document.querySelector('#rangePreset'),
+      refreshButton: document.querySelector('#refreshButton'),
+      serviceList: document.querySelector('#serviceList'),
+      serviceCount: document.querySelector('#serviceCount'),
+      detail: document.querySelector('#detail'),
+      subtitle: document.querySelector('#subtitle'),
+    };
+
+    init();
+
+    function init() {
+      const today = new Date();
+      els.startDate.value = toInputDate(today);
+      els.endDate.value = toInputDate(addDays(today, Number(els.rangePreset.value)));
+      els.rangePreset.addEventListener('change', () => {
+        els.endDate.value = toInputDate(addDays(new Date(els.startDate.value), Number(els.rangePreset.value)));
+      });
+      els.filters.addEventListener('submit', (event) => {
+        event.preventDefault();
+        loadServices();
+      });
+      loadServices();
+    }
+
+    async function loadServices() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          start: els.startDate.value,
+          end: els.endDate.value,
+        });
+        const data = await fetchJson(`/api/services.php?${params}`);
+        state.services = data.services || [];
+        state.selected = state.services[0] || null;
+        renderServices();
+        if (state.selected) {
+          await loadServiceDetail(state.selected);
+        } else {
+          renderEmpty('Keine Gottesdienste im gewaehlten Zeitraum');
+        }
+      } catch (error) {
+        renderError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function loadServiceDetail(service) {
+      state.selected = service;
+      state.detail = null;
+      renderServices();
+      renderDetailLoading(service);
+      try {
+        const params = new URLSearchParams({ elvantoId: service.elvantoId });
+        const data = await fetchJson(`/api/service-details.php?${params}`);
+        state.detail = data;
+        state.tab = 'plan';
+        renderDetail();
+      } catch (error) {
+        renderError(error.message);
+      }
+    }
+
+    function renderServices() {
+      els.serviceCount.textContent = `${state.services.length} Eintraege`;
+      els.subtitle.textContent = `${formatDate(els.startDate.value)} bis ${formatDate(els.endDate.value)}`;
+      els.serviceList.innerHTML = state.services.map((service) => {
+        const isActive = state.selected && state.selected.id === service.id;
+        const hasDetails = Boolean(service.detailsImportedAt);
+        const counts = service.counts || {};
+        return `
+          <button class="service-row ${isActive ? 'active' : ''}" data-id="${escapeAttr(service.id)}" type="button">
+            <span class="row-title">${escapeHtml(service.title)}</span>
+            <span class="row-meta">
+              <span>${formatDate(service.date)}</span>
+              <span>${escapeHtml(service.time || '')}</span>
+              <span>${escapeHtml(service.location || '')}</span>
+            </span>
+            <span class="row-meta">
+              <span class="badge ${hasDetails ? 'ready' : 'missing'}">${hasDetails ? 'Details' : 'Offen'}</span>
+              <span class="badge">${Number(counts.planItems || 0)} Ablauf</span>
+              <span class="badge">${Number(counts.volunteers || 0)} Team</span>
+            </span>
+          </button>
+        `;
+      }).join('');
+
+      els.serviceList.querySelectorAll('.service-row').forEach((button) => {
+        button.addEventListener('click', () => {
+          const service = state.services.find((item) => item.id === button.dataset.id);
+          if (service) {
+            loadServiceDetail(service);
+          }
+        });
+      });
+    }
+
+    function renderDetailLoading(service) {
+      els.detail.innerHTML = `
+        <div class="detail-top">
+          <h2 class="detail-title">${escapeHtml(service.title)}</h2>
+          <div class="row-meta">
+            <span>${formatDate(service.date)}</span>
+            <span>${escapeHtml(service.time || '')}</span>
+            <span>${escapeHtml(service.location || '')}</span>
+          </div>
+        </div>
+        <div class="detail-empty">Lade Details...</div>
+      `;
+    }
+
+    function renderDetail() {
+      const data = state.detail || {};
+      const service = data.service || {};
+      const planItems = data.planItems || [];
+      const volunteers = data.volunteers || [];
+      const songs = uniqueSongs(planItems);
+      const times = data.times || [];
+
+      if (!service.service_id && !service.serviceId) {
+        renderEmpty('Noch keine Service-Details importiert');
+        return;
+      }
+
+      els.detail.innerHTML = `
+        <div class="detail-top">
+          <h2 class="detail-title">${escapeHtml(service.title || state.selected.title)}</h2>
+          <div class="row-meta">
+            <span>${formatServiceDate(service, state.selected)}</span>
+            <span>${escapeHtml(service.location || state.selected.location || '')}</span>
+            <span>${escapeHtml(service.category || state.selected.category || '')}</span>
+          </div>
+          <div class="metrics">
+            <span class="badge ready">${times.length} Zeiten</span>
+            <span class="badge ready">${planItems.length} Ablaufpunkte</span>
+            <span class="badge ready">${songs.length} Songs</span>
+            <span class="badge ready">${volunteers.length} Team</span>
+          </div>
+        </div>
+        <div class="tabs">
+          ${renderTab('plan', 'Ablauf')}
+          ${renderTab('songs', 'Songs')}
+          ${renderTab('team', 'Team')}
+          ${renderTab('times', 'Zeiten')}
+        </div>
+        <div class="tab-content" id="tabContent"></div>
+      `;
+
+      els.detail.querySelectorAll('.tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          state.tab = tab.dataset.tab;
+          renderTabContent();
+        });
+      });
+      renderTabContent();
+    }
+
+    function renderTab(tab, label) {
+      return `<button class="tab ${state.tab === tab ? 'active' : ''}" data-tab="${tab}" type="button">${label}</button>`;
+    }
+
+    function renderTabContent() {
+      const target = els.detail.querySelector('#tabContent');
+      const data = state.detail || {};
+      if (!target) {
+        return;
+      }
+      els.detail.querySelectorAll('.tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.tab === state.tab);
+      });
+
+      if (state.tab === 'team') {
+        target.innerHTML = renderTeam(data.volunteers || []);
+      } else if (state.tab === 'songs') {
+        target.innerHTML = renderSongs(uniqueSongs(data.planItems || []));
+      } else if (state.tab === 'times') {
+        target.innerHTML = renderTimes(data.times || []);
+      } else {
+        target.innerHTML = renderPlan(data.planItems || []);
+      }
+    }
+
+    function renderPlan(items) {
+      if (!items.length) {
+        return '<div class="detail-empty">Kein Ablauf importiert</div>';
+      }
+      return `<div class="timeline">${items.map((item) => {
+        const title = item.title || '';
+        const isHeading = Number(item.duration_min || 0) === 0 && !item.song_title && !stripHtml(item.description || '');
+        return `
+          <article class="plan-item ${isHeading ? 'heading' : ''}">
+            <div class="plan-time">${item.starts_at ? formatTime(item.starts_at) : ''}</div>
+            <div>
+              <div class="plan-title">${escapeHtml(title)}</div>
+              ${item.song_title ? `<div class="plan-song">${escapeHtml(item.song_title)}</div>` : ''}
+              ${item.description ? `<div class="plan-description">${escapeHtml(stripHtml(item.description))}</div>` : ''}
+            </div>
+            <div class="plan-duration">${item.duration_min ? `${Number(item.duration_min)} min` : ''}</div>
+          </article>
+        `;
+      }).join('')}</div>`;
+    }
+
+    function renderSongs(songs) {
+      if (!songs.length) {
+        return '<div class="detail-empty">Keine Songs im Ablauf</div>';
+      }
+      return `<div class="song-list">${songs.map((song) => `
+        <div class="song-row">
+          <strong>${escapeHtml(song.title)}</strong>
+          <span class="muted">${song.count > 1 ? `${song.count}x` : ''}</span>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function renderTeam(volunteers) {
+      if (!volunteers.length) {
+        return '<div class="detail-empty">Kein Team importiert</div>';
+      }
+      const grouped = groupBy(volunteers, (item) => item.team || 'Ohne Team');
+      return `<div class="group-grid">${Object.entries(grouped).map(([team, people]) => `
+        <section class="team-card">
+          <div class="team-title">${escapeHtml(team)}</div>
+          ${people.map((person) => `
+            <div class="person">
+              <div class="person-name">${escapeHtml(person.display_name || 'Unbenannt')}</div>
+              <div class="person-role">${escapeHtml([person.role, person.status].filter(Boolean).join(' - '))}</div>
+            </div>
+          `).join('')}
+        </section>
+      `).join('')}</div>`;
+    }
+
+    function renderTimes(times) {
+      if (!times.length) {
+        return '<div class="detail-empty">Keine Zeiten importiert</div>';
+      }
+      return `<div class="song-list">${times.map((time) => `
+        <div class="song-row">
+          <strong>${escapeHtml(time.label || 'Zeit')}</strong>
+          <span class="muted">${formatDateTime(time.starts_at)}${time.ends_at ? ` bis ${formatDateTime(time.ends_at)}` : ''}</span>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function renderEmpty(message) {
+      els.detail.innerHTML = `<div class="detail-empty">${escapeHtml(message)}</div>`;
+    }
+
+    function renderError(message) {
+      els.detail.innerHTML = `<div class="error-state">${escapeHtml(message || 'Fehler beim Laden')}</div>`;
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      return data;
+    }
+
+    function setLoading(isLoading) {
+      els.refreshButton.disabled = isLoading;
+      els.refreshButton.textContent = isLoading ? 'Laedt...' : 'Aktualisieren';
+    }
+
+    function uniqueSongs(items) {
+      const map = new Map();
+      items.forEach((item) => {
+        const title = item.song_title || '';
+        if (!title) {
+          return;
+        }
+        const current = map.get(title) || { title, count: 0 };
+        current.count += 1;
+        map.set(title, current);
+      });
+      return Array.from(map.values());
+    }
+
+    function groupBy(items, getKey) {
+      return items.reduce((acc, item) => {
+        const key = getKey(item);
+        acc[key] = acc[key] || [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+    }
+
+    function stripHtml(value) {
+      const doc = new DOMParser().parseFromString(String(value), 'text/html');
+      return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function formatServiceDate(service, fallback) {
+      const date = service.service_start ? service.service_start.slice(0, 10) : fallback.date;
+      const time = service.service_start ? service.service_start.slice(11, 16) : fallback.time;
+      return [formatDate(date), time].filter(Boolean).join(' ');
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return '';
+      }
+      return new Intl.DateTimeFormat('de-CH', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(new Date(`${value}T12:00:00`));
+    }
+
+    function formatTime(value) {
+      return String(value).slice(11, 16);
+    }
+
+    function formatDateTime(value) {
+      if (!value) {
+        return '';
+      }
+      return `${formatDate(String(value).slice(0, 10))} ${String(value).slice(11, 16)}`;
+    }
+
+    function toInputDate(date) {
+      return date.toISOString().slice(0, 10);
+    }
+
+    function addDays(date, days) {
+      const copy = new Date(date);
+      copy.setDate(copy.getDate() + days);
+      return copy;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      })[char]);
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#096;');
+    }
+  </script>
 </body>
 </html>
-
