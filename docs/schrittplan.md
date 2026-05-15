@@ -53,6 +53,8 @@ Ergebnis: Das Frontend kann ohne Google Apps Script arbeiten.
    - `<?!= include('Body'); ?>`
 3. `withGsRetry(...)` so umbauen, dass es `fetch(...)` nutzt.
 4. API-Antworten kompatibel halten, damit moeglichst wenig UI-Code geaendert werden muss.
+   - Direkte PHP-Endpunkte dort nutzen, wo die Antwort bereits passt.
+   - `/api/rpc.php` als temporaeren PHP-Router fuer alte Funktionsnamen nutzen, nicht als Google-Script-Bridge.
 5. PWA-Manifest und Service Worker optional nachziehen.
 
 Ergebnis: Browser laedt die App direkt von Metanet.
@@ -92,4 +94,3 @@ Ergebnis: Die App laeuft produktiv.
 7. Mobile PWA auf iPhone/Android testen.
 
 Ergebnis: Google Apps Script kann abgeloest werden.
-

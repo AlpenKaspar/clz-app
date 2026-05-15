@@ -7136,51 +7136,6 @@
   </div>
 
 </div>
-
-
-    <script>
-      window.google = window.google || {};
-      window.google.script = window.google.script || {};
-      const googleScriptRunTarget = {
-        _success: null,
-        _failure: null,
-        withSuccessHandler(fn) { this._success = fn; return window.google.script.run; },
-        withFailureHandler(fn) { this._failure = fn; return window.google.script.run; }
-      };
-      window.google.script.run = new Proxy(googleScriptRunTarget, {
-        get(target, prop) {
-          if (prop in target) {
-            const value = target[prop];
-            return typeof value === 'function' ? value.bind(target) : value;
-          }
-          return (...args) => {
-            const success = target._success;
-            const failure = target._failure;
-            target._success = null;
-            target._failure = null;
-            fetch('/api/legacy.php', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify({ fn: String(prop), args })
-            })
-              .then(async (response) => {
-                const data = await response.json().catch(() => ({}));
-                if (response.status === 401) {
-                  window.location.href = '/api/auth/google-start.php';
-                  throw new Error('Bitte anmelden.');
-                }
-                if (!response.ok || data.ok === false) {
-                  throw new Error(data.error || data.detail || ('HTTP ' + response.status));
-                }
-                return data;
-              })
-              .then((data) => { if (typeof success === 'function') success(data); })
-              .catch((error) => { if (typeof failure === 'function') failure(error); else console.error(error); });
-          };
-        }
-      });
-    </script>
-
     <script>
       let currentTab = 'contacts';
       let currentData = null;
@@ -7623,41 +7578,57 @@
         "LEITUNG": "fa-user-tie"
       };
 
-      function withGsRetry(fnName, args = [], options = {}) {
+      async function withGsRetry(fnName, args = [], options = {}) {
         const retries = Number.isFinite(options.retries) ? options.retries : 2;
         const retryDelay = Number.isFinite(options.retryDelay) ? options.retryDelay : 700;
+        const direct = {
+          app_ping: '/api/ping.php',
+          app_bootstrap: '/api/bootstrap.php',
+          app_loadContactsLite: '/api/rpc.php',
+          app_loadFilterDefs: '/api/rpc.php',
+          app_loadDashboardStats: '/api/rpc.php',
+          app_loadSongsLite: '/api/rpc.php',
+          app_getUserAccessLight: '/api/rpc.php',
+          getCalendarEventsRange: '/api/rpc.php',
+          kalenderUi_getServiceDetails: '/api/rpc.php',
+          kalenderUi_getServiceOverview: '/api/rpc.php',
+          kalenderUi_getServiceStaff: '/api/rpc.php',
+          kalenderUi_getServiceFlow: '/api/rpc.php',
+          kalenderUi_refreshServiceDetails: '/api/rpc.php',
+          personenUi_getMainDetails: '/api/rpc.php',
+          personenUi_getExtraDetails: '/api/rpc.php',
+          personenUi_getFullDetails: '/api/rpc.php',
+          personenUi_getFamily: '/api/rpc.php',
+          personenUi_getGroupByName: '/api/rpc.php',
+          personenUi_extendedSearch: '/api/rpc.php'
+        };
 
-        return new Promise((resolve, reject) => {
-          let attempt = 0;
-
-          function run() {
-            attempt++;
-
-            let runner = google.script.run
-              .withSuccessHandler(resolve)
-              .withFailureHandler(err => {
-                const msg = String(err?.message || err || "");
-                const retryable =
-                  /networkerror/i.test(msg) ||
-                  /http 0/i.test(msg) ||
-                  /verbindungsfehler/i.test(msg) ||
-                  /failed to fetch/i.test(msg) ||
-                  /script error/i.test(msg);
-
-                if (retryable && attempt <= retries + 1) {
-                  setTimeout(run, retryDelay * attempt);
-                  return;
-                }
-                reject(err);
-              });
-
-            runner[fnName].apply(runner, args);
+        for (let attempt = 1; attempt <= retries + 1; attempt++) {
+          try {
+            const url = direct[fnName] || '/api/rpc.php';
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ fn: fnName, args })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.status === 401) {
+              window.location.href = '/api/auth/google-start.php';
+              throw new Error('Bitte anmelden.');
+            }
+            if (!response.ok || data?.ok === false) {
+              throw new Error(data?.error || data?.detail || ('HTTP ' + response.status));
+            }
+            return data;
+          } catch (err) {
+            const msg = String(err?.message || err || '');
+            const retryable = /networkerror|http 0|verbindungsfehler|failed to fetch|api fehler/i.test(msg);
+            if (!retryable || attempt > retries) throw err;
+            await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
           }
-
-          run();
-        });
+        }
       }
-
       function toast(msg, ms = 1800) {
         const el = document.getElementById("toast");
         if (!el) return;

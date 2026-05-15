@@ -30,7 +30,7 @@ Diese Dienste gibt es auf Metanet/Plesk nicht. Deshalb wird die App portiert:
 - `PropertiesService` -> `.env` plus Tabelle `app_settings`
 - `LockService` -> DB-Locks
 - `Session.getActiveUser()` -> eigenes Login
-- `google.script.run` -> `fetch('/api/...')`
+- `google.script.run` -> `fetch('/api/...')`; alte Frontend-Funktionsnamen duerfen nur als PHP-RPC-Router weiterleben.
 
 ## Ordner
 

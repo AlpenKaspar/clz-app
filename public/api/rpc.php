@@ -10,37 +10,37 @@ try {
     $fn = trim((string) ($body['fn'] ?? ''));
     $args = is_array($body['args'] ?? null) ? $body['args'] : [];
 
-    json_response(legacy_dispatch($fn, $args, $user));
+    json_response(rpc_dispatch($fn, $args, $user));
 } catch (Throwable $e) {
-    json_error('Legacy API Fehler.', 500, [
+    json_error('API Fehler.', 500, [
         'detail' => env('APP_DEBUG', '0') === '1' ? $e->getMessage() : null,
     ]);
 }
 
-function legacy_dispatch(string $fn, array $args, array $user): array
+function rpc_dispatch(string $fn, array $args, array $user): array
 {
     return match ($fn) {
-        'app_ping' => legacy_ping(),
-        'app_bootstrap' => legacy_bootstrap($user),
-        'app_getUserAccessLight' => ['ok' => true, 'user' => $user, 'permissions' => legacy_permissions()],
-        'app_loadContactsLite' => legacy_contacts_lite(),
-        'personenUi_getMainDetails' => legacy_person_main((string) ($args[0] ?? '')),
-        'personenUi_getFullDetails' => legacy_person_full((string) ($args[0] ?? '')),
-        'personenUi_getExtraDetails' => legacy_person_extra((string) ($args[0] ?? '')),
-        'personenUi_extendedSearch' => legacy_extended_search((string) ($args[0] ?? '')),
-        'personenUi_getFamily' => legacy_family((string) ($args[0] ?? '')),
-        'personenUi_getGroupByName' => legacy_group((string) ($args[0] ?? '')),
-        'getCalendarEventsRange' => legacy_calendar((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
-        'kalenderUi_getServiceOverview' => legacy_service_overview($args[0] ?? []),
-        'kalenderUi_getServiceStaff' => legacy_service_staff($args[0] ?? []),
-        'kalenderUi_getServiceFlow' => legacy_service_flow($args[0] ?? []),
-        'kalenderUi_getServiceDetails', 'kalenderUi_refreshServiceDetails' => legacy_service_details($args[0] ?? []),
+        'app_ping' => rpc_ping(),
+        'app_bootstrap' => rpc_bootstrap($user),
+        'app_getUserAccessLight' => ['ok' => true, 'user' => $user, 'permissions' => rpc_permissions()],
+        'app_loadContactsLite' => rpc_contacts_lite(),
+        'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? '')),
+        'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? '')),
+        'personenUi_getExtraDetails' => rpc_person_extra((string) ($args[0] ?? '')),
+        'personenUi_extendedSearch' => rpc_extended_search((string) ($args[0] ?? '')),
+        'personenUi_getFamily' => rpc_family((string) ($args[0] ?? '')),
+        'personenUi_getGroupByName' => rpc_group((string) ($args[0] ?? '')),
+        'getCalendarEventsRange' => rpc_calendar((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
+        'kalenderUi_getServiceOverview' => rpc_service_overview($args[0] ?? []),
+        'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
+        'kalenderUi_getServiceFlow' => rpc_service_flow($args[0] ?? []),
+        'kalenderUi_getServiceDetails', 'kalenderUi_refreshServiceDetails' => rpc_service_details($args[0] ?? []),
         'kalenderUi_getPersonServiceAssignments' => ['ok' => true, 'serviceIds' => [], 'count' => 0],
-        'app_loadSongsLite' => legacy_songs_lite(),
-        'app_loadFilterDefs' => ['ok' => true, 'filters' => legacy_contact_filters(), 'dataVersion' => legacy_data_version()],
-        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => legacy_dashboard(), 'dataVersion' => legacy_data_version()],
-        'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => legacy_import_runs()],
-        'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => legacy_data_version()],
+        'app_loadSongsLite' => rpc_songs_lite(),
+        'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
+        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
+        'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => rpc_import_runs()],
+        'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => rpc_data_version()],
         'tools_loadUserSmartFilters' => ['ok' => true, 'filters' => []],
         'tools_saveUserSmartFilters' => ['ok' => true],
         'tools_importKalender', 'tools_importPersonen' => ['ok' => false, 'error' => 'Import bitte ueber Admin-Endpunkte starten.'],
@@ -56,33 +56,33 @@ function legacy_dispatch(string $fn, array $args, array $user): array
     };
 }
 
-function legacy_ping(): array
+function rpc_ping(): array
 {
     return [
         'ok' => true,
         'ts' => date('c'),
-        'dataVersion' => legacy_data_version(),
+        'dataVersion' => rpc_data_version(),
     ];
 }
 
-function legacy_bootstrap(array $user): array
+function rpc_bootstrap(array $user): array
 {
     return [
         'ok' => true,
         'ts' => date('c'),
-        'dataVersion' => legacy_data_version(),
+        'dataVersion' => rpc_data_version(),
         'user' => [
             'email' => $user['email'] ?? '',
             'role' => $user['role'] ?? 'member',
-            'permissions' => legacy_permissions(),
+            'permissions' => rpc_permissions(),
         ],
         'cache' => [],
-        'filters' => legacy_contact_filters(),
-        'dashboard' => legacy_dashboard(),
+        'filters' => rpc_contact_filters(),
+        'dashboard' => rpc_dashboard(),
     ];
 }
 
-function legacy_permissions(): array
+function rpc_permissions(): array
 {
     return [
         'tabs' => [
@@ -104,7 +104,7 @@ function legacy_permissions(): array
     ];
 }
 
-function legacy_data_version(): string
+function rpc_data_version(): string
 {
     static $version = null;
     if ($version !== null) {
@@ -126,7 +126,7 @@ function legacy_data_version(): string
     return $version;
 }
 
-function legacy_contacts_lite(): array
+function rpc_contacts_lite(): array
 {
     $stmt = db()->query(
         "SELECT id, firstname, preferred_name, lastname, display_name, email, phone, mobile,
@@ -137,49 +137,49 @@ function legacy_contacts_lite(): array
 
     $contacts = [];
     foreach ($stmt as $row) {
-        $contacts[] = legacy_contact_row($row);
+        $contacts[] = rpc_contact_row($row);
     }
 
     return [
         'ok' => true,
         'ts' => date('c'),
-        'dataVersion' => legacy_data_version(),
+        'dataVersion' => rpc_data_version(),
         'contacts' => $contacts,
     ];
 }
 
-function legacy_contact_row(array $row): array
+function rpc_contact_row(array $row): array
 {
-    $first = legacy_str($row['firstname'] ?? '');
-    $preferred = legacy_str($row['preferred_name'] ?? '');
-    $last = legacy_str($row['lastname'] ?? '');
-    $display = legacy_str($row['display_name'] ?? '') ?: trim(($preferred ?: $first) . ' ' . $last);
-    $cityLine = trim(legacy_str($row['home_postcode'] ?? '') . ' ' . legacy_str($row['home_city'] ?? ''));
-    $category = legacy_str($row['category_name'] ?? '');
-    $birthday = legacy_str($row['birthday'] ?? '');
-    $age = legacy_age($birthday);
+    $first = rpc_str($row['firstname'] ?? '');
+    $preferred = rpc_str($row['preferred_name'] ?? '');
+    $last = rpc_str($row['lastname'] ?? '');
+    $display = rpc_str($row['display_name'] ?? '') ?: trim(($preferred ?: $first) . ' ' . $last);
+    $cityLine = trim(rpc_str($row['home_postcode'] ?? '') . ' ' . rpc_str($row['home_city'] ?? ''));
+    $category = rpc_str($row['category_name'] ?? '');
+    $birthday = rpc_str($row['birthday'] ?? '');
+    $age = rpc_age($birthday);
 
     return [
-        'id' => legacy_str($row['id'] ?? ''),
+        'id' => rpc_str($row['id'] ?? ''),
         'displayName' => $display,
         'listDisplayName' => $display,
         'firstName' => $first,
         'preferredName' => $preferred,
         'lastName' => $last,
-        'email' => legacy_str($row['email'] ?? ''),
-        'phone' => legacy_str($row['phone'] ?? ''),
-        'mobile' => legacy_str($row['mobile'] ?? ''),
+        'email' => rpc_str($row['email'] ?? ''),
+        'phone' => rpc_str($row['phone'] ?? ''),
+        'mobile' => rpc_str($row['mobile'] ?? ''),
         'category' => $category,
-        'familyId' => legacy_str($row['family_id'] ?? ''),
-        'gender' => legacy_str($row['gender'] ?? ''),
+        'familyId' => rpc_str($row['family_id'] ?? ''),
+        'gender' => rpc_str($row['gender'] ?? ''),
         'birthday' => $birthday,
         'age' => $age,
         'isChild' => $age !== null && $age < 16,
         'isFamilyMain' => true,
-        'pictureUrl' => legacy_str($row['picture_url'] ?? ''),
-        'address' => legacy_str($row['home_address'] ?? ''),
-        'city' => legacy_str($row['home_city'] ?? ''),
-        'postcode' => legacy_str($row['home_postcode'] ?? ''),
+        'pictureUrl' => rpc_str($row['picture_url'] ?? ''),
+        'address' => rpc_str($row['home_address'] ?? ''),
+        'city' => rpc_str($row['home_city'] ?? ''),
+        'postcode' => rpc_str($row['home_postcode'] ?? ''),
         'sub' => implode(' - ', array_values(array_filter([$category, $cityLine]))),
         'searchText' => strtolower($display . ' ' . $first . ' ' . $preferred . ' ' . $last . ' ' . $category . ' ' . $cityLine),
         'kgGroupValues' => [],
@@ -188,32 +188,32 @@ function legacy_contact_row(array $row): array
     ];
 }
 
-function legacy_person_full(string $personId): array
+function rpc_person_full(string $personId): array
 {
     return [
         'ok' => true,
-        'main' => legacy_person_main($personId),
-        'extra' => legacy_person_extra($personId),
+        'main' => rpc_person_main($personId),
+        'extra' => rpc_person_extra($personId),
         'family' => null,
     ];
 }
 
-function legacy_person_main(string $personId): array
+function rpc_person_main(string $personId): array
 {
-    $row = legacy_fetch_person($personId);
+    $row = rpc_fetch_person($personId);
     if (!$row) {
         return ['displayName' => '', 'details' => [], 'meta' => ['personId' => $personId], 'previewOnly' => true];
     }
 
-    $lite = legacy_contact_row($row);
+    $lite = rpc_contact_row($row);
     $details = [
-        legacy_detail('Kategorie', $lite['category']),
-        legacy_detail('E-Mail', $lite['email'], 'email', $lite['email'] ? 'mailto:' . $lite['email'] : ''),
-        legacy_detail('Telefon', $lite['phone'], 'phone', $lite['phone'] ? 'tel:' . $lite['phone'] : ''),
-        legacy_detail('Mobile', $lite['mobile'], 'phone', $lite['mobile'] ? 'tel:' . $lite['mobile'] : ''),
-        legacy_detail('Adresse', trim($lite['address'] . ', ' . $lite['postcode'] . ' ' . $lite['city']), 'address'),
-        legacy_detail('Geburtsdatum', $lite['birthday']),
-        legacy_detail('Picture', $lite['pictureUrl']),
+        rpc_detail('Kategorie', $lite['category']),
+        rpc_detail('E-Mail', $lite['email'], 'email', $lite['email'] ? 'mailto:' . $lite['email'] : ''),
+        rpc_detail('Telefon', $lite['phone'], 'phone', $lite['phone'] ? 'tel:' . $lite['phone'] : ''),
+        rpc_detail('Mobile', $lite['mobile'], 'phone', $lite['mobile'] ? 'tel:' . $lite['mobile'] : ''),
+        rpc_detail('Adresse', trim($lite['address'] . ', ' . $lite['postcode'] . ' ' . $lite['city']), 'address'),
+        rpc_detail('Geburtsdatum', $lite['birthday']),
+        rpc_detail('Picture', $lite['pictureUrl']),
     ];
 
     return [
@@ -227,9 +227,9 @@ function legacy_person_main(string $personId): array
     ];
 }
 
-function legacy_person_extra(string $personId): array
+function rpc_person_extra(string $personId): array
 {
-    $row = legacy_fetch_person($personId);
+    $row = rpc_fetch_person($personId);
     if (!$row) {
         return [];
     }
@@ -241,15 +241,15 @@ function legacy_person_extra(string $personId): array
 
     $extra = [];
     foreach ($custom as $field) {
-        $value = legacy_str($field['field_value'] ?? '');
+        $value = rpc_str($field['field_value'] ?? '');
         if ($value !== '') {
-            $extra[] = legacy_detail(legacy_str($field['field_name'] ?? ''), $value);
+            $extra[] = rpc_detail(rpc_str($field['field_name'] ?? ''), $value);
         }
     }
     return $extra;
 }
 
-function legacy_fetch_person(string $personId): ?array
+function rpc_fetch_person(string $personId): ?array
 {
     $stmt = db()->prepare('SELECT * FROM people WHERE id = ?');
     $stmt->execute([$personId]);
@@ -257,7 +257,7 @@ function legacy_fetch_person(string $personId): ?array
     return is_array($row) ? $row : null;
 }
 
-function legacy_detail(string $label, string $value, string $type = '', string $href = ''): array
+function rpc_detail(string $label, string $value, string $type = '', string $href = ''): array
 {
     return [
         'label' => $label,
@@ -267,9 +267,9 @@ function legacy_detail(string $label, string $value, string $type = '', string $
     ];
 }
 
-function legacy_extended_search(string $query): array
+function rpc_extended_search(string $query): array
 {
-    $contacts = legacy_contacts_lite()['contacts'];
+    $contacts = rpc_contacts_lite()['contacts'];
     $needle = strtolower(trim($query));
     if ($needle !== '') {
         $contacts = array_values(array_filter($contacts, static fn(array $row): bool => str_contains($row['searchText'] ?? '', $needle)));
@@ -277,17 +277,17 @@ function legacy_extended_search(string $query): array
     return ['ok' => true, 'contacts' => array_slice($contacts, 0, 200)];
 }
 
-function legacy_family(string $familyId): array
+function rpc_family(string $familyId): array
 {
     return ['ok' => true, 'familyId' => $familyId, 'adults' => [], 'kids' => [], 'others' => []];
 }
 
-function legacy_group(string $groupName): array
+function rpc_group(string $groupName): array
 {
     return ['ok' => true, 'name' => $groupName, 'leaders' => [], 'assistants' => [], 'members' => []];
 }
 
-function legacy_calendar(string $startIso, string $endIso): array
+function rpc_calendar(string $startIso, string $endIso): array
 {
     $start = $startIso !== '' ? $startIso : (new DateTimeImmutable('today'))->format('Y-m-d');
     $end = $endIso !== '' ? $endIso : (new DateTimeImmutable($start))->modify('+60 days')->format('Y-m-d');
@@ -300,7 +300,7 @@ function legacy_calendar(string $startIso, string $endIso): array
 
     $events = [];
     foreach ($stmt as $row) {
-        $events[] = legacy_calendar_event($row);
+        $events[] = rpc_calendar_event($row);
     }
     $categories = array_values(array_unique(array_filter(array_map(static fn(array $row): string => $row['Kategorie'] ?? '', $events))));
     sort($categories);
@@ -308,22 +308,22 @@ function legacy_calendar(string $startIso, string $endIso): array
     return ['ok' => true, 'events' => $events, 'categories' => $categories];
 }
 
-function legacy_calendar_event(array $row): array
+function rpc_calendar_event(array $row): array
 {
-    $id = legacy_str($row['elvanto_id'] ?? '');
+    $id = rpc_str($row['elvanto_id'] ?? '');
     $serviceId = str_starts_with($id, 'SERVICE-') ? substr($id, 8) : '';
     return [
-        'id' => 'evt_' . legacy_str($row['id'] ?? ''),
-        'Bezeichnung' => legacy_str($row['title'] ?? ''),
-        'StartDatum' => legacy_ui_date($row['start_date'] ?? ''),
-        'EndDatum' => legacy_ui_date($row['end_date'] ?? ($row['start_date'] ?? '')),
-        'StartZeit' => legacy_time($row['start_time'] ?? ''),
-        'EndZeit' => legacy_time($row['end_time'] ?? ''),
-        'Kategorie' => legacy_str($row['category'] ?? ''),
-        'Ort' => legacy_str($row['location'] ?? ''),
-        'Details' => legacy_str($row['details'] ?? ''),
-        'Ressourcen' => legacy_str($row['resources'] ?? ''),
-        'displayColor' => legacy_str($row['category_color'] ?? '') ?: '#cbd5e1',
+        'id' => 'evt_' . rpc_str($row['id'] ?? ''),
+        'Bezeichnung' => rpc_str($row['title'] ?? ''),
+        'StartDatum' => rpc_ui_date($row['start_date'] ?? ''),
+        'EndDatum' => rpc_ui_date($row['end_date'] ?? ($row['start_date'] ?? '')),
+        'StartZeit' => rpc_time($row['start_time'] ?? ''),
+        'EndZeit' => rpc_time($row['end_time'] ?? ''),
+        'Kategorie' => rpc_str($row['category'] ?? ''),
+        'Ort' => rpc_str($row['location'] ?? ''),
+        'Details' => rpc_str($row['details'] ?? ''),
+        'Ressourcen' => rpc_str($row['resources'] ?? ''),
+        'displayColor' => rpc_str($row['category_color'] ?? '') ?: '#cbd5e1',
         '_elvantoId' => $id,
         '_elvantoUrl' => $serviceId !== '' ? 'https://app.elvanto.com/services/' . $serviceId : '',
         'hasServiceFlow' => $serviceId !== '',
@@ -331,20 +331,20 @@ function legacy_calendar_event(array $row): array
     ];
 }
 
-function legacy_service_details(mixed $meta): array
+function rpc_service_details(mixed $meta): array
 {
     return array_merge(
         ['ok' => true],
-        legacy_service_overview($meta),
-        legacy_service_staff($meta),
-        legacy_service_flow($meta)
+        rpc_service_overview($meta),
+        rpc_service_staff($meta),
+        rpc_service_flow($meta)
     );
 }
 
-function legacy_service_overview(mixed $meta): array
+function rpc_service_overview(mixed $meta): array
 {
-    $serviceId = legacy_service_id_from_meta($meta);
-    $service = legacy_fetch_service($serviceId);
+    $serviceId = rpc_service_id_from_meta($meta);
+    $service = rpc_fetch_service($serviceId);
     if (!$service) {
         return ['ok' => true, 'overview' => null];
     }
@@ -354,11 +354,11 @@ function legacy_service_overview(mixed $meta): array
         'overview' => [
             'serviceId' => $serviceId,
             'timeId' => '',
-            'title' => legacy_str($service['title'] ?? ''),
-            'category' => legacy_str($service['category'] ?? ''),
-            'date' => legacy_ui_date(substr((string) ($service['service_start'] ?? ''), 0, 10)),
-            'startTime' => legacy_time(substr((string) ($service['service_start'] ?? ''), 11, 8)),
-            'endTime' => legacy_time(substr((string) ($service['service_end'] ?? ''), 11, 8)),
+            'title' => rpc_str($service['title'] ?? ''),
+            'category' => rpc_str($service['category'] ?? ''),
+            'date' => rpc_ui_date(substr((string) ($service['service_start'] ?? ''), 0, 10)),
+            'startTime' => rpc_time(substr((string) ($service['service_start'] ?? ''), 11, 8)),
+            'endTime' => rpc_time(substr((string) ($service['service_end'] ?? ''), 11, 8)),
             'timeLabel' => '',
             'rehearsalTimes' => '',
             'otherTimes' => '',
@@ -367,9 +367,9 @@ function legacy_service_overview(mixed $meta): array
     ];
 }
 
-function legacy_service_staff(mixed $meta): array
+function rpc_service_staff(mixed $meta): array
 {
-    $serviceId = legacy_service_id_from_meta($meta);
+    $serviceId = rpc_service_id_from_meta($meta);
     if ($serviceId === '') {
         return ['ok' => true, 'staffGroups' => [], 'staffCount' => 0];
     }
@@ -380,7 +380,7 @@ function legacy_service_staff(mixed $meta): array
     );
     $groups = [];
     foreach ($rows as $row) {
-        $label = legacy_str($row['team'] ?? '') ?: 'Team';
+        $label = rpc_str($row['team'] ?? '') ?: 'Team';
         $groups[$label] ??= [];
         $groups[$label][] = [
             'groupLabel' => $label,
@@ -389,10 +389,10 @@ function legacy_service_staff(mixed $meta): array
             'teamName' => $label,
             'departmentName' => $label,
             'subDepartmentName' => '',
-            'positionName' => legacy_str($row['role'] ?? ''),
-            'personId' => legacy_str($row['person_id'] ?? ''),
-            'name' => legacy_str($row['display_name'] ?? ''),
-            'status' => legacy_str($row['status'] ?? ''),
+            'positionName' => rpc_str($row['role'] ?? ''),
+            'personId' => rpc_str($row['person_id'] ?? ''),
+            'name' => rpc_str($row['display_name'] ?? ''),
+            'status' => rpc_str($row['status'] ?? ''),
             'statusTone' => 'ok',
             'statusSortRank' => 1,
             'positionSort' => 9999,
@@ -409,9 +409,9 @@ function legacy_service_staff(mixed $meta): array
     return ['ok' => true, 'staffGroups' => $staffGroups, 'staffCount' => count($rows)];
 }
 
-function legacy_service_flow(mixed $meta): array
+function rpc_service_flow(mixed $meta): array
 {
-    $serviceId = legacy_service_id_from_meta($meta);
+    $serviceId = rpc_service_id_from_meta($meta);
     if ($serviceId === '') {
         return ['ok' => true, 'flow' => [], 'flowCount' => 0];
     }
@@ -421,9 +421,9 @@ function legacy_service_flow(mixed $meta): array
         [$serviceId]
     );
     $flow = array_map(static function (array $row): array {
-        $title = legacy_str($row['title'] ?? '');
-        $description = legacy_strip_tags(legacy_str($row['description'] ?? ''));
-        $song = legacy_str($row['song_title'] ?? '');
+        $title = rpc_str($row['title'] ?? '');
+        $description = rpc_strip_tags(rpc_str($row['description'] ?? ''));
+        $song = rpc_str($row['song_title'] ?? '');
         $duration = $row['duration_min'] ?? '';
         return [
             'title' => $title,
@@ -433,7 +433,7 @@ function legacy_service_flow(mixed $meta): array
             'planDescription' => $description,
             'type' => '',
             'rawType' => '',
-            'time' => legacy_time(substr((string) ($row['starts_at'] ?? ''), 11, 8)),
+            'time' => rpc_time(substr((string) ($row['starts_at'] ?? ''), 11, 8)),
             'durationMin' => $duration !== null ? (string) $duration : '',
             'hasComputedTime' => false,
             'isHeader' => ((int) ($duration ?: 0)) === 0 && $song === '' && $description === '',
@@ -443,14 +443,14 @@ function legacy_service_flow(mixed $meta): array
     return ['ok' => true, 'flow' => $flow, 'flowCount' => count($flow)];
 }
 
-function legacy_service_id_from_meta(mixed $meta): string
+function rpc_service_id_from_meta(mixed $meta): string
 {
     $meta = is_array($meta) ? $meta : [];
-    $elvantoId = legacy_str($meta['elvantoId'] ?? '');
-    return str_starts_with($elvantoId, 'SERVICE-') ? substr($elvantoId, 8) : legacy_str($meta['serviceId'] ?? '');
+    $elvantoId = rpc_str($meta['elvantoId'] ?? '');
+    return str_starts_with($elvantoId, 'SERVICE-') ? substr($elvantoId, 8) : rpc_str($meta['serviceId'] ?? '');
 }
 
-function legacy_fetch_service(string $serviceId): ?array
+function rpc_fetch_service(string $serviceId): ?array
 {
     if ($serviceId === '') {
         return null;
@@ -461,35 +461,35 @@ function legacy_fetch_service(string $serviceId): ?array
     return is_array($row) ? $row : null;
 }
 
-function legacy_songs_lite(): array
+function rpc_songs_lite(): array
 {
     $songs = [];
     try {
         $stmt = db()->query('SELECT song_id, title, artist, category, default_key_name, bpm FROM songs ORDER BY title');
         foreach ($stmt as $row) {
             $songs[] = [
-                'id' => legacy_str($row['song_id'] ?? ''),
-                'title' => legacy_str($row['title'] ?? ''),
-                'artist' => legacy_str($row['artist'] ?? ''),
-                'category' => legacy_str($row['category'] ?? ''),
-                'key' => legacy_str($row['default_key_name'] ?? ''),
-                'bpm' => legacy_str($row['bpm'] ?? ''),
+                'id' => rpc_str($row['song_id'] ?? ''),
+                'title' => rpc_str($row['title'] ?? ''),
+                'artist' => rpc_str($row['artist'] ?? ''),
+                'category' => rpc_str($row['category'] ?? ''),
+                'key' => rpc_str($row['default_key_name'] ?? ''),
+                'bpm' => rpc_str($row['bpm'] ?? ''),
             ];
         }
     } catch (Throwable) {
         $songs = [];
     }
 
-    return ['ok' => true, 'songs' => $songs, 'dataVersion' => legacy_data_version()];
+    return ['ok' => true, 'songs' => $songs, 'dataVersion' => rpc_data_version()];
 }
 
-function legacy_contact_filters(): array
+function rpc_contact_filters(): array
 {
     $rows = db()->query("SELECT DISTINCT category_name AS label FROM people WHERE category_name IS NOT NULL AND category_name <> '' ORDER BY category_name")->fetchAll();
     return array_map(static fn(array $row): array => ['label' => $row['label'], 'value' => $row['label']], $rows);
 }
 
-function legacy_dashboard(): array
+function rpc_dashboard(): array
 {
     return [
         'peopleCount' => (int) db()->query('SELECT COUNT(*) AS c FROM people')->fetch()['c'],
@@ -498,7 +498,7 @@ function legacy_dashboard(): array
     ];
 }
 
-function legacy_import_runs(): array
+function rpc_import_runs(): array
 {
     return db()->query('SELECT import_type, status, started_at, finished_at, item_count, message FROM import_runs ORDER BY started_at DESC LIMIT 10')->fetchAll();
 }
@@ -510,20 +510,20 @@ function fetch_all_prepared_legacy(string $sql, array $params): array
     return $stmt->fetchAll();
 }
 
-function legacy_str(mixed $value): string
+function rpc_str(mixed $value): string
 {
     return trim((string) ($value ?? ''));
 }
 
-function legacy_time(mixed $value): string
+function rpc_time(mixed $value): string
 {
-    $raw = legacy_str($value);
+    $raw = rpc_str($value);
     return $raw !== '' ? substr($raw, 0, 5) : '';
 }
 
-function legacy_ui_date(mixed $value): string
+function rpc_ui_date(mixed $value): string
 {
-    $raw = legacy_str($value);
+    $raw = rpc_str($value);
     if ($raw === '' || $raw === '0000-00-00') {
         return '';
     }
@@ -534,7 +534,7 @@ function legacy_ui_date(mixed $value): string
     }
 }
 
-function legacy_age(string $birthday): ?int
+function rpc_age(string $birthday): ?int
 {
     if ($birthday === '') {
         return null;
@@ -546,7 +546,7 @@ function legacy_age(string $birthday): ?int
     }
 }
 
-function legacy_strip_tags(string $html): string
+function rpc_strip_tags(string $html): string
 {
     return trim(preg_replace('/\s+/', ' ', strip_tags($html)) ?? '');
 }

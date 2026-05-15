@@ -1,7 +1,7 @@
 # API-Mapping von Apps Script nach PHP
 
-Die bestehenden Frontend-Aufrufe laufen ueber `withGsRetry(fnName, args)`.
-Ziel ist, die Namen zunaechst kompatibel zu halten und serverseitig auf PHP-Endpunkte zu routen.
+Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`, aber nur noch als lokaler JavaScript-Adapter.
+`withGsRetry` nutzt `fetch(...)` gegen PHP-Endpunkte. Es gibt kein `google.script.run` und kein Google Apps Script mehr im Browser.
 
 ## Kern
 
@@ -68,13 +68,13 @@ Ziel ist, die Namen zunaechst kompatibel zu halten und serverseitig auf PHP-Endp
 
 ## Frontend-Adapter
 
-Die einfachste Uebergangsstrategie ist, `withGsRetry` im Frontend intern umzubauen:
+Die Uebergangsstrategie ist, `withGsRetry` im Frontend intern umzubauen. Direkte Endpunkte werden bevorzugt; alte Funktionsnamen, deren Rueckgabeform noch nicht als eigener Endpunkt existiert, laufen temporaer ueber `/api/rpc.php`.
 
 ```js
 const RPC_MAP = {
   app_ping: '/api/ping.php',
   app_bootstrap: '/api/bootstrap.php',
-  app_loadContactsLite: '/api/contacts-lite.php'
+  app_loadContactsLite: '/api/rpc.php'
 };
 
 async function withGsRetry(fnName, args = [], options = {}) {
@@ -90,4 +90,3 @@ async function withGsRetry(fnName, args = [], options = {}) {
   return data;
 }
 ```
-
