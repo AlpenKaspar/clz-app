@@ -35,7 +35,7 @@ function import_service_details(): array
                 continue;
             }
 
-            $data = elvanto_post('services/get.json', [
+            $data = elvanto_post('services/getInfo.json', [
                 'id' => $serviceId,
                 'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
             ]);
@@ -98,12 +98,27 @@ function import_service_details(): array
 function extract_service_detail_payload(array $data): array
 {
     foreach ([['service'], ['services', 'service'], ['data', 'service']] as $path) {
-        $items = get_path_array($data, $path);
+        $items = service_get_path_array($data, $path);
         if (is_array($items[0] ?? null)) {
             return $items[0];
         }
     }
+    if (isset($data['id']) || isset($data['name'])) {
+        return $data;
+    }
     return [];
+}
+
+function service_get_path_array(array $data, array $path): array
+{
+    $value = $data;
+    foreach ($path as $segment) {
+        if (!is_array($value) || !array_key_exists($segment, $value)) {
+            return [];
+        }
+        $value = $value[$segment];
+    }
+    return normalize_collection($value);
 }
 
 function upsert_service_detail(string $serviceId, array $service): void
@@ -210,7 +225,7 @@ function extract_service_volunteers(array $service): array
         ['people', 'person'],
         ['people'],
     ] as $path) {
-        $items = get_path_array($service, $path);
+        $items = service_get_path_array($service, $path);
         if ($items) {
             return $items;
         }
@@ -243,7 +258,7 @@ function extract_service_plan_items(array $service): array
             ['plan_items', 'plan_item'],
             ['plan_items'],
         ] as $path) {
-            $items = get_path_array($plan, $path);
+            $items = service_get_path_array($plan, $path);
             if ($items) {
                 $planItems = array_merge($planItems, $items);
                 break;
@@ -272,4 +287,3 @@ function parse_duration_minutes(mixed $value): ?int
     }
     return null;
 }
-
