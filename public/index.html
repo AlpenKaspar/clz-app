@@ -7336,10 +7336,10 @@
       let printTitleOverrides = { contacts: "", calendar: "" };
 
       const CACHE_KEYS = {
-        bootstrap: "clz_bootstrap_v187",
-        filterDefs: "clz_filter_defs_v187",
-        dashboardStats: "clz_dashboard_stats_v187",
-        contactsLite: "clz_contacts_lite_v187",
+        bootstrap: "clz_bootstrap_v188",
+        filterDefs: "clz_filter_defs_v188",
+        dashboardStats: "clz_dashboard_stats_v188",
+        contactsLite: "clz_contacts_lite_v188",
         personMainPrefix: "clz_person_main_v187_",
         personExtraPrefix: "clz_person_extra_v187_",
         groupSectionPrefix: "clz_group_section_v187_",
@@ -9152,7 +9152,8 @@
 
         const hasQueryFocus = document.activeElement === q;
         const hasVisibleIntent = contactHasVisibleIntent_();
-        const showFilterHome = !hasVisibleIntent && !hasQueryFocus && !!contactFilterDefs.length;
+        const leadershipDefs = getContactLeadershipFilterDefs_();
+        const showFilterHome = !hasVisibleIntent && !hasQueryFocus && !!leadershipDefs.length;
         const showInlineFilters = hasActivatedInlineFilters || hasVisibleIntent;
 
         layout.classList.toggle("search-active", hasQueryFocus || hasVisibleIntent);
@@ -9167,8 +9168,9 @@
         if (!list) return;
 
         const shouldAnimate = !filterHomeAnimatedOnce;
+        const defs = getContactLeadershipFilterDefs_();
 
-        list.innerHTML = (contactFilterDefs || []).map((f, idx) => {
+        list.innerHTML = defs.map((f, idx) => {
           const displayLabel = getFilterDisplayLabel_(f.label);
           const animClass = shouldAnimate ? " is-animated" : "";
           const animStyle = shouldAnimate ? ` style="animation-delay:${Math.min(idx * 60, 540)}ms"` : "";
@@ -9180,7 +9182,7 @@
         `;
         }).join("");
 
-        if (shouldAnimate && (contactFilterDefs || []).length) filterHomeAnimatedOnce = true;
+        if (shouldAnimate && defs.length) filterHomeAnimatedOnce = true;
         updateContactsStage_();
       }
 
@@ -14349,7 +14351,7 @@ function updateBottomNavHighlight_() {
       function renderContactFilterList_() {
         const host = document.getElementById("contact-filter-list");
         if (!host) return;
-        const defs = Array.isArray(contactFilterDefs) ? contactFilterDefs : [];
+        const defs = getContactLeadershipFilterDefs_();
         if (!defs.length) {
           host.innerHTML = `<div class="service-empty-box">Keine Filter vorhanden.</div>`;
           return;
@@ -14365,6 +14367,17 @@ function updateBottomNavHighlight_() {
           </div>
           <div class="staff-sub-filter-fade"></div>
         `;
+      }
+
+      function getContactLeadershipFilterDefs_() {
+        return (Array.isArray(contactFilterDefs) ? contactFilterDefs : [])
+          .filter(def => {
+            const key = String(def?.key || '').trim();
+            const type = String(def?.type || 'leadership').trim().toLowerCase();
+            if (!key) return false;
+            if (type !== 'leadership') return false;
+            return !/^(haushalt|gruppe|familie|familien|kontakte|gemeinde)$/i.test(key);
+          });
       }
 
       function toggleContactFilterFromOverlay_(key) {

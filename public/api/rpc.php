@@ -582,7 +582,7 @@ function rpc_contact_filters(): array
     $seen = [];
 
     foreach (rpc_people_custom_values() as $custom) {
-        foreach (rpc_split_multi_value($custom['LEITERSCHAFT'] ?? '') as $value) {
+        foreach (rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '') as $value) {
             $seen[$value] = true;
         }
     }
@@ -606,7 +606,7 @@ function rpc_contact_filters(): array
 
     foreach ($keys as $key) {
         if ($key !== '') {
-            $filters[] = ['key' => $key, 'label' => $key];
+            $filters[] = ['key' => $key, 'label' => $key, 'type' => 'leadership'];
         }
     }
 
@@ -858,6 +858,93 @@ function rpc_split_multi_value(string $value): array
         }
     }
     return $out;
+}
+
+function rpc_split_leadership_values(string $value): array
+{
+    $out = [];
+    foreach (rpc_split_multi_value($value) as $part) {
+        $normalized = rpc_normalize_leadership_token($part);
+        if ($normalized !== '' && !in_array($normalized, $out, true)) {
+            $out[] = $normalized;
+        }
+    }
+    return $out;
+}
+
+function rpc_normalize_leadership_token(string $value): string
+{
+    $raw = trim(preg_replace('/\s+/', ' ', $value) ?? '');
+    if ($raw === '') {
+        return '';
+    }
+
+    $compact = rpc_lower($raw);
+    $compact = strtr($compact, [
+        'ä' => 'ae',
+        'ö' => 'oe',
+        'ü' => 'ue',
+        'ß' => 'ss',
+        '–' => '-',
+        '—' => '-',
+    ]);
+    $compact = preg_replace('/[^a-z0-9]+/', ' ', $compact) ?? '';
+    $compact = trim(preg_replace('/\s+/', ' ', $compact) ?? '');
+    if ($compact === '') {
+        return '';
+    }
+
+    if (
+        str_contains($compact, 'in leiter') ||
+        str_contains($compact, 'leiter kleingruppen') ||
+        str_contains($compact, 'leiter ressort') ||
+        (str_contains($compact, 'gruppen ressort') && !str_contains($compact, 'leiter'))
+    ) {
+        return '';
+    }
+    if (preg_match('/^kleingruppen leiter( in)?$/', $compact)) {
+        return '';
+    }
+
+    $map = [
+        'aelteste' => 'Strategiesche-Leitung',
+        'strategische leitung' => 'Strategiesche-Leitung',
+        'strategiesche leitung' => 'Strategiesche-Leitung',
+        'operative leitung' => 'Operative-Leitung',
+        'opl' => 'Operative-Leitung',
+        'gemeindeleitung opl' => 'Operative-Leitung',
+        'ressort gruppen leiter in' => 'Ressort-Gruppen-Leiter/-in',
+        'ressort gruppen leiterin' => 'Ressort-Gruppen-Leiter/-in',
+        'ressort gruppen leiter' => 'Ressort-Gruppen-Leiter/-in',
+        'leiterin gruppen ressort' => 'Ressort-Gruppen-Leiter/-in',
+        'ressort leiter in' => 'Ressort-Leiter/-in',
+        'ressort leiterin' => 'Ressort-Leiter/-in',
+        'ressort leiter' => 'Ressort-Leiter/-in',
+        'ressort leiter in stv' => 'Ressort-Leiter/-in Stv.',
+        'ressort leiterin stv' => 'Ressort-Leiter/-in Stv.',
+        'ressort leiter stv' => 'Ressort-Leiter/-in Stv.',
+    ];
+    if (isset($map[$compact])) {
+        return $map[$compact];
+    }
+
+    if (preg_match('/^ressort gruppen leiter( in)?$/', $compact)) {
+        return 'Ressort-Gruppen-Leiter/-in';
+    }
+    if (preg_match('/^ressort leiter( in)? stv$/', $compact)) {
+        return 'Ressort-Leiter/-in Stv.';
+    }
+    if (preg_match('/^ressort leiter( in)?$/', $compact)) {
+        return 'Ressort-Leiter/-in';
+    }
+    if (preg_match('/^strategi?sche leitung$/', $compact)) {
+        return 'Strategiesche-Leitung';
+    }
+    if (preg_match('/^operative leitung$/', $compact)) {
+        return 'Operative-Leitung';
+    }
+
+    return '';
 }
 
 function rpc_search_text(string $value): string
