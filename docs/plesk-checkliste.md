@@ -47,9 +47,11 @@ DB_PASS=...
 ELVANTO_API_KEY=...
 ELVANTO_SUBDOMAIN=clz
 APP_ADMIN_EMAILS=...
+ADMIN_IMPORT_TOKEN=...
 ```
 
 Der Elvanto API-Key gehoert nur auf den Server, nie ins Frontend.
+Der `ADMIN_IMPORT_TOKEN` schuetzt Admin-Import-Endpunkte. Er sollte lang und zufaellig sein.
 
 ## 5. Erster Test
 
@@ -86,6 +88,12 @@ php /pfad/zur/app/scripts/import_people.php
 php /pfad/zur/app/scripts/import_calendar.php
 ```
 
+Admin-Import per Browser/API:
+
+```text
+https://deine-domain.ch/api/admin/import-people.php?token=DEIN_ADMIN_IMPORT_TOKEN
+```
+
 Empfohlener Rhythmus:
 
 - Personen: nachts oder manuell
@@ -102,4 +110,3 @@ Empfohlener Rhythmus:
 6. Gottesdienst-Details, Mitarbeitende und Ablauf testen.
 7. CSV/PDF/Druckansichten testen.
 8. Mobile Home-Screen/PWA testen.
-

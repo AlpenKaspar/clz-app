@@ -6,6 +6,7 @@ require __DIR__ . '/../../../src/bootstrap.php';
 require __DIR__ . '/../../../src/import_people.php';
 
 try {
+    require_admin_token();
     $result = import_people();
     json_response($result);
 } catch (Throwable $e) {
@@ -13,4 +14,3 @@ try {
         'detail' => env('APP_DEBUG', '0') === '1' ? $e->getMessage() : null,
     ]);
 }
-

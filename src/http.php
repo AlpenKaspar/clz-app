@@ -34,3 +34,22 @@ function read_json_body(): array
     return $decoded;
 }
 
+function require_admin_token(): void
+{
+    $expected = trim((string) env('ADMIN_IMPORT_TOKEN', ''));
+    if ($expected === '') {
+        json_error('ADMIN_IMPORT_TOKEN ist nicht konfiguriert.', 500);
+    }
+
+    $provided = '';
+    $header = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '';
+    if (is_string($header) && trim($header) !== '') {
+        $provided = trim($header);
+    } elseif (isset($_GET['token'])) {
+        $provided = trim((string) $_GET['token']);
+    }
+
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        json_error('Nicht autorisiert.', 403);
+    }
+}
