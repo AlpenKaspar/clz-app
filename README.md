@@ -70,3 +70,49 @@ APP_ADMIN_EMAILS=deine.admin.mail@example.ch
 ```
 
 Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen `member`.
+
+## Lokal mit Docker testen
+
+Auf Windows ist kein lokales PHP noetig, wenn Docker Desktop laeuft.
+
+1. Lokale Env erstellen:
+
+```powershell
+Copy-Item .env.local.example .env
+```
+
+2. In `.env` mindestens setzen:
+
+```text
+APP_URL=http://localhost:8080
+APP_ADMIN_EMAILS=deine.admin.mail@example.ch
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+ELVANTO_API_KEY=...
+```
+
+3. In Google Cloud beim OAuth-Client zusaetzlich eintragen:
+
+```text
+Autorisierte JavaScript-Quelle: http://localhost:8080
+Autorisierte Weiterleitungs-URI: http://localhost:8080/api/auth/google-callback.php
+```
+
+4. Container starten:
+
+```powershell
+docker compose up --build
+```
+
+5. Browser oeffnen:
+
+```text
+http://localhost:8080
+```
+
+Die lokale MariaDB ist von Windows aus auf Port `3307` erreichbar. Das Schema wird beim ersten Start automatisch aus `database/schema.sql` importiert. Wenn die DB neu aufgebaut werden soll:
+
+```powershell
+docker compose down -v
+docker compose up --build
+```

@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    environment:
+      APP_ENV: local
+      APP_DEBUG: ${APP_DEBUG:-1}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Zurich}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      APP_SESSION_NAME: ${APP_SESSION_NAME:-clz_app_session_local}
+      APP_ADMIN_EMAILS: ${APP_ADMIN_EMAILS:-admin@example.ch}
+      ADMIN_IMPORT_TOKEN: ${ADMIN_IMPORT_TOKEN:-local-dev-token}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-change-me.apps.googleusercontent.com}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-change-me}
+      ELVANTO_API_KEY: ${ELVANTO_API_KEY:-change-me}
+      ELVANTO_SUBDOMAIN: ${ELVANTO_SUBDOMAIN:-clz}
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-clz_app}
+      DB_USER: ${DB_USER:-clz_app_user}
+      DB_PASS: ${DB_PASS:-clz_app_pass}
+      DB_CHARSET: ${DB_CHARSET:-utf8mb4}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:10.11
+    ports:
+      - "3307:3306"
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-clz_app}
+      MARIADB_USER: ${DB_USER:-clz_app_user}
+      MARIADB_PASSWORD: ${DB_PASS:-clz_app_pass}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpass}
+    volumes:
+      - clz_db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  clz_db_data:
