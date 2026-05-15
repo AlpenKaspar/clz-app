@@ -7618,7 +7618,9 @@
               throw new Error('Bitte anmelden.');
             }
             if (!response.ok || data?.ok === false) {
-              throw new Error(data?.error || data?.detail || ('HTTP ' + response.status));
+              const serverMessage = data?.detail || data?.error || ('HTTP ' + response.status);
+              if (data?.detail && data?.error) console.error('RPC error', fnName, data);
+              throw new Error(serverMessage);
             }
             return data;
           } catch (err) {
