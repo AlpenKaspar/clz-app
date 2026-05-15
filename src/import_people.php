@@ -421,6 +421,17 @@ function extract_custom_option_ids(mixed $value): string
 
 function normalize_string(mixed $value): string
 {
+    if ($value === null) {
+        return '';
+    }
+    if (is_array($value)) {
+        foreach (['name', 'title', 'label', 'value', 'display_name'] as $key) {
+            if (isset($value[$key]) && !is_array($value[$key])) {
+                return normalize_string($value[$key]);
+            }
+        }
+        return '';
+    }
     return trim(html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 }
 
@@ -501,4 +512,3 @@ function set_app_setting(string $key, string $value): void
     );
     $stmt->execute([$key, $value]);
 }
-
