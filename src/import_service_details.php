@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/import_calendar.php';
 
-function import_service_details(): array
+function import_service_details(?int $limit = null): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('service_details');
@@ -22,8 +22,15 @@ function import_service_details(): array
              WHERE elvanto_id LIKE 'SERVICE-%'
              ORDER BY start_date"
         )->fetchAll();
+        if ($limit !== null && $limit > 0) {
+            $serviceIds = array_slice($serviceIds, 0, $limit);
+        }
 
-        $serviceDetails = [];
+        $services = 0;
+        $times = 0;
+        $volunteers = 0;
+        $planItems = 0;
+
         foreach ($serviceIds as $row) {
             $serviceId = trim((string) ($row['service_id'] ?? ''));
             if ($serviceId === '') {
@@ -35,53 +42,18 @@ function import_service_details(): array
                 'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
             ]);
             $service = extract_service_detail_payload($data);
-            if ($service) {
-                $serviceDetails[$serviceId] = $service;
+            if (!$service) {
+                continue;
             }
-        }
 
-        $services = 0;
-        $times = 0;
-        $volunteers = 0;
-        $planItems = 0;
-
-        $pdo = db();
-        $pdo->beginTransaction();
-        $pdo->exec('DELETE FROM service_plan_items');
-        $pdo->exec('DELETE FROM service_volunteers');
-        $pdo->exec('DELETE FROM service_times');
-        $pdo->exec('DELETE FROM services');
-
-        foreach ($serviceDetails as $serviceId => $service) {
-            upsert_service_detail($serviceId, $service);
+            $counts = save_service_detail_bundle($serviceId, $service);
             $services++;
-
-            foreach (extract_service_times($service) as $time) {
-                if (is_array($time)) {
-                    upsert_service_time($serviceId, $time);
-                    $times++;
-                }
-            }
-
-            foreach (extract_service_volunteers($service) as $volunteer) {
-                if (is_array($volunteer)) {
-                    upsert_service_volunteer($serviceId, $volunteer);
-                    $volunteers++;
-                }
-            }
-
-            $order = 0;
-            foreach (extract_service_plan_items($service) as $item) {
-                if (is_array($item)) {
-                    $order++;
-                    upsert_service_plan_item($serviceId, $item, $order);
-                    $planItems++;
-                }
-            }
+            $times += $counts['times'];
+            $volunteers += $counts['volunteers'];
+            $planItems += $counts['planItems'];
         }
 
         set_app_setting('IMPORT_SERVICE_DETAILS_LAST', date('c'));
-        $pdo->commit();
         release_service_details_import_lock();
         $lockAcquired = false;
 
@@ -106,6 +78,57 @@ function import_service_details(): array
         }
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
+    }
+}
+
+function save_service_detail_bundle(string $serviceId, array $service): array
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+
+    db_delete_service_detail_bundle($serviceId);
+    upsert_service_detail($serviceId, $service);
+
+    $times = 0;
+    foreach (extract_service_times($service) as $time) {
+        if (is_array($time)) {
+            upsert_service_time($serviceId, $time);
+            $times++;
+        }
+    }
+
+    $volunteers = 0;
+    foreach (extract_service_volunteers($service) as $volunteer) {
+        if (is_array($volunteer)) {
+            upsert_service_volunteer($serviceId, $volunteer);
+            $volunteers++;
+        }
+    }
+
+    $planItems = 0;
+    $order = 0;
+    foreach (extract_service_plan_items($service) as $item) {
+        if (is_array($item)) {
+            $order++;
+            upsert_service_plan_item($serviceId, $item, $order);
+            $planItems++;
+        }
+    }
+
+    $pdo->commit();
+
+    return [
+        'times' => $times,
+        'volunteers' => $volunteers,
+        'planItems' => $planItems,
+    ];
+}
+
+function db_delete_service_detail_bundle(string $serviceId): void
+{
+    foreach (['service_plan_items', 'service_volunteers', 'service_times', 'services'] as $table) {
+        $stmt = db()->prepare("DELETE FROM {$table} WHERE service_id = ?");
+        $stmt->execute([$serviceId]);
     }
 }
 
