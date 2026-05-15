@@ -8,8 +8,14 @@ function import_service_details(): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('service_details');
+    $lockAcquired = false;
 
     try {
+        $lockAcquired = acquire_service_details_import_lock();
+        if (!$lockAcquired) {
+            throw new RuntimeException('Service-Detailimport laeuft bereits. Bitte den laufenden Import abwarten.');
+        }
+
         $serviceIds = db()->query(
             "SELECT DISTINCT REPLACE(elvanto_id, 'SERVICE-', '') AS service_id
              FROM calendar_events
@@ -17,18 +23,7 @@ function import_service_details(): array
              ORDER BY start_date"
         )->fetchAll();
 
-        $pdo = db();
-        $pdo->beginTransaction();
-        $pdo->exec('DELETE FROM service_plan_items');
-        $pdo->exec('DELETE FROM service_volunteers');
-        $pdo->exec('DELETE FROM service_times');
-        $pdo->exec('DELETE FROM services');
-
-        $services = 0;
-        $times = 0;
-        $volunteers = 0;
-        $planItems = 0;
-
+        $serviceDetails = [];
         foreach ($serviceIds as $row) {
             $serviceId = trim((string) ($row['service_id'] ?? ''));
             if ($serviceId === '') {
@@ -40,10 +35,24 @@ function import_service_details(): array
                 'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
             ]);
             $service = extract_service_detail_payload($data);
-            if (!$service) {
-                continue;
+            if ($service) {
+                $serviceDetails[$serviceId] = $service;
             }
+        }
 
+        $services = 0;
+        $times = 0;
+        $volunteers = 0;
+        $planItems = 0;
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        $pdo->exec('DELETE FROM service_plan_items');
+        $pdo->exec('DELETE FROM service_volunteers');
+        $pdo->exec('DELETE FROM service_times');
+        $pdo->exec('DELETE FROM services');
+
+        foreach ($serviceDetails as $serviceId => $service) {
             upsert_service_detail($serviceId, $service);
             $services++;
 
@@ -73,6 +82,8 @@ function import_service_details(): array
 
         set_app_setting('IMPORT_SERVICE_DETAILS_LAST', date('c'));
         $pdo->commit();
+        release_service_details_import_lock();
+        $lockAcquired = false;
 
         import_run_finish($runId, 'ok', $services, "Imported {$services} services, {$times} times, {$volunteers} volunteers, {$planItems} plan items.");
 
@@ -90,9 +101,23 @@ function import_service_details(): array
         if (db()->inTransaction()) {
             db()->rollBack();
         }
+        if ($lockAcquired) {
+            release_service_details_import_lock();
+        }
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
     }
+}
+
+function acquire_service_details_import_lock(): bool
+{
+    $stmt = db()->query("SELECT GET_LOCK('clz_service_details_import', 0) AS lock_status");
+    return (int) ($stmt->fetch()['lock_status'] ?? 0) === 1;
+}
+
+function release_service_details_import_lock(): void
+{
+    db()->query("SELECT RELEASE_LOCK('clz_service_details_import')");
 }
 
 function extract_service_detail_payload(array $data): array
