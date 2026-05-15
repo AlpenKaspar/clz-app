@@ -54,6 +54,11 @@ function current_user(): ?array
     $stmt = db()->prepare('SELECT id, email, display_name, role, is_active FROM users WHERE id = ? AND is_active = 1');
     $stmt->execute([(int) $id]);
     $user = $stmt->fetch();
+    if (is_array($user) && google_login_role_for_email((string) ($user['email'] ?? '')) === 'admin' && ($user['role'] ?? '') !== 'admin') {
+        $upgrade = db()->prepare("UPDATE users SET role = 'admin' WHERE id = ?");
+        $upgrade->execute([(int) $user['id']]);
+        $user['role'] = 'admin';
+    }
     return is_array($user) ? user_payload($user) : null;
 }
 

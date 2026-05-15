@@ -22,7 +22,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
     return match ($fn) {
         'app_ping' => rpc_ping(),
         'app_bootstrap' => rpc_bootstrap($user),
-        'app_getUserAccessLight' => ['ok' => true, 'user' => $user, 'permissions' => rpc_permissions()],
+        'app_getUserAccessLight' => ['ok' => true, 'user' => $user, 'permissions' => rpc_permissions($user)],
         'app_loadContactsLite' => rpc_contacts_lite(),
         'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? '')),
         'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? '')),
@@ -74,7 +74,7 @@ function rpc_bootstrap(array $user): array
         'user' => [
             'email' => $user['email'] ?? '',
             'role' => $user['role'] ?? 'member',
-            'permissions' => rpc_permissions(),
+            'permissions' => rpc_permissions($user),
         ],
         'cache' => [],
         'filters' => rpc_contact_filters(),
@@ -82,8 +82,10 @@ function rpc_bootstrap(array $user): array
     ];
 }
 
-function rpc_permissions(): array
+function rpc_permissions(array $user = []): array
 {
+    $isAdmin = strtolower((string) ($user['role'] ?? '')) === 'admin';
+
     return [
         'tabs' => [
             'contacts' => true,
@@ -92,10 +94,10 @@ function rpc_permissions(): array
             'tools' => true,
         ],
         'exports' => [
-            'contactsCsv' => false,
-            'contactsPrint' => false,
-            'calendarCsv' => false,
-            'calendarPrint' => false,
+            'contactsCsv' => $isAdmin,
+            'contactsPrint' => $isAdmin,
+            'calendarCsv' => $isAdmin,
+            'calendarPrint' => $isAdmin,
         ],
         'detailPrint' => [
             'contact' => true,
@@ -129,15 +131,26 @@ function rpc_data_version(): string
 function rpc_contacts_lite(): array
 {
     $stmt = db()->query(
-        "SELECT id, firstname, preferred_name, lastname, display_name, email, phone, mobile,
-                category_name, family_id, gender, birthday, home_address, home_city, home_postcode, picture_url
+        "SELECT id, date_added, firstname, preferred_name, lastname, display_name, email, phone, mobile,
+                category_name, family_id, gender, birthday, home_address, home_city, home_postcode, departments, picture_url
          FROM people
+         WHERE status IS NULL OR status = '' OR LOWER(status) = 'active'
          ORDER BY lastname, firstname"
     );
 
+    $customValues = rpc_people_custom_values();
+    $groupValues = rpc_people_group_values();
+    $familyValues = rpc_people_family_values();
+
     $contacts = [];
     foreach ($stmt as $row) {
-        $contacts[] = rpc_contact_row($row);
+        $personId = rpc_str($row['id'] ?? '');
+        $contacts[] = rpc_contact_row(
+            $row,
+            $customValues[$personId] ?? [],
+            $groupValues[$personId] ?? ['groups' => [], 'leads' => [], 'assists' => []],
+            $familyValues[$personId] ?? []
+        );
     }
 
     return [
@@ -148,21 +161,37 @@ function rpc_contacts_lite(): array
     ];
 }
 
-function rpc_contact_row(array $row): array
+function rpc_contact_row(array $row, array $custom = [], array $groups = [], array $family = []): array
 {
     $first = rpc_str($row['firstname'] ?? '');
     $preferred = rpc_str($row['preferred_name'] ?? '');
     $last = rpc_str($row['lastname'] ?? '');
     $display = rpc_str($row['display_name'] ?? '') ?: trim(($preferred ?: $first) . ' ' . $last);
+    $listDisplay = trim($last . ' ' . ($preferred ?: $first)) ?: $display;
     $cityLine = trim(rpc_str($row['home_postcode'] ?? '') . ' ' . rpc_str($row['home_city'] ?? ''));
     $category = rpc_str($row['category_name'] ?? '');
     $birthday = rpc_str($row['birthday'] ?? '');
     $age = rpc_age($birthday);
+    $departmentsValues = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
+    $leaderships = rpc_split_multi_value($custom['LEITERSCHAFT'] ?? '');
+    $kgGroupValues = $groups['groups'] ?? [];
+    $kgLeadGroupValues = $groups['leads'] ?? [];
+    $kgAssistantGroupValues = $groups['assists'] ?? [];
+    $leadsKg = count($kgLeadGroupValues) > 0;
+    $assistsKg = count($kgAssistantGroupValues) > 0;
+    if ($leadsKg && !in_array('Kleingruppen-Leiter/-in', $leaderships, true)) {
+        $leaderships[] = 'Kleingruppen-Leiter/-in';
+    }
+    if ($assistsKg && !in_array('Stv. Kleingruppen-Leiter/-in', $leaderships, true)) {
+        $leaderships[] = 'Stv. Kleingruppen-Leiter/-in';
+    }
+    $birthdayParts = rpc_birthday_parts($birthday);
+    $dateAdded = rpc_str($row['date_added'] ?? '');
 
     return [
         'id' => rpc_str($row['id'] ?? ''),
         'displayName' => $display,
-        'listDisplayName' => $display,
+        'listDisplayName' => $listDisplay,
         'firstName' => $first,
         'preferredName' => $preferred,
         'lastName' => $last,
@@ -174,17 +203,39 @@ function rpc_contact_row(array $row): array
         'gender' => rpc_str($row['gender'] ?? ''),
         'birthday' => $birthday,
         'age' => $age,
-        'isChild' => $age !== null && $age < 16,
-        'isFamilyMain' => true,
+        'ageBucket' => rpc_age_bucket($age),
+        'isChild' => ($family['relationship'] ?? '') === 'Kind' || ($age !== null && $age < 16),
+        'isFamilyMain' => (bool) ($family['isFamilyMain'] ?? false),
+        'isSingle' => (bool) ($family['isSingle'] ?? false),
+        'householdTypeKey' => rpc_str($family['householdTypeKey'] ?? ''),
         'pictureUrl' => rpc_str($row['picture_url'] ?? ''),
         'address' => rpc_str($row['home_address'] ?? ''),
         'city' => rpc_str($row['home_city'] ?? ''),
         'postcode' => rpc_str($row['home_postcode'] ?? ''),
         'sub' => implode(' - ', array_values(array_filter([$category, $cityLine]))),
-        'searchText' => strtolower($display . ' ' . $first . ' ' . $preferred . ' ' . $last . ' ' . $category . ' ' . $cityLine),
-        'kgGroupValues' => [],
-        'kgLeadGroupValues' => [],
-        'kgAssistantGroupValues' => [],
+        'searchName' => rpc_search_text($first . ' ' . $preferred . ' ' . $last),
+        'searchText' => rpc_search_text(implode(' ', array_merge([$display, $first, $preferred, $last, $category, $cityLine], $kgGroupValues, $departmentsValues))),
+        'searchMeta' => rpc_search_text(implode(' ', array_merge([$first, $preferred, $last, $category, $cityLine], $kgGroupValues, $departmentsValues))),
+        'hasKg' => count($kgGroupValues) > 0,
+        'leadsKg' => $leadsKg,
+        'hasMitarbeit' => count($departmentsValues) > 0,
+        'departmentsValues' => $departmentsValues,
+        'kgGroupValues' => $kgGroupValues,
+        'kgLeadGroupValues' => $kgLeadGroupValues,
+        'kgAssistantGroupValues' => $kgAssistantGroupValues,
+        'leaderships' => $leaderships,
+        'nextStepValues' => rpc_split_multi_value($custom['KURSE / TAUFE'] ?? ''),
+        'kidsChurchValues' => rpc_split_multi_value($custom['KIDS & PROMISELAND'] ?? ''),
+        'youthYpgValues' => rpc_split_multi_value($custom['JUNGE ERWACHSENE'] ?? ''),
+        'new12' => rpc_date_within_months($dateAdded, 12),
+        'new6' => rpc_date_within_months($dateAdded, 6),
+        'new3' => rpc_date_within_months($dateAdded, 3),
+        'new14' => rpc_date_within_days($dateAdded, 14),
+        'birthdayDay' => $birthdayParts['day'] ?? '',
+        'birthdayMonth' => $birthdayParts['month'] ?? '',
+        'birthdayToday' => rpc_birthday_today($birthdayParts),
+        'birthdayWeek' => rpc_birthday_week($birthdayParts),
+        'birthdayMonthFlag' => rpc_birthday_month($birthdayParts),
     ];
 }
 
@@ -246,6 +297,10 @@ function rpc_person_extra(string $personId): array
             $extra[] = rpc_detail(rpc_str($field['field_name'] ?? ''), $value);
         }
     }
+    $groupSections = rpc_person_group_sections($personId);
+    foreach ($groupSections as $section) {
+        $extra[] = $section;
+    }
     return $extra;
 }
 
@@ -279,12 +334,50 @@ function rpc_extended_search(string $query): array
 
 function rpc_family(string $familyId): array
 {
-    return ['ok' => true, 'familyId' => $familyId, 'adults' => [], 'kids' => [], 'others' => []];
+    $rows = fetch_all_prepared_legacy(
+        'SELECT fm.person_id, fm.relationship, fm.sort_order, p.firstname, p.preferred_name, p.lastname, p.display_name, p.birthday
+         FROM family_members fm
+         LEFT JOIN people p ON p.id = fm.person_id
+         WHERE fm.family_id = ?
+         ORDER BY fm.sort_order, p.birthday, p.lastname, p.firstname',
+        [$familyId]
+    );
+
+    $family = ['ok' => true, 'familyId' => $familyId, 'adults' => [], 'kids' => [], 'others' => []];
+    foreach ($rows as $row) {
+        $name = rpc_str($row['display_name'] ?? '') ?: trim(rpc_str($row['preferred_name'] ?? $row['firstname'] ?? '') . ' ' . rpc_str($row['lastname'] ?? ''));
+        $relationship = rpc_str($row['relationship'] ?? '');
+        $person = [
+            'personId' => rpc_str($row['person_id'] ?? ''),
+            'name' => $name,
+            'relationship' => $relationship,
+        ];
+        $age = rpc_age(rpc_str($row['birthday'] ?? ''));
+        if ($relationship === 'Kind' || ($age !== null && $age < 16)) {
+            $family['kids'][] = $person;
+        } elseif ($relationship === '' || in_array($relationship, ['Hauptkontakt', 'EhepartnerIn', 'PartnerIn'], true) || ($age !== null && $age >= 16)) {
+            $family['adults'][] = $person;
+        } else {
+            $family['others'][] = $person;
+        }
+    }
+
+    return $family;
 }
 
 function rpc_group(string $groupName): array
 {
-    return ['ok' => true, 'name' => $groupName, 'leaders' => [], 'assistants' => [], 'members' => []];
+    $group = rpc_fetch_group_by_name($groupName);
+    if (!$group) {
+        return [
+            'groupName' => $groupName,
+            'leaderPersons' => [],
+            'assistantPersons' => [],
+            'memberPersons' => [],
+        ];
+    }
+
+    return rpc_group_payload($group);
 }
 
 function rpc_calendar(string $startIso, string $endIso): array
@@ -485,8 +578,39 @@ function rpc_songs_lite(): array
 
 function rpc_contact_filters(): array
 {
-    $rows = db()->query("SELECT DISTINCT category_name AS label FROM people WHERE category_name IS NOT NULL AND category_name <> '' ORDER BY category_name")->fetchAll();
-    return array_map(static fn(array $row): array => ['label' => $row['label'], 'value' => $row['label']], $rows);
+    $filters = [];
+    $seen = [];
+
+    foreach (rpc_people_custom_values() as $custom) {
+        foreach (rpc_split_multi_value($custom['LEITERSCHAFT'] ?? '') as $value) {
+            $seen[$value] = true;
+        }
+    }
+
+    $hasKg = (int) db()->query('SELECT COUNT(*) AS c FROM group_members')->fetch()['c'] > 0;
+    if ($hasKg) {
+        $seen['Kleingruppen-Leiter/-in'] = true;
+        $seen['Stv. Kleingruppen-Leiter/-in'] = true;
+    }
+
+    $order = [
+        'Kleingruppen-Leiter/-in' => 100,
+        'Stv. Kleingruppen-Leiter/-in' => 101,
+    ];
+    $keys = array_keys($seen);
+    usort($keys, static function (string $a, string $b) use ($order): int {
+        $orderA = $order[$a] ?? 1000;
+        $orderB = $order[$b] ?? 1000;
+        return $orderA <=> $orderB ?: strcasecmp($a, $b);
+    });
+
+    foreach ($keys as $key) {
+        if ($key !== '') {
+            $filters[] = ['key' => $key, 'label' => $key];
+        }
+    }
+
+    return $filters;
 }
 
 function rpc_dashboard(): array
@@ -510,9 +634,235 @@ function fetch_all_prepared_legacy(string $sql, array $params): array
     return $stmt->fetchAll();
 }
 
+function rpc_people_custom_values(): array
+{
+    static $values = null;
+    if ($values !== null) {
+        return $values;
+    }
+
+    $values = [];
+    $rows = db()->query('SELECT person_id, field_name, field_value FROM people_custom_fields')->fetchAll();
+    foreach ($rows as $row) {
+        $personId = rpc_str($row['person_id'] ?? '');
+        $fieldName = strtoupper(rpc_str($row['field_name'] ?? ''));
+        if ($personId !== '' && $fieldName !== '') {
+            $values[$personId][$fieldName] = rpc_str($row['field_value'] ?? '');
+        }
+    }
+    return $values;
+}
+
+function rpc_people_group_values(): array
+{
+    static $values = null;
+    if ($values !== null) {
+        return $values;
+    }
+
+    $values = [];
+    $rows = db()->query(
+        'SELECT gm.person_id, gm.role, gm.position, g.name
+         FROM group_members gm
+         LEFT JOIN groups g ON g.id = gm.group_id'
+    )->fetchAll();
+
+    foreach ($rows as $row) {
+        $personId = rpc_str($row['person_id'] ?? '');
+        $groupName = rpc_str($row['name'] ?? '');
+        if ($personId === '' || $groupName === '') {
+            continue;
+        }
+
+        $values[$personId] ??= ['groups' => [], 'leads' => [], 'assists' => []];
+        rpc_add_unique($values[$personId]['groups'], $groupName);
+
+        $roleText = mb_strtolower(rpc_str($row['role'] ?? '') . ' ' . rpc_str($row['position'] ?? ''));
+        if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
+            rpc_add_unique($values[$personId]['assists'], $groupName);
+        } elseif (str_contains($roleText, 'leiter') || str_contains($roleText, 'leader')) {
+            rpc_add_unique($values[$personId]['leads'], $groupName);
+        }
+    }
+
+    return $values;
+}
+
+function rpc_people_family_values(): array
+{
+    static $values = null;
+    if ($values !== null) {
+        return $values;
+    }
+
+    $values = [];
+    $membersByFamily = [];
+    $rows = db()->query(
+        'SELECT fm.family_id, fm.person_id, fm.relationship, fm.sort_order, p.birthday
+         FROM family_members fm
+         LEFT JOIN people p ON p.id = fm.person_id
+         ORDER BY fm.family_id, fm.sort_order, p.birthday'
+    )->fetchAll();
+
+    foreach ($rows as $row) {
+        $familyId = rpc_str($row['family_id'] ?? '');
+        if ($familyId !== '') {
+            $membersByFamily[$familyId][] = $row;
+        }
+    }
+
+    foreach ($membersByFamily as $familyId => $members) {
+        $adultMembers = array_values(array_filter($members, static function (array $member): bool {
+            $relationship = rpc_str($member['relationship'] ?? '');
+            $age = rpc_age(rpc_str($member['birthday'] ?? ''));
+            return $relationship !== 'Kind' && ($age === null || $age >= 16);
+        }));
+        $main = $adultMembers[0] ?? ($members[0] ?? null);
+        $mainPersonId = $main ? rpc_str($main['person_id'] ?? '') : '';
+        $isSingleFamily = str_starts_with($familyId, 'Einzel_') || count($members) === 1;
+        $hasKids = count($members) > count($adultMembers);
+        $adultCount = count($adultMembers);
+        $householdTypeKey = $isSingleFamily ? 'single' : ($hasKids ? 'family_with_kids' : ($adultCount > 1 ? 'couple' : 'family'));
+
+        foreach ($members as $member) {
+            $personId = rpc_str($member['person_id'] ?? '');
+            if ($personId === '') {
+                continue;
+            }
+            $values[$personId] = [
+                'relationship' => rpc_str($member['relationship'] ?? ''),
+                'isFamilyMain' => $personId === $mainPersonId && !$isSingleFamily,
+                'isSingle' => $personId === $mainPersonId && $isSingleFamily,
+                'householdTypeKey' => $householdTypeKey,
+            ];
+        }
+    }
+
+    return $values;
+}
+
+function rpc_person_group_sections(string $personId): array
+{
+    $rows = fetch_all_prepared_legacy(
+        'SELECT DISTINCT g.*
+         FROM groups g
+         INNER JOIN group_members gm ON gm.group_id = g.id
+         WHERE gm.person_id = ?
+         ORDER BY g.name',
+        [$personId]
+    );
+    if (!$rows) {
+        return [];
+    }
+
+    return [[
+        'type' => 'group-section',
+        'label' => 'Kleingruppe',
+        'items' => array_map(static fn(array $group): array => rpc_group_payload($group), $rows),
+    ]];
+}
+
+function rpc_fetch_group_by_name(string $groupName): ?array
+{
+    $stmt = db()->prepare('SELECT * FROM groups WHERE LOWER(name) = LOWER(?) LIMIT 1');
+    $stmt->execute([$groupName]);
+    $row = $stmt->fetch();
+    if (is_array($row)) {
+        return $row;
+    }
+
+    $stmt = db()->prepare('SELECT * FROM groups WHERE name LIKE ? ORDER BY name LIMIT 1');
+    $stmt->execute(['%' . $groupName . '%']);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function rpc_group_payload(array $group): array
+{
+    $groupId = rpc_str($group['id'] ?? '');
+    $members = fetch_all_prepared_legacy(
+        'SELECT gm.person_id, gm.display_name, gm.firstname, gm.lastname, gm.role, gm.position, p.display_name AS person_display_name
+         FROM group_members gm
+         LEFT JOIN people p ON p.id = gm.person_id
+         WHERE gm.group_id = ?
+         ORDER BY gm.role, gm.position, gm.lastname, gm.firstname',
+        [$groupId]
+    );
+
+    $payload = [
+        'groupId' => $groupId,
+        'groupName' => rpc_str($group['name'] ?? ''),
+        'description' => rpc_strip_tags(rpc_str($group['description'] ?? '')),
+        'descriptionHtml' => rpc_str($group['description'] ?? ''),
+        'meetingPoint' => trim(implode(', ', array_filter([
+            rpc_str($group['meeting_address'] ?? ''),
+            trim(rpc_str($group['meeting_postcode'] ?? '') . ' ' . rpc_str($group['meeting_city'] ?? '')),
+        ]))),
+        'meetingDay' => rpc_str($group['meeting_day'] ?? ''),
+        'meetingFrequency' => rpc_str($group['meeting_frequency'] ?? ''),
+        'meetingTime' => rpc_str($group['meeting_time'] ?? ''),
+        'mapHref' => '',
+        'elvantoUrl' => $groupId !== '' ? 'https://app.elvanto.com/groups/' . rawurlencode($groupId) : '',
+        'leaderPersons' => [],
+        'assistantPersons' => [],
+        'memberPersons' => [],
+    ];
+
+    foreach ($members as $member) {
+        $person = [
+            'personId' => rpc_str($member['person_id'] ?? ''),
+            'name' => rpc_str($member['person_display_name'] ?? '') ?: (rpc_str($member['display_name'] ?? '') ?: trim(rpc_str($member['firstname'] ?? '') . ' ' . rpc_str($member['lastname'] ?? ''))),
+            'position' => trim(implode(' ', array_filter([rpc_str($member['role'] ?? ''), rpc_str($member['position'] ?? '')]))),
+            'roleBadge' => '',
+            'roleTone' => '',
+        ];
+        $roleText = mb_strtolower($person['position']);
+        if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
+            $person['roleBadge'] = 'Stv. Leiter';
+            $person['roleTone'] = 'assistant';
+            $payload['assistantPersons'][] = $person;
+        } elseif (str_contains($roleText, 'leiter') || str_contains($roleText, 'leader')) {
+            $payload['leaderPersons'][] = $person;
+        } else {
+            $payload['memberPersons'][] = $person;
+        }
+    }
+
+    return $payload;
+}
+
+function rpc_add_unique(array &$items, string $value): void
+{
+    if ($value !== '' && !in_array($value, $items, true)) {
+        $items[] = $value;
+    }
+}
+
 function rpc_str(mixed $value): string
 {
     return trim((string) ($value ?? ''));
+}
+
+function rpc_split_multi_value(string $value): array
+{
+    if (trim($value) === '') {
+        return [];
+    }
+
+    $parts = preg_split('/\s*(?:\||,|;|\r?\n)\s*/', $value) ?: [];
+    $out = [];
+    foreach ($parts as $part) {
+        $item = trim($part);
+        if ($item !== '' && !in_array($item, $out, true)) {
+            $out[] = $item;
+        }
+    }
+    return $out;
+}
+
+function rpc_search_text(string $value): string
+{
+    return mb_strtolower(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
 }
 
 function rpc_time(mixed $value): string
@@ -544,6 +894,87 @@ function rpc_age(string $birthday): ?int
     } catch (Throwable) {
         return null;
     }
+}
+
+function rpc_age_bucket(?int $age): string
+{
+    if ($age === null) {
+        return '';
+    }
+    if ($age <= 20) {
+        return '0_20';
+    }
+    if ($age <= 40) {
+        return '21_40';
+    }
+    if ($age <= 60) {
+        return '41_60';
+    }
+    return '61_100';
+}
+
+function rpc_date_within_months(string $date, int $months): bool
+{
+    if ($date === '') {
+        return false;
+    }
+    try {
+        $day = new DateTimeImmutable($date);
+        return $day >= (new DateTimeImmutable('today'))->modify("-{$months} months");
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function rpc_date_within_days(string $date, int $days): bool
+{
+    if ($date === '') {
+        return false;
+    }
+    try {
+        $day = new DateTimeImmutable($date);
+        return $day >= (new DateTimeImmutable('today'))->modify("-{$days} days");
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function rpc_birthday_parts(string $birthday): array
+{
+    if ($birthday === '') {
+        return [];
+    }
+    try {
+        $date = new DateTimeImmutable($birthday);
+        return ['day' => (int) $date->format('j'), 'month' => (int) $date->format('n')];
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+function rpc_birthday_today(array $parts): bool
+{
+    return ($parts['day'] ?? null) === (int) date('j') && ($parts['month'] ?? null) === (int) date('n');
+}
+
+function rpc_birthday_month(array $parts): bool
+{
+    return ($parts['month'] ?? null) === (int) date('n');
+}
+
+function rpc_birthday_week(array $parts): bool
+{
+    if (!$parts) {
+        return false;
+    }
+    $year = (int) date('Y');
+    $birthday = DateTimeImmutable::createFromFormat('!Y-n-j', $year . '-' . $parts['month'] . '-' . $parts['day']);
+    if (!$birthday) {
+        return false;
+    }
+    $today = new DateTimeImmutable('today');
+    $end = $today->modify('+7 days');
+    return $birthday >= $today && $birthday <= $end;
 }
 
 function rpc_strip_tags(string $html): string
