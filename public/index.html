@@ -80,6 +80,30 @@
       justify-content: flex-end;
     }
 
+    .authbar {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 28px;
+    }
+
+    .auth-link {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 10px;
+      background: #fff;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 740;
+      display: inline-flex;
+      align-items: center;
+    }
+
     .field {
       display: grid;
       gap: 4px;
@@ -458,6 +482,7 @@
           </label>
           <button class="icon-button" id="refreshButton" type="submit">Aktualisieren</button>
         </form>
+        <div class="authbar" id="authbar">Loginstatus wird geladen...</div>
       </div>
     </header>
 
@@ -494,11 +519,12 @@
       serviceCount: document.querySelector('#serviceCount'),
       detail: document.querySelector('#detail'),
       subtitle: document.querySelector('#subtitle'),
+      authbar: document.querySelector('#authbar'),
     };
 
     init();
 
-    function init() {
+    async function init() {
       const today = new Date();
       els.startDate.value = toInputDate(today);
       els.endDate.value = toInputDate(addDays(today, Number(els.rangePreset.value)));
@@ -509,7 +535,43 @@
         event.preventDefault();
         loadServices();
       });
-      loadServices();
+      const isAuthenticated = await loadAuth();
+      if (isAuthenticated) {
+        loadServices();
+      } else {
+        els.serviceCount.textContent = '0 Eintraege';
+        els.serviceList.innerHTML = '<div class="detail-empty">Bitte anmelden</div>';
+        renderEmpty('Bitte mit Google anmelden');
+      }
+    }
+
+    async function loadAuth() {
+      try {
+        const data = await fetchJson('/api/auth/me.php');
+        renderAuth(data.user || {}, Boolean(data.googleConfigured));
+        return Boolean(data.user && data.user.isAuthenticated);
+      } catch (error) {
+        els.authbar.textContent = 'Loginstatus nicht verfuegbar';
+        return false;
+      }
+    }
+
+    function renderAuth(user, googleConfigured) {
+      if (user.isAuthenticated) {
+        els.authbar.innerHTML = `
+          <span>${escapeHtml(user.displayName || user.email)}</span>
+          <span class="badge">${escapeHtml(user.role || 'member')}</span>
+          <a class="auth-link" href="/api/auth/logout.php">Abmelden</a>
+        `;
+        return;
+      }
+
+      if (!googleConfigured) {
+        els.authbar.innerHTML = '<span>Google Login noch nicht konfiguriert</span>';
+        return;
+      }
+
+      els.authbar.innerHTML = '<a class="auth-link" href="/api/auth/google-start.php">Mit Google anmelden</a>';
     }
 
     async function loadServices() {

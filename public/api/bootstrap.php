@@ -13,10 +13,11 @@ try {
         'ok' => true,
         'ts' => date('c'),
         'dataVersion' => app_setting('DATA_VERSION', '1'),
-        'user' => [
-            'email' => '',
-            'role' => 'guest',
+        'user' => array_merge(current_user() ?? guest_user_payload(), [
             'permissions' => default_permissions(),
+        ]),
+        'auth' => [
+            'googleConfigured' => google_oauth_is_configured(),
         ],
         'filters' => array_map(static fn(array $row): array => [
             'label' => $row['label'],
@@ -62,4 +63,3 @@ function default_permissions(): array
         ],
     ];
 }
-

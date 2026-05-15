@@ -50,3 +50,23 @@ Diese Dienste gibt es auf Metanet/Plesk nicht. Deshalb wird die App portiert:
 6. `/api/ping.php` pruefen.
 7. Danach Import-Scripts portieren und aktivieren.
 
+## Google Login
+
+Die App unterstuetzt Google OAuth Login ueber PHP-Sessions.
+
+In der Google Cloud Console eine OAuth-Client-ID vom Typ `Web application` erstellen und diese Redirect-URI eintragen:
+
+```text
+https://app.clzspiez.ch/api/auth/google-callback.php
+```
+
+Danach in `.env` setzen:
+
+```text
+APP_URL=https://app.clzspiez.ch
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+APP_ADMIN_EMAILS=deine.admin.mail@example.ch
+```
+
+Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen `member`.

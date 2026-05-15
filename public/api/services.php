@@ -5,6 +5,8 @@ declare(strict_types=1);
 require __DIR__ . '/../../src/bootstrap.php';
 
 try {
+    require_user();
+
     $start = trim((string) ($_GET['start'] ?? $_POST['start'] ?? ''));
     $end = trim((string) ($_GET['end'] ?? $_POST['end'] ?? ''));
 

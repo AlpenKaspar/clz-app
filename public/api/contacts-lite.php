@@ -5,6 +5,8 @@ declare(strict_types=1);
 require __DIR__ . '/../../src/bootstrap.php';
 
 try {
+    require_user();
+
     $stmt = db()->query(
         "SELECT id, firstname, preferred_name, lastname, display_name, email, phone, mobile,
                 category_name, family_id, gender, birthday, home_address, home_city, home_postcode, picture_url
@@ -53,4 +55,3 @@ function app_setting_contacts(string $key, string $default = ''): string
     $value = $stmt->fetchColumn();
     return is_string($value) && $value !== '' ? $value : $default;
 }
-

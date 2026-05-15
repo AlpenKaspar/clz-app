@@ -5,6 +5,8 @@ declare(strict_types=1);
 require __DIR__ . '/../../src/bootstrap.php';
 
 try {
+    require_user();
+
     $serviceId = trim((string) ($_GET['serviceId'] ?? $_POST['serviceId'] ?? ''));
     $elvantoId = trim((string) ($_GET['elvantoId'] ?? $_POST['elvantoId'] ?? ''));
     if ($serviceId === '' && str_starts_with($elvantoId, 'SERVICE-')) {
@@ -44,4 +46,3 @@ function fetch_all_prepared(string $sql, array $params): array
     $stmt->execute($params);
     return $stmt->fetchAll();
 }
-
