@@ -220,13 +220,27 @@ function upsert_service_time(string $serviceId, array $time): void
 
 function upsert_service_volunteer(string $serviceId, array $volunteer): void
 {
-    $personId = normalize_string($volunteer['person_id'] ?? ($volunteer['person']['id'] ?? ($volunteer['id'] ?? '')));
-    $displayName = normalize_string($volunteer['name'] ?? ($volunteer['display_name'] ?? ($volunteer['person']['name'] ?? '')));
+    $person = is_array($volunteer['person'] ?? null) ? $volunteer['person'] : [];
+    $personId = normalize_string($volunteer['person_id'] ?? ($person['id'] ?? ($volunteer['id'] ?? '')));
+    $displayName = normalize_string($volunteer['name'] ?? ($volunteer['display_name'] ?? ($person['name'] ?? '')));
     if ($displayName === '') {
-        $displayName = trim(normalize_string($volunteer['firstname'] ?? ($volunteer['person']['firstname'] ?? '')) . ' ' . normalize_string($volunteer['lastname'] ?? ($volunteer['person']['lastname'] ?? '')));
+        $firstName = normalize_string($person['preferred_name'] ?? '');
+        if ($firstName === '') {
+            $firstName = normalize_string($volunteer['firstname'] ?? ($person['firstname'] ?? ''));
+        }
+        $displayName = trim($firstName . ' ' . normalize_string($volunteer['lastname'] ?? ($person['lastname'] ?? '')));
     }
-    $role = normalize_string($volunteer['role'] ?? ($volunteer['role_name'] ?? ($volunteer['position'] ?? ($volunteer['position_name'] ?? ''))));
-    $team = normalize_string($volunteer['team'] ?? ($volunteer['team_name'] ?? ($volunteer['department'] ?? '')));
+    if ($personId === '' && $displayName === '') {
+        return;
+    }
+
+    $role = normalize_string($volunteer['_position_name'] ?? ($volunteer['role'] ?? ($volunteer['role_name'] ?? ($volunteer['position'] ?? ($volunteer['position_name'] ?? '')))));
+    $department = normalize_string($volunteer['_department_name'] ?? '');
+    $subDepartment = normalize_string($volunteer['_sub_department_name'] ?? '');
+    $team = trim($department . ($department !== '' && $subDepartment !== '' ? ' / ' : '') . $subDepartment);
+    if ($team === '') {
+        $team = normalize_string($volunteer['team'] ?? ($volunteer['team_name'] ?? ($volunteer['department'] ?? '')));
+    }
 
     $stmt = db()->prepare(
         'INSERT INTO service_volunteers (service_id, person_id, display_name, role, status, team, raw_json, imported_at)
@@ -267,9 +281,13 @@ function upsert_service_plan_item(string $serviceId, array $item, int $order): v
 
 function extract_service_volunteers(array $service): array
 {
+    $nested = extract_service_plan_volunteers($service);
+    if ($nested) {
+        return $nested;
+    }
+
     foreach ([
         ['volunteers', 'volunteer'],
-        ['volunteers'],
         ['people', 'person'],
         ['people'],
     ] as $path) {
@@ -279,6 +297,53 @@ function extract_service_volunteers(array $service): array
         }
     }
     return [];
+}
+
+function extract_service_plan_volunteers(array $service): array
+{
+    $plans = [];
+    if (is_array($service['volunteers'] ?? null) && array_key_exists('plan', $service['volunteers'])) {
+        $plans = normalize_collection($service['volunteers']['plan']);
+    }
+    if (!$plans) {
+        return [];
+    }
+
+    $volunteers = [];
+    foreach ($plans as $plan) {
+        if (!is_array($plan)) {
+            continue;
+        }
+        $positions = [];
+        if (is_array($plan['positions'] ?? null) && array_key_exists('position', $plan['positions'])) {
+            $positions = normalize_collection($plan['positions']['position']);
+        } elseif (is_array($plan['positions'] ?? null)) {
+            $positions = normalize_collection($plan['positions']);
+        }
+
+        foreach ($positions as $position) {
+            if (!is_array($position)) {
+                continue;
+            }
+            $positionVolunteers = [];
+            if (is_array($position['volunteers'] ?? null) && array_key_exists('volunteer', $position['volunteers'])) {
+                $positionVolunteers = normalize_collection($position['volunteers']['volunteer']);
+            }
+
+            foreach ($positionVolunteers as $volunteer) {
+                if (!is_array($volunteer)) {
+                    continue;
+                }
+                $volunteer['_time_id'] = normalize_string($plan['time_id'] ?? '');
+                $volunteer['_department_name'] = normalize_string($position['department_name'] ?? '');
+                $volunteer['_sub_department_name'] = normalize_string($position['sub_department_name'] ?? '');
+                $volunteer['_position_name'] = normalize_string($position['position_name'] ?? '');
+                $volunteers[] = $volunteer;
+            }
+        }
+    }
+
+    return $volunteers;
 }
 
 function extract_service_plan_items(array $service): array
@@ -327,8 +392,11 @@ function parse_duration_minutes(mixed $value): ?int
         return $n > 180 ? (int) round($n / 60) : $n;
     }
     $raw = trim((string) $value);
-    if (preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $raw, $m)) {
-        return ((int) $m[1]) * 60 + (int) $m[2];
+    if (preg_match('/^(\d+):(\d{2})(?::(\d{2}))?$/', $raw, $m)) {
+        if (isset($m[3]) && $m[3] !== '') {
+            return ((int) $m[1]) * 60 + (int) $m[2] + ((int) $m[3] >= 30 ? 1 : 0);
+        }
+        return (int) $m[1] + ((int) $m[2] >= 30 ? 1 : 0);
     }
     if (preg_match('/\d+/', $raw, $m)) {
         return (int) $m[0];
