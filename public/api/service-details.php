@@ -9,7 +9,7 @@ try {
 
     $serviceId = trim((string) ($_GET['serviceId'] ?? $_POST['serviceId'] ?? ''));
     $elvantoId = trim((string) ($_GET['elvantoId'] ?? $_POST['elvantoId'] ?? ''));
-    if ($serviceId === '' && str_starts_with($elvantoId, 'SERVICE-')) {
+    if ($serviceId === '' && str_starts_with((string) $elvantoId, 'SERVICE-')) {
         $serviceId = substr($elvantoId, 8);
     }
     if ($serviceId === '') {

@@ -404,7 +404,7 @@ function rpc_calendar(string $startIso, string $endIso): array
 function rpc_calendar_event(array $row): array
 {
     $id = rpc_str($row['elvanto_id'] ?? '');
-    $serviceId = str_starts_with($id, 'SERVICE-') ? substr($id, 8) : '';
+    $serviceId = rpc_starts_with($id, 'SERVICE-') ? substr($id, 8) : '';
     return [
         'id' => 'evt_' . rpc_str($row['id'] ?? ''),
         'Bezeichnung' => rpc_str($row['title'] ?? ''),
@@ -540,7 +540,7 @@ function rpc_service_id_from_meta(mixed $meta): string
 {
     $meta = is_array($meta) ? $meta : [];
     $elvantoId = rpc_str($meta['elvantoId'] ?? '');
-    return str_starts_with($elvantoId, 'SERVICE-') ? substr($elvantoId, 8) : rpc_str($meta['serviceId'] ?? '');
+    return rpc_starts_with($elvantoId, 'SERVICE-') ? substr($elvantoId, 8) : rpc_str($meta['serviceId'] ?? '');
 }
 
 function rpc_fetch_service(string $serviceId): ?array
@@ -719,7 +719,7 @@ function rpc_people_family_values(): array
         }));
         $main = $adultMembers[0] ?? ($members[0] ?? null);
         $mainPersonId = $main ? rpc_str($main['person_id'] ?? '') : '';
-        $isSingleFamily = str_starts_with($familyId, 'Einzel_') || count($members) === 1;
+        $isSingleFamily = rpc_starts_with($familyId, 'Einzel_') || count($members) === 1;
         $hasKids = count($members) > count($adultMembers);
         $adultCount = count($adultMembers);
         $householdTypeKey = $isSingleFamily ? 'single' : ($hasKids ? 'family_with_kids' : ($adultCount > 1 ? 'couple' : 'family'));
@@ -868,6 +868,11 @@ function rpc_search_text(string $value): string
 function rpc_lower(string $value): string
 {
     return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function rpc_starts_with(mixed $haystack, string $needle): bool
+{
+    return str_starts_with((string) $haystack, $needle);
 }
 
 function rpc_time(mixed $value): string
