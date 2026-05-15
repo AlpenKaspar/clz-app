@@ -677,7 +677,7 @@ function rpc_people_group_values(): array
         $values[$personId] ??= ['groups' => [], 'leads' => [], 'assists' => []];
         rpc_add_unique($values[$personId]['groups'], $groupName);
 
-        $roleText = mb_strtolower(rpc_str($row['role'] ?? '') . ' ' . rpc_str($row['position'] ?? ''));
+        $roleText = rpc_lower(rpc_str($row['role'] ?? '') . ' ' . rpc_str($row['position'] ?? ''));
         if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
             rpc_add_unique($values[$personId]['assists'], $groupName);
         } elseif (str_contains($roleText, 'leiter') || str_contains($roleText, 'leader')) {
@@ -816,7 +816,7 @@ function rpc_group_payload(array $group): array
             'roleBadge' => '',
             'roleTone' => '',
         ];
-        $roleText = mb_strtolower($person['position']);
+        $roleText = rpc_lower($person['position']);
         if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
             $person['roleBadge'] = 'Stv. Leiter';
             $person['roleTone'] = 'assistant';
@@ -862,7 +862,12 @@ function rpc_split_multi_value(string $value): array
 
 function rpc_search_text(string $value): string
 {
-    return mb_strtolower(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
+    return rpc_lower(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
+}
+
+function rpc_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
 }
 
 function rpc_time(mixed $value): string
