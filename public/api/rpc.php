@@ -52,6 +52,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_importGruppen' => rpc_run_import('gruppen', $user),
         'tools_importKalender' => rpc_run_import('kalender', $user),
         'tools_importServiceDetails' => rpc_run_import('service_details', $user),
+        'tools_importSongs' => rpc_run_import('songs', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
         'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck()],
         'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''))],
@@ -1105,15 +1106,36 @@ function rpc_songs_lite(): array
 {
     $songs = [];
     try {
-        $stmt = db()->query('SELECT song_id, title, artist, category, default_key_name, bpm FROM songs ORDER BY title');
+        $stmt = db()->query('SELECT song_id, title, artist, category, default_key_name, bpm, raw_json FROM songs ORDER BY title');
         foreach ($stmt as $row) {
+            $songId = rpc_str($row['song_id'] ?? '');
+            $title = rpc_str($row['title'] ?? '');
+            $artist = rpc_str($row['artist'] ?? '');
+            $category = rpc_str($row['category'] ?? '');
+            $keyName = rpc_str($row['default_key_name'] ?? '');
+            $bpm = rpc_str($row['bpm'] ?? '');
+            $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+            $arrangements = rpc_song_arrangements_payload($raw, $title, $keyName, $bpm);
             $songs[] = [
-                'id' => rpc_str($row['song_id'] ?? ''),
-                'title' => rpc_str($row['title'] ?? ''),
-                'artist' => rpc_str($row['artist'] ?? ''),
-                'category' => rpc_str($row['category'] ?? ''),
-                'key' => rpc_str($row['default_key_name'] ?? ''),
-                'bpm' => rpc_str($row['bpm'] ?? ''),
+                'id' => $songId,
+                'songId' => $songId,
+                'title' => $title,
+                'songTitle' => $title,
+                'arrangementName' => rpc_str($arrangements[0]['arrangementName'] ?? $title),
+                'artist' => $artist,
+                'album' => rpc_song_scalar($raw['album'] ?? ''),
+                'category' => $category,
+                'key' => $keyName,
+                'keyName' => $keyName,
+                'bpm' => $bpm,
+                'ccliNumber' => rpc_song_scalar($raw['ccli_number'] ?? ($raw['ccli'] ?? '')),
+                'youtubeUrl' => rpc_song_youtube_url($raw),
+                'youtubeUrls' => rpc_song_youtube_urls($raw),
+                'youtubeEmbeds' => [],
+                'pdfLinks' => rpc_song_links_payload($raw, ['pdf']),
+                'fileLinks' => rpc_song_links_payload($raw, ['file', 'link']),
+                'assets' => rpc_song_assets_payload($raw),
+                'arrangements' => $arrangements,
             ];
         }
     } catch (Throwable) {
@@ -1121,6 +1143,211 @@ function rpc_songs_lite(): array
     }
 
     return ['ok' => true, 'songs' => $songs, 'dataVersion' => rpc_data_version()];
+}
+
+function rpc_decode_json_array(mixed $json): array
+{
+    if (!is_string($json) || trim($json) === '') {
+        return [];
+    }
+    $decoded = json_decode($json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function rpc_song_arrangements_payload(array $song, string $fallbackTitle, string $fallbackKey, string $fallbackBpm): array
+{
+    $rawArrangements = [];
+    foreach ([['arrangements', 'arrangement'], ['arrangements'], ['song_arrangements', 'arrangement'], ['song_arrangements']] as $path) {
+        $rawArrangements = rpc_song_path_list($song, $path);
+        if ($rawArrangements) {
+            break;
+        }
+    }
+
+    if (!$rawArrangements) {
+        $rawArrangements = [[
+            'id' => '',
+            'name' => $fallbackTitle,
+            'key_name' => $fallbackKey,
+            'bpm' => $fallbackBpm,
+        ]];
+    }
+
+    $arrangements = [];
+    foreach ($rawArrangements as $arrangement) {
+        if (!is_array($arrangement)) {
+            continue;
+        }
+        $name = rpc_song_scalar($arrangement['name'] ?? ($arrangement['title'] ?? ($arrangement['arrangement_name'] ?? $fallbackTitle)));
+        $keyNames = rpc_song_key_names($arrangement, $fallbackKey);
+        $arrangements[] = [
+            'arrangementId' => rpc_song_scalar($arrangement['id'] ?? ($arrangement['arrangement_id'] ?? '')),
+            'arrangementName' => $name !== '' ? $name : $fallbackTitle,
+            'keyName' => $keyNames[0] ?? $fallbackKey,
+            'keyNames' => $keyNames,
+            'bpm' => rpc_song_scalar($arrangement['bpm'] ?? ($arrangement['tempo'] ?? $fallbackBpm)),
+            'sequence' => rpc_song_sequence($arrangement),
+            'pdfLinks' => rpc_song_links_payload($arrangement, ['pdf']),
+            'fileLinks' => rpc_song_links_payload($arrangement, ['file', 'link']),
+            'assets' => rpc_song_assets_payload($arrangement),
+            'keyResources' => [],
+            'youtubeUrls' => rpc_song_youtube_urls($arrangement),
+            'youtubeEmbeds' => [],
+        ];
+    }
+
+    return $arrangements;
+}
+
+function rpc_song_path_list(array $data, array $path): array
+{
+    $value = $data;
+    foreach ($path as $segment) {
+        if (!is_array($value) || !array_key_exists($segment, $value)) {
+            return [];
+        }
+        $value = $value[$segment];
+    }
+    if ($value === null || $value === '') {
+        return [];
+    }
+    if (!is_array($value)) {
+        return [$value];
+    }
+    return array_is_list($value) ? $value : [$value];
+}
+
+function rpc_song_scalar(mixed $value): string
+{
+    if ($value === null) {
+        return '';
+    }
+    if (is_array($value)) {
+        foreach (['name', 'title', 'label', 'value'] as $key) {
+            if (isset($value[$key]) && !is_array($value[$key])) {
+                return rpc_song_scalar($value[$key]);
+            }
+        }
+        return '';
+    }
+    return trim(html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+}
+
+function rpc_song_key_names(array $arrangement, string $fallbackKey): array
+{
+    $keys = [];
+    foreach (['key_name', 'key', 'default_key_name'] as $field) {
+        $value = rpc_song_scalar($arrangement[$field] ?? '');
+        if ($value !== '') {
+            $keys[] = $value;
+        }
+    }
+    foreach ([['keys', 'key'], ['keys']] as $path) {
+        foreach (rpc_song_path_list($arrangement, $path) as $key) {
+            $value = rpc_song_scalar($key);
+            if ($value !== '') {
+                $keys[] = $value;
+            }
+        }
+    }
+    if (!$keys && $fallbackKey !== '') {
+        $keys[] = $fallbackKey;
+    }
+    return array_values(array_unique($keys));
+}
+
+function rpc_song_sequence(array $arrangement): array
+{
+    $sequence = $arrangement['sequence'] ?? [];
+    if (is_string($sequence)) {
+        return array_values(array_filter(array_map('trim', preg_split('/[,;\n\r]+/', $sequence) ?: [])));
+    }
+    if (!is_array($sequence)) {
+        return [];
+    }
+    $steps = array_is_list($sequence) ? $sequence : ($sequence['item'] ?? ($sequence['step'] ?? []));
+    if (!is_array($steps)) {
+        return [];
+    }
+    $out = [];
+    foreach ((array_is_list($steps) ? $steps : [$steps]) as $step) {
+        $value = rpc_song_scalar($step);
+        if ($value !== '') {
+            $out[] = $value;
+        }
+    }
+    return $out;
+}
+
+function rpc_song_youtube_url(array $song): string
+{
+    return rpc_song_youtube_urls($song)[0] ?? '';
+}
+
+function rpc_song_youtube_urls(array $song): array
+{
+    $urls = [];
+    foreach (['youtube_url', 'youtubeUrl', 'youtube', 'youtube_embed', 'youtubeEmbed'] as $field) {
+        $value = rpc_song_scalar($song[$field] ?? '');
+        if ($value !== '' && preg_match('/(youtube\.com|youtu\.be)/i', $value)) {
+            $urls[] = $value;
+        }
+    }
+    foreach (rpc_song_collect_urls($song) as $url) {
+        if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
+            $urls[] = $url;
+        }
+    }
+    return array_values(array_unique($urls));
+}
+
+function rpc_song_links_payload(array $song, array $kinds): array
+{
+    $urls = [];
+    foreach (rpc_song_collect_urls($song) as $url) {
+        $isPdf = (bool) preg_match('/\.pdf(\?|$)/i', $url);
+        if (in_array('pdf', $kinds, true) && $isPdf) {
+            $urls[] = $url;
+            continue;
+        }
+        if (!$isPdf && (in_array('file', $kinds, true) || in_array('link', $kinds, true))) {
+            $urls[] = $url;
+        }
+    }
+    return array_values(array_unique($urls));
+}
+
+function rpc_song_assets_payload(array $song): array
+{
+    $assets = [];
+    foreach (rpc_song_collect_urls($song) as $url) {
+        if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
+            continue;
+        }
+        $assets[] = [
+            'url' => $url,
+            'name' => basename(parse_url($url, PHP_URL_PATH) ?: $url),
+        ];
+    }
+    return $assets;
+}
+
+function rpc_song_collect_urls(mixed $value): array
+{
+    $urls = [];
+    if (is_string($value)) {
+        if (preg_match_all('/https?:\/\/[^\s<>"\']+/i', $value, $matches)) {
+            $urls = array_merge($urls, $matches[0]);
+        }
+        return $urls;
+    }
+    if (!is_array($value)) {
+        return [];
+    }
+    foreach ($value as $child) {
+        $urls = array_merge($urls, rpc_song_collect_urls($child));
+    }
+    return array_values(array_unique($urls));
 }
 
 function rpc_contact_filters(): array
@@ -1676,7 +1903,8 @@ function rpc_import_steps(string $type): array
         'gruppen' => ['groups'],
         'kalender' => ['calendar'],
         'service_details' => ['service_details'],
-        'alles' => ['people', 'families', 'groups', 'calendar', 'service_details'],
+        'songs' => ['songs'],
+        'alles' => ['people', 'families', 'groups', 'calendar', 'service_details', 'songs'],
         default => throw new InvalidArgumentException('Unbekannter Import: ' . $type),
     };
 }
@@ -1689,6 +1917,7 @@ function rpc_run_import_step(string $step): array
         'groups' => rpc_import_groups_step(),
         'calendar' => rpc_import_calendar_step(),
         'service_details' => rpc_import_service_details_step(),
+        'songs' => rpc_import_songs_step(),
         default => throw new InvalidArgumentException('Unbekannter Importschritt: ' . $step),
     };
 }
@@ -1721,6 +1950,12 @@ function rpc_import_service_details_step(): array
 {
     require_once __DIR__ . '/../../src/import_service_details.php';
     return import_service_details();
+}
+
+function rpc_import_songs_step(): array
+{
+    require_once __DIR__ . '/../../src/import_songs.php';
+    return import_songs();
 }
 
 function rpc_import_runs(): array

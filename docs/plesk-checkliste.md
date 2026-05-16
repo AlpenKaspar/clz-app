@@ -83,23 +83,35 @@ Erwartete Antwort:
 
 ## 6. Cronjobs
 
-Nach dem Portieren der Importer:
+Auf deinem Hosting ist das App-Verzeichnis:
 
 ```text
-php /pfad/zur/app/scripts/import_people.php
-php /pfad/zur/app/scripts/import_calendar.php
+/home/httpd/vhosts/ypg.ch/app.clzspiez.ch
+```
+
+Plesk -> Geplante Aufgaben -> Befehl ausfuehren:
+
+```text
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_people.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_families.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_groups.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_calendar.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_service_details.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_songs.php
 ```
 
 Admin-Import per Browser/API:
 
 ```text
 https://deine-domain.ch/api/admin/import-people.php?token=DEIN_ADMIN_IMPORT_TOKEN
+https://deine-domain.ch/api/admin/import-songs.php?token=DEIN_ADMIN_IMPORT_TOKEN
 ```
 
 Empfohlener Rhythmus:
 
 - Personen: nachts oder manuell
 - Kalender/Services: alle 15-60 Minuten oder nachts plus Admin-Button
+- Songs: nachts oder manuell nach Aenderungen in Elvanto
 - Cache-Rebuild: nach jedem Import
 
 ## 7. Abnahme

@@ -50,6 +50,22 @@ Diese Dienste gibt es auf Metanet/Plesk nicht. Deshalb wird die App portiert:
 6. `/api/ping.php` pruefen.
 7. Danach Import-Scripts portieren und aktivieren.
 
+## Import-Scripts fuer Plesk Cron
+
+Auf Metanet/Plesk liegen die Scripts im App-Verzeichnis und koennen mit PHP 8.2 ausgefuehrt werden:
+
+```text
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_people.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_families.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_groups.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_calendar.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_service_details.php
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_songs.php
+```
+
+Der Songimport fuellt die Tabelle `songs` aus Elvanto und liefert die Daten wieder im alten Frontend-Format
+(`songId`, `songTitle`, `arrangements`), damit die bestehende Songansicht weiter funktioniert.
+
 ## Google Login
 
 Die App unterstuetzt Google OAuth Login ueber PHP-Sessions.

@@ -12,7 +12,7 @@ Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`
 | `app_loadFilterDefs` | `/api/filter-defs.php` | geplant |
 | `app_loadDashboardStats` | `/api/rpc.php` | implementiert, eigener Endpunkt spaeter |
 | `app_loadContactsLite` | `/api/contacts-lite.php` | geplant |
-| `app_loadSongsLite` | `/api/songs-lite.php` | geplant |
+| `app_loadSongsLite` | `/api/rpc.php` | implementiert, Datenquelle `songs` |
 | `app_getUserAccessLight` | `/api/user-access.php` | geplant |
 
 ## Kontakte
@@ -45,6 +45,7 @@ Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`
 | `tools_getSyncStatus` | `/api/admin/sync-status.php` | Importstatus |
 | `tools_importPersonen` | `/api/admin/import-people.php` | Personenimport |
 | `tools_importKalender` | `/api/admin/import-calendar.php` | Kalenderimport |
+| `tools_importSongs` | `/api/admin/import-songs.php` und `/api/rpc.php` | Songimport |
 | `tools_rebuildServerCaches` | `/api/admin/rebuild-cache.php` | Cache neu aufbauen |
 | `tools_getCacheDiagnostics` | `/api/admin/cache-diagnostics.php` | Diagnose |
 | `tools_loadUserSmartFilters` | `/api/rpc.php` | Smart-Filter laden |
