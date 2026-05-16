@@ -193,6 +193,10 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $kgGroupValues = $groups['groups'] ?? [];
     $kgLeadGroupValues = $groups['leads'] ?? [];
     $kgAssistantGroupValues = $groups['assists'] ?? [];
+    $phoneSearchTokens = rpc_phone_search_tokens(
+        rpc_str($row['phone'] ?? ''),
+        rpc_str($row['mobile'] ?? '')
+    );
     $leadsKg = count($kgLeadGroupValues) > 0;
     $assistsKg = count($kgAssistantGroupValues) > 0;
     if ($leadsKg && !in_array('Kleingruppen-Leiter/-in', $leaderships, true)) {
@@ -218,6 +222,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'familyId' => rpc_str($row['family_id'] ?? ''),
         'gender' => rpc_str($row['gender'] ?? ''),
         'birthday' => $birthday,
+        'dateAdded' => $dateAdded,
         'age' => $age,
         'ageBucket' => rpc_age_bucket($age),
         'isChild' => ($family['relationship'] ?? '') === 'Kind' || ($age !== null && $age < 16),
@@ -230,8 +235,8 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'postcode' => rpc_str($row['home_postcode'] ?? ''),
         'sub' => implode(' - ', array_values(array_filter([$category, $cityLine]))),
         'searchName' => rpc_search_text($first . ' ' . $preferred . ' ' . $last),
-        'searchText' => rpc_search_text(implode(' ', array_merge([$display, $first, $preferred, $last, $category, $cityLine], $kgGroupValues, $departmentsValues))),
-        'searchMeta' => rpc_search_text(implode(' ', array_merge([$first, $preferred, $last, $category, $cityLine], $kgGroupValues, $departmentsValues))),
+        'searchText' => rpc_search_text(implode(' ', array_merge([$display, $first, $preferred, $last, rpc_str($row['home_postcode'] ?? ''), rpc_str($row['home_city'] ?? ''), $category], $kgGroupValues, $departmentsValues, $phoneSearchTokens))),
+        'searchMeta' => rpc_search_text(implode(' ', array_merge([$first, $preferred, $last, rpc_str($row['home_postcode'] ?? ''), rpc_str($row['home_city'] ?? ''), $category], $kgGroupValues, $departmentsValues, $phoneSearchTokens))),
         'hasKg' => count($kgGroupValues) > 0,
         'leadsKg' => $leadsKg,
         'hasMitarbeit' => count($departmentsValues) > 0,
@@ -538,12 +543,62 @@ function rpc_detail(string $label, string $value, string $type = '', string $hre
 
 function rpc_extended_search(string $query): array
 {
-    $contacts = rpc_contacts_lite()['contacts'];
-    $needle = strtolower(trim($query));
-    if ($needle !== '') {
-        $contacts = array_values(array_filter($contacts, static fn(array $row): bool => str_contains($row['searchText'] ?? '', $needle)));
+    $needle = rpc_search_text($query);
+    if ($needle === '') {
+        return ['ok' => true, 'contacts' => []];
     }
-    return ['ok' => true, 'contacts' => array_slice($contacts, 0, 200)];
+
+    $contacts = rpc_contacts_lite()['contacts'];
+    $contacts = array_values(array_filter($contacts, static fn(array $row): bool => rpc_contact_matches_extended_search($row, $query)));
+    return ['ok' => true, 'contacts' => $contacts];
+}
+
+function rpc_contact_matches_extended_search(array $contact, string $query): bool
+{
+    $needle = rpc_search_text($query);
+    if ($needle === '') {
+        return false;
+    }
+
+    $fields = [
+        $contact['firstName'] ?? '',
+        $contact['preferredName'] ?? '',
+        $contact['lastName'] ?? '',
+        $contact['email'] ?? '',
+        $contact['phone'] ?? '',
+        $contact['mobile'] ?? '',
+        $contact['address'] ?? '',
+        $contact['city'] ?? '',
+        $contact['postcode'] ?? '',
+        $contact['category'] ?? '',
+        $contact['gender'] ?? '',
+        $contact['birthday'] ?? '',
+        $contact['dateAdded'] ?? '',
+        $contact['searchText'] ?? '',
+        $contact['searchMeta'] ?? '',
+    ];
+    $haystack = rpc_search_text(implode(' ', array_map('rpc_str', $fields)));
+    if (str_contains($haystack, $needle)) {
+        return true;
+    }
+
+    $queryDigits = preg_replace('/\D+/', '', $query) ?? '';
+    if ($queryDigits === '') {
+        return false;
+    }
+
+    foreach ([rpc_str($contact['phone'] ?? ''), rpc_str($contact['mobile'] ?? '')] as $phone) {
+        if ($phone === '') {
+            continue;
+        }
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        $local = rpc_normalize_phone_search_token($phone);
+        if (($digits !== '' && str_contains($digits, $queryDigits)) || ($local !== '' && str_contains($local, $queryDigits))) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function rpc_contacts_print_rows_response(mixed $ids, mixed $columns, array $user): array
@@ -1944,6 +1999,48 @@ function rpc_phone_href_value(string $phone): string
     return preg_replace('/[^\d+]/', '', $phone) ?? '';
 }
 
+function rpc_normalize_tel(string $phone): string
+{
+    return preg_replace('/[\s()\-]+/', '', trim($phone)) ?? '';
+}
+
+function rpc_normalize_phone_search_token(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if ($digits === '') {
+        return '';
+    }
+    if (rpc_starts_with($digits, '41') && strlen($digits) >= 11) {
+        return '0' . substr($digits, 2);
+    }
+    return $digits;
+}
+
+function rpc_phone_search_tokens(string $phone, string $mobile): array
+{
+    $seen = [];
+    $out = [];
+
+    foreach ([$phone, $mobile] as $value) {
+        $raw = trim($value);
+        if ($raw === '') {
+            continue;
+        }
+
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        foreach ([$raw, rpc_normalize_tel($raw), $digits, rpc_normalize_phone_search_token($raw)] as $token) {
+            $normalized = rpc_search_text($token);
+            if ($normalized === '' || isset($seen[$normalized])) {
+                continue;
+            }
+            $seen[$normalized] = true;
+            $out[] = $normalized;
+        }
+    }
+
+    return $out;
+}
+
 function rpc_whatsapp_href(string $phone): string
 {
     $digits = preg_replace('/\D+/', '', $phone) ?? '';
@@ -2081,7 +2178,19 @@ function rpc_normalize_leadership_token(string $value): string
 
 function rpc_search_text(string $value): string
 {
-    return rpc_lower(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
+    $value = rpc_lower(trim($value));
+    $value = strtr($value, [
+        'ä' => 'ae',
+        'ö' => 'oe',
+        'ü' => 'ue',
+        'ß' => 'ss',
+        'Ã¤' => 'ae',
+        'Ã¶' => 'oe',
+        'Ã¼' => 'ue',
+        'ÃŸ' => 'ss',
+    ]);
+    $value = preg_replace('/[^A-Za-z0-9_\s()+-]+/u', ' ', $value) ?? '';
+    return trim(preg_replace('/\s+/', ' ', $value) ?? '');
 }
 
 function rpc_lower(string $value): string
