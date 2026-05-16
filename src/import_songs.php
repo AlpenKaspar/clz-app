@@ -57,16 +57,6 @@ function fetch_elvanto_songs(): array
         $data = elvanto_post('songs/getAll.json', [
             'page' => $page,
             'page_size' => $pageSize,
-            'fields' => [
-                'arrangements',
-                'keys',
-                'files',
-                'links',
-                'youtube',
-                'category',
-                'ccli_number',
-                'lyrics',
-            ],
         ]);
 
         $batch = extract_songs_payload($data);
