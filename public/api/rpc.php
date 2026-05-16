@@ -50,12 +50,15 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
+        'tools_importPersonenSmart' => rpc_run_import('personen', $user),
         'tools_importFamilien' => rpc_run_import('familien', $user),
         'tools_importGruppen' => rpc_run_import('gruppen', $user),
         'tools_importKalender' => rpc_run_import('kalender', $user),
         'tools_importServiceDetails' => rpc_run_import('service_details', $user),
         'tools_importSongs' => rpc_run_import('songs', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
+        'tools_installNightlyServerCacheRebuild' => rpc_nightly_cache_notice('install'),
+        'tools_removeNightlyServerCacheRebuild' => rpc_nightly_cache_notice('remove'),
         'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck()],
         'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''))],
         'prayerPools_get' => ['ok' => true, 'pools' => rpc_prayer_pools()],
@@ -991,21 +994,26 @@ function rpc_service_overview(mixed $meta): array
     if (!$service) {
         return ['ok' => true, 'overview' => null];
     }
+    $times = rpc_service_times($serviceId);
+    $raw = rpc_decode_json_array($service['raw_json'] ?? null);
+    $rehearsal = rpc_service_named_times($raw, ['rehearsal_times', 'rehearsals']);
+    $other = rpc_service_named_times($raw, ['other_times']);
+    $roleSummary = rpc_service_role_summary($serviceId);
 
     return [
         'ok' => true,
         'overview' => [
             'serviceId' => $serviceId,
-            'timeId' => '',
+            'timeId' => rpc_str($times[0]['elvanto_time_id'] ?? ''),
             'title' => rpc_str($service['title'] ?? ''),
             'category' => rpc_str($service['category'] ?? ''),
             'date' => rpc_ui_date(substr((string) ($service['service_start'] ?? ''), 0, 10)),
             'startTime' => rpc_time(substr((string) ($service['service_start'] ?? ''), 11, 8)),
             'endTime' => rpc_time(substr((string) ($service['service_end'] ?? ''), 11, 8)),
-            'timeLabel' => '',
-            'rehearsalTimes' => '',
-            'otherTimes' => '',
-            'roleSummary' => '',
+            'timeLabel' => rpc_service_time_label($times),
+            'rehearsalTimes' => implode(' · ', $rehearsal),
+            'otherTimes' => implode(' · ', $other),
+            'roleSummary' => $roleSummary,
         ],
     ];
 }
@@ -1018,35 +1026,47 @@ function rpc_service_staff(mixed $meta): array
     }
 
     $rows = fetch_all_prepared_legacy(
-        'SELECT * FROM service_volunteers WHERE service_id = ? ORDER BY team, role, display_name',
+        'SELECT sv.*, p.email, p.phone, p.mobile
+         FROM service_volunteers sv
+         LEFT JOIN people p ON p.id = sv.person_id
+         WHERE sv.service_id = ?
+         ORDER BY sv.team, sv.role, sv.display_name',
         [$serviceId]
     );
     $groups = [];
     foreach ($rows as $row) {
         $label = rpc_str($row['team'] ?? '') ?: 'Team';
+        $status = rpc_str($row['status'] ?? '');
+        $statusTone = rpc_service_status_tone($status);
+        $role = rpc_str($row['role'] ?? '');
         $groups[$label] ??= [];
         $groups[$label][] = [
             'groupLabel' => $label,
             'groupSortLabel' => $label,
-            'subLabel' => '',
+            'subLabel' => rpc_service_sub_label($label),
             'teamName' => $label,
-            'departmentName' => $label,
-            'subDepartmentName' => '',
-            'positionName' => rpc_str($row['role'] ?? ''),
+            'departmentName' => rpc_service_department_label($label),
+            'subDepartmentName' => rpc_service_sub_label($label),
+            'positionName' => $role,
             'personId' => rpc_str($row['person_id'] ?? ''),
             'name' => rpc_str($row['display_name'] ?? ''),
-            'status' => rpc_str($row['status'] ?? ''),
-            'statusTone' => 'ok',
-            'statusSortRank' => 1,
-            'positionSort' => 9999,
-            'email' => '',
-            'phone' => '',
+            'status' => $status,
+            'statusTone' => $statusTone,
+            'statusSortRank' => rpc_service_status_rank($statusTone),
+            'positionSort' => rpc_service_position_sort($role),
+            'email' => rpc_str($row['email'] ?? ''),
+            'phone' => rpc_str($row['mobile'] ?? '') ?: rpc_str($row['phone'] ?? ''),
             'note' => '',
         ];
     }
 
     $staffGroups = [];
     foreach ($groups as $label => $items) {
+        usort($items, static function (array $a, array $b): int {
+            return ((int) ($a['positionSort'] ?? 9999)) <=> ((int) ($b['positionSort'] ?? 9999))
+                ?: ((int) ($a['statusSortRank'] ?? 9)) <=> ((int) ($b['statusSortRank'] ?? 9))
+                ?: strcasecmp(rpc_str($a['name'] ?? ''), rpc_str($b['name'] ?? ''));
+        });
         $staffGroups[] = ['label' => $label, 'items' => $items];
     }
     return ['ok' => true, 'staffGroups' => $staffGroups, 'staffCount' => count($rows)];
@@ -1063,27 +1083,205 @@ function rpc_service_flow(mixed $meta): array
         'SELECT * FROM service_plan_items WHERE service_id = ? ORDER BY item_order',
         [$serviceId]
     );
-    $flow = array_map(static function (array $row): array {
+    $service = rpc_fetch_service($serviceId);
+    $cursor = rpc_service_start_datetime($service);
+    $flow = array_map(static function (array $row) use (&$cursor): array {
         $title = rpc_str($row['title'] ?? '');
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
         $description = rpc_strip_tags(rpc_str($row['description'] ?? ''));
         $song = rpc_str($row['song_title'] ?? '');
-        $duration = $row['duration_min'] ?? '';
+        $duration = rpc_service_duration_minutes($row['duration_min'] ?? null);
+        $explicitTime = rpc_time(substr((string) ($row['starts_at'] ?? ''), 11, 8));
+        $time = $explicitTime;
+        $hasComputedTime = false;
+        if ($time === '' && $cursor instanceof DateTimeImmutable && $duration !== null && $duration > 0) {
+            $time = $cursor->format('H:i');
+            $hasComputedTime = true;
+        }
+        if ($cursor instanceof DateTimeImmutable && $duration !== null && $duration > 0) {
+            $cursor = $cursor->modify('+' . $duration . ' minutes');
+        }
         return [
             'title' => $title,
             'description' => $description,
             'song' => $song,
-            'note' => '',
+            'note' => rpc_strip_tags(rpc_song_scalar($raw['note'] ?? ($raw['notes'] ?? ''))),
             'planDescription' => $description,
-            'type' => '',
-            'rawType' => '',
-            'time' => rpc_time(substr((string) ($row['starts_at'] ?? ''), 11, 8)),
+            'type' => rpc_song_scalar($raw['when'] ?? ($row['item_type'] ?? '')),
+            'rawType' => rpc_str($row['item_type'] ?? ''),
+            'time' => $time,
             'durationMin' => $duration !== null ? (string) $duration : '',
-            'hasComputedTime' => false,
-            'isHeader' => ((int) ($duration ?: 0)) === 0 && $song === '' && $description === '',
+            'hasComputedTime' => $hasComputedTime,
+            'isHeader' => ((int) ($raw['heading'] ?? 0)) === 1 || (($duration ?? 0) === 0 && $song === '' && $description === ''),
         ];
     }, $rows);
 
     return ['ok' => true, 'flow' => $flow, 'flowCount' => count($flow)];
+}
+
+function rpc_service_times(string $serviceId): array
+{
+    if ($serviceId === '') {
+        return [];
+    }
+    return fetch_all_prepared_legacy(
+        'SELECT * FROM service_times WHERE service_id = ? ORDER BY starts_at, label',
+        [$serviceId]
+    );
+}
+
+function rpc_service_time_label(array $times): string
+{
+    $labels = [];
+    foreach ($times as $time) {
+        if (!is_array($time)) {
+            continue;
+        }
+        $label = rpc_str($time['label'] ?? '');
+        $start = rpc_time(substr(rpc_str($time['starts_at'] ?? ''), 11, 8));
+        $end = rpc_time(substr(rpc_str($time['ends_at'] ?? ''), 11, 8));
+        $range = trim($start . ($end !== '' ? '-' . $end : ''));
+        $text = trim(($label !== '' ? $label . ': ' : '') . $range);
+        if ($text !== '') {
+            $labels[] = $text;
+        }
+    }
+    return implode(' · ', array_values(array_unique($labels)));
+}
+
+function rpc_service_named_times(array $service, array $keys): array
+{
+    $out = [];
+    foreach ($keys as $key) {
+        $times = rpc_service_extract_collection($service[$key] ?? null, ['time', 'rehearsal_time', 'other_time']);
+        foreach ($times as $time) {
+            if (!is_array($time)) {
+                continue;
+            }
+            $label = rpc_str($time['name'] ?? ($time['label'] ?? ''));
+            $start = rpc_time(substr(rpc_str($time['starts'] ?? ($time['start'] ?? '')), 11, 8));
+            $end = rpc_time(substr(rpc_str($time['ends'] ?? ($time['end'] ?? '')), 11, 8));
+            $range = trim($start . ($end !== '' ? '-' . $end : ''));
+            $text = trim(($label !== '' ? $label . ': ' : '') . $range);
+            if ($text !== '') {
+                $out[] = $text;
+            }
+        }
+    }
+    return array_values(array_unique($out));
+}
+
+function rpc_service_extract_collection(mixed $value, array $innerKeys = []): array
+{
+    if ($value === null || $value === '') {
+        return [];
+    }
+    if (!is_array($value)) {
+        return [$value];
+    }
+    foreach ($innerKeys as $key) {
+        if (array_key_exists($key, $value)) {
+            return rpc_service_extract_collection($value[$key], []);
+        }
+    }
+    return array_is_list($value) ? $value : [$value];
+}
+
+function rpc_service_role_summary(string $serviceId): string
+{
+    if ($serviceId === '') {
+        return '';
+    }
+    $rows = fetch_all_prepared_legacy(
+        'SELECT team, COUNT(*) AS c FROM service_volunteers WHERE service_id = ? GROUP BY team ORDER BY team',
+        [$serviceId]
+    );
+    $parts = [];
+    foreach ($rows as $row) {
+        $team = rpc_str($row['team'] ?? '') ?: 'Team';
+        $count = (int) ($row['c'] ?? 0);
+        if ($count > 0) {
+            $parts[] = $team . ' (' . $count . ')';
+        }
+    }
+    return implode(' · ', $parts);
+}
+
+function rpc_service_status_tone(string $status): string
+{
+    $value = strtolower($status);
+    if ($value === '' || str_contains($value, 'open') || str_contains($value, 'unbesetzt')) {
+        return 'open';
+    }
+    if (str_contains($value, 'confirm') || str_contains($value, 'best') || str_contains($value, 'zugesagt')) {
+        return 'confirmed';
+    }
+    return 'other';
+}
+
+function rpc_service_status_rank(string $tone): int
+{
+    return ['open' => 0, 'other' => 1, 'confirmed' => 2][$tone] ?? 1;
+}
+
+function rpc_service_position_sort(string $role): int
+{
+    $role = strtolower($role);
+    foreach ([
+        'leiter' => 10,
+        'leader' => 20,
+        'pastor' => 30,
+        'moderation' => 40,
+        'worship' => 50,
+        'vocal' => 60,
+        'piano' => 70,
+        'guitar' => 80,
+        'bass' => 90,
+        'drum' => 100,
+        'audio' => 110,
+        'video' => 120,
+        'kamera' => 130,
+        'licht' => 140,
+    ] as $needle => $rank) {
+        if (str_contains($role, $needle)) {
+            return $rank;
+        }
+    }
+    return 999;
+}
+
+function rpc_service_department_label(string $team): string
+{
+    $parts = array_map('trim', explode('/', $team, 2));
+    return $parts[0] ?? $team;
+}
+
+function rpc_service_sub_label(string $team): string
+{
+    $parts = array_map('trim', explode('/', $team, 2));
+    return $parts[1] ?? '';
+}
+
+function rpc_service_duration_minutes(mixed $value): ?int
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    $n = (int) $value;
+    return $n > 180 ? (int) round($n / 60) : $n;
+}
+
+function rpc_service_start_datetime(?array $service): ?DateTimeImmutable
+{
+    $raw = rpc_str($service['service_start'] ?? '');
+    if ($raw === '') {
+        return null;
+    }
+    try {
+        return new DateTimeImmutable($raw);
+    } catch (Throwable) {
+        return null;
+    }
 }
 
 function rpc_service_id_from_meta(mixed $meta): string
@@ -1986,6 +2184,17 @@ function rpc_rebuild_server_caches(): array
 {
     set_app_setting('DATA_VERSION', (string) time());
     return ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()];
+}
+
+function rpc_nightly_cache_notice(string $mode): array
+{
+    return [
+        'ok' => true,
+        'mode' => $mode,
+        'message' => 'Auf Metanet/Plesk werden automatische Jobs ueber Geplante Aufgaben eingerichtet. Google-Apps-Script-Trigger werden nicht mehr verwendet.',
+        'cron' => 'cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_calendar.php',
+        'dataVersion' => rpc_data_version(),
+    ];
 }
 
 function rpc_import_status_group(array $types): array
