@@ -71,6 +71,21 @@ APP_ADMIN_EMAILS=deine.admin.mail@example.ch
 
 Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen `member`.
 
+Falls dein User bereits vor dem Setzen von `APP_ADMIN_EMAILS` erstellt wurde, reicht normalerweise ein Logout/Login,
+weil die Rolle beim Laden der Session anhand der Admin-Liste aktualisiert wird. Alternativ kann die Rolle in phpMyAdmin
+direkt gesetzt werden:
+
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'deine.admin.mail@example.ch';
+```
+
+Wichtig: Die E-Mail in `APP_ADMIN_EMAILS` muss exakt der Google-Login-Adresse entsprechen. Mehrere Admins werden
+kommagetrennt eingetragen, zum Beispiel:
+
+```text
+APP_ADMIN_EMAILS=admin1@example.ch,admin2@example.ch
+```
+
 ## Lokal mit Docker testen
 
 Auf Windows ist kein lokales PHP noetig, wenn Docker Desktop laeuft.

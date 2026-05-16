@@ -43,7 +43,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'app_loadSongsLite' => rpc_songs_lite(),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
         'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
-        'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => rpc_import_runs()],
+        'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => rpc_import_runs(), 'user' => array_merge($user, ['permissions' => rpc_permissions($user)])],
         'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => rpc_data_version()],
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
@@ -105,8 +105,9 @@ function rpc_permissions(array $user = []): array
         'tabs' => [
             'contacts' => true,
             'calendar' => true,
+            'songs' => true,
             'dashboard' => true,
-            'tools' => true,
+            'tools' => $isAdmin,
         ],
         'exports' => [
             'contactsCsv' => $isAdmin,

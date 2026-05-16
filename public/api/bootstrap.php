@@ -9,12 +9,14 @@ try {
     $peopleCount = (int) db()->query('SELECT COUNT(*) AS c FROM people')->fetch()['c'];
     $eventsCount = (int) db()->query('SELECT COUNT(*) AS c FROM calendar_events')->fetch()['c'];
 
+    $user = current_user() ?? guest_user_payload();
+
     json_response([
         'ok' => true,
         'ts' => date('c'),
         'dataVersion' => app_setting('DATA_VERSION', '1'),
-        'user' => array_merge(current_user() ?? guest_user_payload(), [
-            'permissions' => default_permissions(),
+        'user' => array_merge($user, [
+            'permissions' => default_permissions($user),
         ]),
         'auth' => [
             'googleConfigured' => google_oauth_is_configured(),
@@ -42,20 +44,25 @@ function app_setting(string $key, string $default = ''): string
     return is_string($value) && $value !== '' ? $value : $default;
 }
 
-function default_permissions(): array
+function default_permissions(array $user = []): array
 {
+    $role = strtolower((string) ($user['role'] ?? 'guest'));
+    $isAuthenticated = (bool) ($user['isAuthenticated'] ?? false);
+    $isAdmin = $role === 'admin';
+
     return [
         'tabs' => [
             'contacts' => true,
             'calendar' => true,
-            'dashboard' => false,
-            'tools' => false,
+            'songs' => true,
+            'dashboard' => $isAuthenticated,
+            'tools' => $isAdmin,
         ],
         'exports' => [
-            'contactsCsv' => false,
-            'contactsPrint' => false,
-            'calendarCsv' => false,
-            'calendarPrint' => false,
+            'contactsCsv' => $isAdmin,
+            'contactsPrint' => $isAdmin,
+            'calendarCsv' => $isAdmin,
+            'calendarPrint' => $isAdmin,
         ],
         'detailPrint' => [
             'contact' => true,
