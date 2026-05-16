@@ -8,15 +8,51 @@ function start_app_session(): void
         return;
     }
 
+    $lifetime = app_session_lifetime_seconds();
+    ini_set('session.gc_maxlifetime', (string) $lifetime);
+    ini_set('session.cookie_lifetime', (string) $lifetime);
+
     session_name((string) env('APP_SESSION_NAME', 'clz_app_session'));
     session_set_cookie_params([
-        'lifetime' => 0,
+        'lifetime' => $lifetime,
         'path' => '/',
         'secure' => is_https_request(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
     session_start();
+}
+
+function app_session_lifetime_seconds(): int
+{
+    $days = (int) env('APP_SESSION_DAYS', '30');
+    if ($days < 1) {
+        $days = 30;
+    }
+    if ($days > 365) {
+        $days = 365;
+    }
+    return $days * 24 * 60 * 60;
+}
+
+function refresh_app_session_cookie(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE || !ini_get('session.use_cookies')) {
+        return;
+    }
+
+    $params = session_get_cookie_params();
+    $options = [
+        'expires' => time() + app_session_lifetime_seconds(),
+        'path' => $params['path'] ?: '/',
+        'secure' => (bool) ($params['secure'] ?? false),
+        'httponly' => (bool) ($params['httponly'] ?? true),
+        'samesite' => $params['samesite'] ?? 'Lax',
+    ];
+    if (!empty($params['domain'])) {
+        $options['domain'] = $params['domain'];
+    }
+    setcookie(session_name(), session_id(), $options);
 }
 
 function is_https_request(): bool
@@ -59,7 +95,12 @@ function current_user(): ?array
         $upgrade->execute([(int) $user['id']]);
         $user['role'] = 'admin';
     }
-    return is_array($user) ? user_payload($user) : null;
+    if (!is_array($user)) {
+        return null;
+    }
+
+    refresh_app_session_cookie();
+    return user_payload($user);
 }
 
 function user_payload(array $user): array

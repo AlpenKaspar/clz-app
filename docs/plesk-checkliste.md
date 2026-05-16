@@ -47,11 +47,13 @@ DB_PASS=...
 ELVANTO_API_KEY=...
 ELVANTO_SUBDOMAIN=clz
 APP_ADMIN_EMAILS=...
+APP_SESSION_DAYS=30
 ADMIN_IMPORT_TOKEN=...
 ```
 
 Der Elvanto API-Key gehoert nur auf den Server, nie ins Frontend.
 Der `ADMIN_IMPORT_TOKEN` schuetzt Admin-Import-Endpunkte. Er sollte lang und zufaellig sein.
+`APP_SESSION_DAYS` legt fest, wie lange ein Login gueltig bleibt; die App erneuert die Session bei API-Nutzung automatisch.
 
 ## 5. Erster Test
 

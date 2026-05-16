@@ -13,6 +13,7 @@ services:
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Zurich}
       APP_URL: ${APP_URL:-http://localhost:8080}
       APP_SESSION_NAME: ${APP_SESSION_NAME:-clz_app_session_local}
+      APP_SESSION_DAYS: ${APP_SESSION_DAYS:-30}
       APP_ADMIN_EMAILS: ${APP_ADMIN_EMAILS:-admin@example.ch}
       ADMIN_IMPORT_TOKEN: ${ADMIN_IMPORT_TOKEN:-local-dev-token}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-change-me.apps.googleusercontent.com}

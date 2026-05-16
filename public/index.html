@@ -7198,6 +7198,8 @@
       let dashboardStats = null;
       let currentLoginEmail = "";
       let currentUserRole = "guest";
+      let authExpiredShown = false;
+      let authKeepaliveTimer = null;
       let currentPermissions = {
         tabs: { contacts: true, calendar: true, dashboard: false, tools: false },
         exports: { contactsCsv: false, contactsPrint: false, calendarCsv: false, calendarPrint: false },
@@ -7634,8 +7636,10 @@
             });
             const data = await response.json().catch(() => ({}));
             if (response.status === 401) {
-              window.location.href = '/api/auth/google-start.php';
-              throw new Error('Bitte anmelden.');
+              showAuthExpiredNotice_();
+              const authErr = new Error('Login abgelaufen. Bitte erneut anmelden.');
+              authErr.authExpired = true;
+              throw authErr;
             }
             if (!response.ok || data?.ok === false) {
               const serverMessage = data?.detail || data?.error || ('HTTP ' + response.status);
@@ -7651,6 +7655,73 @@
           }
         }
       }
+
+      function showAuthExpiredNotice_() {
+        if (authExpiredShown) return;
+        authExpiredShown = true;
+        toast('Login abgelaufen - bitte erneut anmelden', 4200);
+
+        let box = document.getElementById('auth-expired-notice');
+        if (!box) {
+          box = document.createElement('div');
+          box.id = 'auth-expired-notice';
+          box.style.cssText = [
+            'position:fixed',
+            'left:16px',
+            'right:16px',
+            'bottom:calc(18px + env(safe-area-inset-bottom))',
+            'z-index:9999',
+            'display:flex',
+            'align-items:center',
+            'justify-content:space-between',
+            'gap:12px',
+            'padding:12px 14px',
+            'border-radius:16px',
+            'background:var(--card-bg)',
+            'border:1px solid var(--border-color)',
+            'box-shadow:0 18px 45px rgba(15,23,42,.22)',
+            'color:var(--text-color)'
+          ].join(';');
+          box.innerHTML = `
+            <div style="min-width:0;">
+              <div style="font-weight:900;font-size:13px;">Login erneuern</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.35;">Deine Sitzung ist abgelaufen. Melde dich kurz wieder mit Google an.</div>
+            </div>
+            <button class="btn btn-primary" type="button" onclick="window.location.href='/api/auth/google-start.php'" style="white-space:nowrap;">
+              <i class="fab fa-google"></i><span>Anmelden</span>
+            </button>
+          `;
+          document.body.appendChild(box);
+        }
+      }
+
+      async function keepAuthSessionAlive_() {
+        if (document.visibilityState === 'hidden') return;
+        try {
+          const response = await fetch('/api/auth/me.php', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            credentials: 'include'
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data?.user?.isAuthenticated) {
+            showAuthExpiredNotice_();
+            return;
+          }
+          authExpiredShown = false;
+          const notice = document.getElementById('auth-expired-notice');
+          if (notice) notice.remove();
+        } catch (e) {
+          // Keepalive is best-effort; normal API calls still report real errors.
+        }
+      }
+
+      function startAuthKeepalive_() {
+        if (authKeepaliveTimer) clearInterval(authKeepaliveTimer);
+        authKeepaliveTimer = setInterval(keepAuthSessionAlive_, 5 * 60 * 1000);
+        setTimeout(keepAuthSessionAlive_, 45 * 1000);
+      }
+
       function toast(msg, ms = 1800) {
         const el = document.getElementById("toast");
         if (!el) return;
@@ -19383,6 +19454,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         try {
           startGlobalLiveBannerWatcher_();
         } catch (e) {}
+        startAuthKeepalive_();
 
         ["q", "cal-q", "songs-q"].forEach(id => {
           const el = document.getElementById(id);
@@ -19453,12 +19525,14 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
+            keepAuthSessionAlive_();
             refreshPermissionsInBackground_('visible').catch(() => {});
             setTimeout(() => checkForDataVersionRefresh_('visible'), 160);
           }
         });
 
         window.addEventListener('focus', () => {
+          keepAuthSessionAlive_();
           refreshPermissionsInBackground_('focus').catch(() => {});
           setTimeout(() => checkForDataVersionRefresh_('focus'), 160);
         });
