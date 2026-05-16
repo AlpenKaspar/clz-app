@@ -10,7 +10,7 @@ Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`
 | `app_ping` | `/api/ping.php` | angelegt |
 | `app_bootstrap` | `/api/bootstrap.php` | geplant |
 | `app_loadFilterDefs` | `/api/filter-defs.php` | geplant |
-| `app_loadDashboardStats` | `/api/dashboard-stats.php` | geplant |
+| `app_loadDashboardStats` | `/api/rpc.php` | implementiert, eigener Endpunkt spaeter |
 | `app_loadContactsLite` | `/api/contacts-lite.php` | geplant |
 | `app_loadSongsLite` | `/api/songs-lite.php` | geplant |
 | `app_getUserAccessLight` | `/api/user-access.php` | geplant |
@@ -47,24 +47,25 @@ Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`
 | `tools_importKalender` | `/api/admin/import-calendar.php` | Kalenderimport |
 | `tools_rebuildServerCaches` | `/api/admin/rebuild-cache.php` | Cache neu aufbauen |
 | `tools_getCacheDiagnostics` | `/api/admin/cache-diagnostics.php` | Diagnose |
-| `tools_loadUserSmartFilters` | `/api/smart-filters.php` | Smart-Filter laden |
-| `tools_saveUserSmartFilters` | `/api/smart-filters-save.php` | Smart-Filter speichern |
+| `tools_loadUserSmartFilters` | `/api/rpc.php` | Smart-Filter laden |
+| `tools_saveUserSmartFilters` | `/api/rpc.php` | Smart-Filter speichern |
 
 ## Prayer / Gebetsansicht
 
 | Apps Script Funktion | PHP-Endpunkt | Datenquelle |
 | --- | --- | --- |
-| `personenUi_getPrayerDeck` | `/api/prayer/deck.php` | `people` |
-| `prayer_startSession` | `/api/prayer/start.php` | `prayer_sessions` |
-| `prayer_heartbeat` | `/api/prayer/heartbeat.php` | `prayer_sessions` |
-| `prayer_endSession` | `/api/prayer/end.php` | `prayer_sessions`, `prayer_points` |
-| `prayer_getLeaderboard` | `/api/prayer/leaderboard.php` | `prayer_points` |
-| `prayerPools_get` | `/api/prayer/pools.php` | `prayer_pools` |
-| `prayerPools_getMembers` | `/api/prayer/pool-members.php` | `prayer_pool_members` |
-| `prayerPools_create` | `/api/prayer/pool-create.php` | `prayer_pools` |
-| `prayerPools_delete` | `/api/prayer/pool-delete.php` | `prayer_pools` |
-| `prayerPools_addMembers` | `/api/prayer/pool-add-members.php` | `prayer_pool_members` |
-| `prayerPools_removeMembers` | `/api/prayer/pool-remove-members.php` | `prayer_pool_members` |
+| `personenUi_getPrayerDeck` | `/api/rpc.php` | `people` |
+| `prayerDeck_getByPool` | `/api/rpc.php` | `prayer_pools`, `prayer_pool_members`, `people` |
+| `prayer_startSession` | `/api/rpc.php` | `prayer_sessions` |
+| `prayer_heartbeat` | `/api/rpc.php` | `prayer_sessions` |
+| `prayer_endSession` | `/api/rpc.php` | `prayer_sessions`, `prayer_points` |
+| `prayer_getLeaderboard` | `/api/rpc.php` | `prayer_points` |
+| `prayerPools_get` | `/api/rpc.php` | `prayer_pools` |
+| `prayerPools_getMembers` | `/api/rpc.php` | `prayer_pool_members` |
+| `prayerPools_create` | `/api/rpc.php` | `prayer_pools` |
+| `prayerPools_delete` | `/api/rpc.php` | `prayer_pools` |
+| `prayerPools_addMembers` | `/api/rpc.php` | `prayer_pool_members` |
+| `prayerPools_removeMembers` | `/api/rpc.php` | `prayer_pool_members` |
 
 ## Frontend-Adapter
 

@@ -45,21 +45,26 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
         'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => rpc_import_runs()],
         'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => rpc_data_version()],
-        'tools_loadUserSmartFilters' => ['ok' => true, 'filters' => []],
-        'tools_saveUserSmartFilters' => ['ok' => true],
+        'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
+        'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
         'tools_importFamilien' => rpc_run_import('familien', $user),
         'tools_importGruppen' => rpc_run_import('gruppen', $user),
         'tools_importKalender' => rpc_run_import('kalender', $user),
         'tools_importServiceDetails' => rpc_run_import('service_details', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
-        'personenUi_getPrayerDeck', 'prayerDeck_getByPool' => ['ok' => true, 'cards' => []],
-        'prayerPools_get' => ['ok' => true, 'pools' => []],
-        'prayerPools_getMembers' => ['ok' => true, 'members' => []],
-        'prayerPools_create', 'prayerPools_delete', 'prayerPools_addMembers', 'prayerPools_removeMembers' => ['ok' => true],
-        'prayer_startSession' => ['ok' => true, 'sessionId' => bin2hex(random_bytes(8))],
-        'prayer_heartbeat', 'prayer_endSession' => ['ok' => true],
-        'prayer_getLeaderboard' => ['ok' => true, 'rows' => []],
+        'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck()],
+        'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''))],
+        'prayerPools_get' => ['ok' => true, 'pools' => rpc_prayer_pools()],
+        'prayerPools_getMembers' => ['ok' => true, 'members' => rpc_prayer_pool_members((string) ($args[0] ?? 'Kranke'))],
+        'prayerPools_create' => rpc_prayer_pool_create($args[0] ?? [], $user),
+        'prayerPools_delete' => rpc_prayer_pool_delete((string) ($args[0] ?? '')),
+        'prayerPools_addMembers' => rpc_prayer_pool_add_members($args[0] ?? []),
+        'prayerPools_removeMembers' => rpc_prayer_pool_remove_members($args[0] ?? []),
+        'prayer_startSession' => rpc_prayer_start_session($args[0] ?? [], $user),
+        'prayer_heartbeat' => rpc_prayer_heartbeat($args[0] ?? []),
+        'prayer_endSession' => rpc_prayer_end_session($args[0] ?? []),
+        'prayer_getLeaderboard' => rpc_prayer_leaderboard($user),
         'app_getFilteredContactsPrintRows' => rpc_contacts_print_rows_response($args[0] ?? [], $args[1] ?? [], $user),
         'app_exportFilteredContactsCsv' => rpc_contacts_csv_response($args[0] ?? [], $args[1] ?? [], $user),
         default => ['ok' => true],
@@ -247,6 +252,146 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'birthdayWeek' => rpc_birthday_week($birthdayParts),
         'birthdayMonthFlag' => rpc_birthday_month($birthdayParts),
     ];
+}
+
+function rpc_is_category(array $contact, string $category): bool
+{
+    return rpc_lower(rpc_str($contact['category'] ?? '')) === rpc_lower($category);
+}
+
+function rpc_count_contacts(array $contacts, callable $predicate): int
+{
+    $count = 0;
+    foreach ($contacts as $contact) {
+        if ($predicate($contact)) {
+            $count++;
+        }
+    }
+    return $count;
+}
+
+function rpc_people_added_between(string $startModifier, string $endModifier): int
+{
+    $start = (new DateTimeImmutable('today'))->modify($startModifier)->format('Y-m-d 00:00:00');
+    $end = (new DateTimeImmutable('today'))->modify($endModifier)->format('Y-m-d 23:59:59');
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS c
+         FROM people
+         WHERE date_added >= ? AND date_added <= ?
+           AND (status IS NULL OR status = '' OR LOWER(status) = 'active')
+           AND LOWER(COALESCE(category_name, '')) = 'gemeinde'"
+    );
+    $stmt->execute([$start, $end]);
+    return (int) ($stmt->fetch()['c'] ?? 0);
+}
+
+function rpc_percent_delta(int $current, int $previous): int
+{
+    if ($previous <= 0) {
+        return $current > 0 ? 100 : 0;
+    }
+    return (int) round((($current - $previous) / $previous) * 100);
+}
+
+function rpc_trend(int $current, int $previous): string
+{
+    if ($current > $previous) {
+        return 'up';
+    }
+    if ($current < $previous) {
+        return 'down';
+    }
+    return 'flat';
+}
+
+function rpc_gender_kind(string $gender): string
+{
+    $value = rpc_lower($gender);
+    if ($value === 'm' || str_contains($value, 'mann') || str_contains($value, 'male') || str_contains($value, 'männ')) {
+        return 'male';
+    }
+    if ($value === 'w' || $value === 'f' || str_contains($value, 'frau') || str_contains($value, 'female') || str_contains($value, 'weib')) {
+        return 'female';
+    }
+    return '';
+}
+
+function rpc_age_range_count(array $contacts, int $min, int $max): int
+{
+    return rpc_count_contacts($contacts, static function (array $contact) use ($min, $max): bool {
+        $age = $contact['age'] ?? null;
+        return is_int($age) && $age >= $min && $age <= $max;
+    });
+}
+
+function rpc_value_counts(array $contacts, string $field): array
+{
+    $counts = [];
+    foreach ($contacts as $contact) {
+        $values = is_array($contact[$field] ?? null) ? $contact[$field] : [];
+        foreach ($values as $value) {
+            $label = rpc_str($value);
+            if ($label === '') {
+                continue;
+            }
+            $counts[$label] = ($counts[$label] ?? 0) + 1;
+        }
+    }
+    ksort($counts, SORT_NATURAL | SORT_FLAG_CASE);
+    return $counts;
+}
+
+function rpc_counts_to_items(array $counts): array
+{
+    $items = [];
+    foreach ($counts as $label => $count) {
+        $items[] = [
+            'label' => (string) $label,
+            'count' => (int) $count,
+            'filterKey' => (string) $label,
+            'filterLabel' => (string) $label,
+        ];
+    }
+    return $items;
+}
+
+function rpc_contact_location(array $contact): string
+{
+    return trim(rpc_str($contact['postcode'] ?? '') . ' ' . rpc_str($contact['city'] ?? ''));
+}
+
+function rpc_prayer_member_payload(array $contact): array
+{
+    return [
+        'personId' => rpc_str($contact['id'] ?? ''),
+        'name' => rpc_str($contact['displayName'] ?? ''),
+        'picture' => rpc_str($contact['pictureUrl'] ?? ''),
+        'age' => $contact['age'] ?? null,
+        'isChild' => (bool) ($contact['isChild'] ?? false),
+    ];
+}
+
+function rpc_prayer_pool_id(string $poolName): int
+{
+    $name = rpc_str($poolName);
+    if ($name === '') {
+        return 0;
+    }
+    $stmt = db()->prepare('SELECT id FROM prayer_pools WHERE LOWER(pool_name) = LOWER(?) LIMIT 1');
+    $stmt->execute([$name]);
+    return (int) ($stmt->fetchColumn() ?: 0);
+}
+
+function rpc_ensure_prayer_pool(string $poolName): int
+{
+    $name = rpc_str($poolName) ?: 'Kranke';
+    $existing = rpc_prayer_pool_id($name);
+    if ($existing > 0) {
+        return $existing;
+    }
+    $stmt = db()->prepare('INSERT INTO prayer_pools (pool_name) VALUES (?)');
+    $stmt->execute([$name]);
+    return (int) db()->lastInsertId();
 }
 
 function rpc_person_full(string $personId): array
@@ -967,11 +1112,470 @@ function rpc_contact_filters(): array
 
 function rpc_dashboard(): array
 {
+    $contacts = rpc_contacts_lite()['contacts'] ?? [];
+    $gemeinde = array_values(array_filter($contacts, static fn(array $c): bool => rpc_is_category($c, 'gemeinde')));
+    $kontakte = array_values(array_filter($contacts, static fn(array $c): bool => rpc_is_category($c, 'kontakte')));
+    $adults = array_values(array_filter($gemeinde, static fn(array $c): bool => !($c['isChild'] ?? false)));
+
+    $new14 = rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['new14'] ?? false));
+    $new3 = rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['new3'] ?? false));
+    $new6 = rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['new6'] ?? false));
+    $new12 = rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['new12'] ?? false));
+
+    $last14 = rpc_people_added_between('-1 year -14 days', '-1 year');
+    $last3 = rpc_people_added_between('-1 year -3 months', '-1 year');
+    $last6 = rpc_people_added_between('-1 year -6 months', '-1 year');
+    $last12 = rpc_people_added_between('-2 years', '-1 year');
+
+    $households = [];
+    foreach ($gemeinde as $contact) {
+        $key = rpc_str($contact['familyId'] ?? '') ?: 'single_' . rpc_str($contact['id'] ?? '');
+        if ($key === 'single_') {
+            continue;
+        }
+        $households[$key] ??= ['adults' => 0, 'kids' => 0, 'count' => 0];
+        if ($contact['isChild'] ?? false) {
+            $households[$key]['kids']++;
+        } else {
+            $households[$key]['adults']++;
+        }
+        $households[$key]['count']++;
+    }
+    $householdDetail = [];
+    foreach ($households as $item) {
+        $adultsCount = (int) $item['adults'];
+        $kidsCount = (int) $item['kids'];
+        $typeKey = $kidsCount > 0 ? "{$adultsCount}_{$kidsCount}" : ($adultsCount === 1 ? 'single' : 'couple');
+        $householdDetail[$typeKey] ??= ['key' => $typeKey, 'adults' => $adultsCount, 'kids' => $kidsCount, 'count' => 0];
+        $householdDetail[$typeKey]['count']++;
+    }
+
+    $nextStepCounts = rpc_value_counts($adults, 'nextStepValues');
+    $kidsCounts = rpc_value_counts($gemeinde, 'kidsChurchValues');
+    $ypgCounts = rpc_value_counts($gemeinde, 'youthYpgValues');
+    $ministryBuckets = [
+        ['label' => 'Keine Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:0', 'filterLabel' => 'Keine Teams'],
+        ['label' => '1 Team', 'count' => 0, 'filterKey' => 'ministry_teams_count:1', 'filterLabel' => '1 Team'],
+        ['label' => '2 Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:2', 'filterLabel' => '2 Teams'],
+        ['label' => '3+ Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:3plus', 'filterLabel' => '3+ Teams'],
+    ];
+    foreach ($adults as $contact) {
+        $count = count(is_array($contact['departmentsValues'] ?? null) ? $contact['departmentsValues'] : []);
+        $idx = $count >= 3 ? 3 : $count;
+        $ministryBuckets[$idx]['count']++;
+    }
+
     return [
-        'peopleCount' => (int) db()->query('SELECT COUNT(*) AS c FROM people')->fetch()['c'],
+        'peopleCount' => count($contacts),
         'eventsCount' => (int) db()->query('SELECT COUNT(*) AS c FROM calendar_events')->fetch()['c'],
         'serviceCount' => (int) db()->query('SELECT COUNT(*) AS c FROM services')->fetch()['c'],
+        'active' => count($gemeinde),
+        'activeGemeinde' => count($gemeinde),
+        'activeContacts' => count($kontakte),
+        'new14' => $new14,
+        'new3' => $new3,
+        'new6' => $new6,
+        'new12' => $new12,
+        'new14LastYear' => $last14,
+        'new3LastYear' => $last3,
+        'new6LastYear' => $last6,
+        'new12LastYear' => $last12,
+        'new14VsLastYearPct' => rpc_percent_delta($new14, $last14),
+        'new3VsLastYearPct' => rpc_percent_delta($new3, $last3),
+        'new6VsLastYearPct' => rpc_percent_delta($new6, $last6),
+        'new12VsLastYearPct' => rpc_percent_delta($new12, $last12),
+        'trend14VsLastYear' => rpc_trend($new14, $last14),
+        'trend3VsLastYear' => rpc_trend($new3, $last3),
+        'trend6VsLastYear' => rpc_trend($new6, $last6),
+        'trend12VsLastYear' => rpc_trend($new12, $last12),
+        'newcomer' => [
+            'current14' => $new14,
+            'compare14LastYear' => $last14,
+            'current3' => $new3,
+            'compare3LastYear' => $last3,
+            'current6' => $new6,
+            'compare6LastYear' => $last6,
+            'current12' => $new12,
+            'compare12LastYear' => $last12,
+        ],
+        'birthday' => [
+            'today' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['birthdayToday'] ?? false)),
+            'week' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['birthdayWeek'] ?? false)),
+            'month' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['birthdayMonthFlag'] ?? false)),
+        ],
+        'male' => rpc_count_contacts($gemeinde, static fn(array $c): bool => rpc_gender_kind(rpc_str($c['gender'] ?? '')) === 'male'),
+        'female' => rpc_count_contacts($gemeinde, static fn(array $c): bool => rpc_gender_kind(rpc_str($c['gender'] ?? '')) === 'female'),
+        'families' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['isFamilyMain'] ?? false)),
+        'singles' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['isSingle'] ?? false)),
+        'households' => count($households),
+        'householdDetail' => array_values($householdDetail),
+        'age0_20' => rpc_age_range_count($gemeinde, 0, 20),
+        'age21_40' => rpc_age_range_count($gemeinde, 21, 40),
+        'age41_60' => rpc_age_range_count($gemeinde, 41, 60),
+        'age61_100' => rpc_age_range_count($gemeinde, 61, 100),
+        'age0_5' => rpc_age_range_count($gemeinde, 0, 5),
+        'age6_10' => rpc_age_range_count($gemeinde, 6, 10),
+        'age11_15' => rpc_age_range_count($gemeinde, 11, 15),
+        'age16_20' => rpc_age_range_count($gemeinde, 16, 20),
+        'age21_25' => rpc_age_range_count($gemeinde, 21, 25),
+        'age26_30' => rpc_age_range_count($gemeinde, 26, 30),
+        'age31_35' => rpc_age_range_count($gemeinde, 31, 35),
+        'age36_40' => rpc_age_range_count($gemeinde, 36, 40),
+        'age41_45' => rpc_age_range_count($gemeinde, 41, 45),
+        'age46_50' => rpc_age_range_count($gemeinde, 46, 50),
+        'age51_55' => rpc_age_range_count($gemeinde, 51, 55),
+        'age56_60' => rpc_age_range_count($gemeinde, 56, 60),
+        'age61_65' => rpc_age_range_count($gemeinde, 61, 65),
+        'age66_70' => rpc_age_range_count($gemeinde, 66, 70),
+        'age71_75' => rpc_age_range_count($gemeinde, 71, 75),
+        'age76_100' => rpc_age_range_count($gemeinde, 76, 100),
+        'nextStep' => [
+            'items' => array_map(
+                static fn(array $item): array => $item + ['notVisitedCount' => max(0, count($adults) - (int) $item['count'])],
+                rpc_counts_to_items($nextStepCounts)
+            ),
+            'kgMembersTotal' => rpc_count_contacts($adults, static fn(array $c): bool => (bool) ($c['hasKg'] ?? false)),
+            'kgMembersMissingTotal' => rpc_count_contacts($adults, static fn(array $c): bool => !($c['hasKg'] ?? false)),
+            'kgLeadersTotal' => rpc_count_contacts($adults, static fn(array $c): bool => (bool) ($c['leadsKg'] ?? false)),
+            'kgLeadersMissingTotal' => rpc_count_contacts($adults, static fn(array $c): bool => !($c['leadsKg'] ?? false)),
+            'ministryTeamBuckets' => $ministryBuckets,
+        ],
+        'childrenYouth' => [
+            'kidsChurch' => ['total' => array_sum($kidsCounts), 'items' => rpc_counts_to_items($kidsCounts)],
+            'youthYpg' => ['total' => array_sum($ypgCounts), 'items' => rpc_counts_to_items($ypgCounts)],
+        ],
     ];
+}
+
+function rpc_load_user_smart_filters(array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0) {
+        return ['ok' => true, 'email' => rpc_str($user['email'] ?? ''), 'found' => false, 'activeSmartRules' => [], 'smartFilterHistory' => []];
+    }
+
+    $stmt = db()->prepare('SELECT payload_json FROM user_smart_filters WHERE user_id = ? AND filter_key = ? LIMIT 1');
+    $stmt->execute([$userId, 'default']);
+    $payload = $stmt->fetchColumn();
+    if (!is_string($payload) || trim($payload) === '') {
+        return ['ok' => true, 'email' => rpc_str($user['email'] ?? ''), 'found' => false, 'activeSmartRules' => [], 'smartFilterHistory' => []];
+    }
+
+    $decoded = json_decode($payload, true);
+    if (!is_array($decoded)) {
+        return ['ok' => true, 'email' => rpc_str($user['email'] ?? ''), 'found' => false, 'activeSmartRules' => [], 'smartFilterHistory' => []];
+    }
+
+    return [
+        'ok' => true,
+        'email' => rpc_str($user['email'] ?? ''),
+        'found' => true,
+        'activeSmartRules' => is_array($decoded['activeSmartRules'] ?? null) ? $decoded['activeSmartRules'] : [],
+        'smartFilterHistory' => is_array($decoded['smartFilterHistory'] ?? null) ? array_slice($decoded['smartFilterHistory'], 0, 10) : [],
+    ];
+}
+
+function rpc_save_user_smart_filters(mixed $payload, array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0 || !is_array($payload)) {
+        return ['ok' => false, 'error' => 'Smart-Filter konnten nicht gespeichert werden.'];
+    }
+
+    $safePayload = [
+        'activeSmartRules' => is_array($payload['activeSmartRules'] ?? null) ? $payload['activeSmartRules'] : [],
+        'smartFilterHistory' => is_array($payload['smartFilterHistory'] ?? null) ? array_slice($payload['smartFilterHistory'], 0, 10) : [],
+    ];
+    $json = json_encode($safePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        return ['ok' => false, 'error' => 'Smart-Filter konnten nicht serialisiert werden.'];
+    }
+
+    $stmt = db()->prepare(
+        'INSERT INTO user_smart_filters (user_id, filter_key, payload_json)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE payload_json = VALUES(payload_json), updated_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([$userId, 'default', $json]);
+    return ['ok' => true];
+}
+
+function rpc_prayer_deck(): array
+{
+    $contacts = array_values(array_filter(
+        rpc_contacts_lite()['contacts'] ?? [],
+        static fn(array $c): bool => rpc_is_category($c, 'gemeinde')
+    ));
+    $families = [];
+    $singles = [];
+
+    foreach ($contacts as $contact) {
+        $familyId = rpc_str($contact['familyId'] ?? '');
+        if ($familyId !== '' && !($contact['isSingle'] ?? false)) {
+            $families[$familyId] ??= [];
+            $families[$familyId][] = $contact;
+            continue;
+        }
+        $singles[] = $contact;
+    }
+
+    $cards = [];
+    foreach ($families as $familyId => $members) {
+        usort($members, static fn(array $a, array $b): int => strcasecmp(rpc_str($a['age'] ?? ''), rpc_str($b['age'] ?? '')));
+        $lastNames = array_values(array_unique(array_filter(array_map(static fn(array $m): string => rpc_str($m['lastName'] ?? ''), $members))));
+        $sortLast = $lastNames[0] ?? '';
+        $title = $sortLast !== '' ? 'Familie ' . $sortLast : 'Familie';
+        $cards[] = [
+            'id' => 'family:' . $familyId,
+            'type' => 'family',
+            'title' => $title,
+            'sortLastName' => $sortLast,
+            'sortFirstName' => '',
+            'sortKey' => rpc_search_text($sortLast . ' ' . $familyId),
+            'location' => rpc_contact_location($members[0] ?? []),
+            'members' => array_map('rpc_prayer_member_payload', $members),
+        ];
+    }
+
+    foreach ($singles as $contact) {
+        $personId = rpc_str($contact['id'] ?? '');
+        if ($personId === '') {
+            continue;
+        }
+        $cards[] = [
+            'id' => 'person:' . $personId,
+            'type' => 'single',
+            'title' => rpc_str($contact['displayName'] ?? ''),
+            'sortLastName' => rpc_str($contact['lastName'] ?? ''),
+            'sortFirstName' => rpc_str($contact['firstName'] ?? ''),
+            'sortKey' => rpc_search_text(rpc_str($contact['lastName'] ?? '') . ' ' . rpc_str($contact['firstName'] ?? '')),
+            'location' => rpc_contact_location($contact),
+            'members' => [rpc_prayer_member_payload($contact)],
+        ];
+    }
+
+    usort($cards, static fn(array $a, array $b): int => strcasecmp(rpc_str($a['sortKey'] ?? ''), rpc_str($b['sortKey'] ?? '')));
+    return $cards;
+}
+
+function rpc_prayer_deck_by_pool(string $poolName): array
+{
+    $personIds = array_flip(array_map(
+        static fn(array $m): string => rpc_str($m['personId'] ?? ''),
+        rpc_prayer_pool_members($poolName)
+    ));
+    if (!$personIds) {
+        return [];
+    }
+
+    return array_values(array_filter(rpc_prayer_deck(), static function (array $card) use ($personIds): bool {
+        foreach (($card['members'] ?? []) as $member) {
+            if (isset($personIds[rpc_str($member['personId'] ?? '')])) {
+                return true;
+            }
+        }
+        return false;
+    }));
+}
+
+function rpc_prayer_pools(): array
+{
+    rpc_ensure_prayer_pool('Kranke');
+    $rows = db()->query(
+        'SELECT pp.pool_name, COUNT(ppm.person_id) AS members_count
+         FROM prayer_pools pp
+         LEFT JOIN prayer_pool_members ppm ON ppm.pool_id = pp.id
+         GROUP BY pp.id, pp.pool_name
+         ORDER BY pp.pool_name'
+    )->fetchAll();
+
+    return array_map(static function (array $row): array {
+        $poolName = rpc_str($row['pool_name'] ?? '');
+        return [
+            'name' => $poolName,
+            'membersCount' => (int) ($row['members_count'] ?? 0),
+            'cardsCount' => count(rpc_prayer_deck_by_pool($poolName)),
+        ];
+    }, $rows);
+}
+
+function rpc_prayer_pool_members(string $poolName): array
+{
+    $poolId = rpc_ensure_prayer_pool($poolName ?: 'Kranke');
+    $rows = fetch_all_prepared_legacy(
+        'SELECT p.id, p.display_name, p.firstname, p.preferred_name, p.lastname, p.picture_url
+         FROM prayer_pool_members ppm
+         INNER JOIN people p ON p.id = ppm.person_id
+         WHERE ppm.pool_id = ?
+         ORDER BY p.lastname, p.firstname',
+        [$poolId]
+    );
+
+    return array_map(static function (array $row): array {
+        $name = rpc_str($row['display_name'] ?? '') ?: trim((rpc_str($row['preferred_name'] ?? '') ?: rpc_str($row['firstname'] ?? '')) . ' ' . rpc_str($row['lastname'] ?? ''));
+        return [
+            'personId' => rpc_str($row['id'] ?? ''),
+            'name' => $name,
+            'picture' => rpc_str($row['picture_url'] ?? ''),
+        ];
+    }, $rows);
+}
+
+function rpc_prayer_pool_create(mixed $payload, array $user): array
+{
+    $poolName = rpc_str(is_array($payload) ? ($payload['poolName'] ?? '') : $payload);
+    if ($poolName === '') {
+        return ['ok' => false, 'reason' => 'empty_name'];
+    }
+    $existing = rpc_prayer_pool_id($poolName);
+    if ($existing > 0) {
+        return ['ok' => false, 'reason' => 'pool_exists', 'poolName' => $poolName];
+    }
+
+    $stmt = db()->prepare('INSERT INTO prayer_pools (pool_name, created_by_email) VALUES (?, ?)');
+    $stmt->execute([$poolName, rpc_str($user['email'] ?? '')]);
+    return ['ok' => true, 'poolName' => $poolName];
+}
+
+function rpc_prayer_pool_delete(string $poolName): array
+{
+    if (rpc_lower($poolName) === 'kranke') {
+        return ['ok' => false, 'reason' => 'protected_default_pool'];
+    }
+    $poolId = rpc_prayer_pool_id($poolName);
+    if ($poolId <= 0) {
+        return ['ok' => true];
+    }
+    $stmt = db()->prepare('DELETE FROM prayer_pools WHERE id = ?');
+    $stmt->execute([$poolId]);
+    return ['ok' => true];
+}
+
+function rpc_prayer_pool_add_members(mixed $payload): array
+{
+    if (!is_array($payload)) {
+        return ['ok' => false, 'reason' => 'invalid_payload'];
+    }
+    $poolId = rpc_ensure_prayer_pool(rpc_str($payload['poolName'] ?? 'Kranke') ?: 'Kranke');
+    $personIds = is_array($payload['personIds'] ?? null) ? $payload['personIds'] : [];
+    $stmt = db()->prepare('INSERT IGNORE INTO prayer_pool_members (pool_id, person_id) VALUES (?, ?)');
+    $added = 0;
+    foreach ($personIds as $personId) {
+        $id = rpc_str($personId);
+        if ($id === '') {
+            continue;
+        }
+        $stmt->execute([$poolId, $id]);
+        $added += $stmt->rowCount();
+    }
+    return ['ok' => true, 'added' => $added];
+}
+
+function rpc_prayer_pool_remove_members(mixed $payload): array
+{
+    if (!is_array($payload)) {
+        return ['ok' => false, 'reason' => 'invalid_payload'];
+    }
+    $poolId = rpc_prayer_pool_id(rpc_str($payload['poolName'] ?? 'Kranke') ?: 'Kranke');
+    if ($poolId <= 0) {
+        return ['ok' => true, 'removed' => 0];
+    }
+    $personIds = is_array($payload['personIds'] ?? null) ? $payload['personIds'] : [];
+    $stmt = db()->prepare('DELETE FROM prayer_pool_members WHERE pool_id = ? AND person_id = ?');
+    $removed = 0;
+    foreach ($personIds as $personId) {
+        $id = rpc_str($personId);
+        if ($id === '') {
+            continue;
+        }
+        $stmt->execute([$poolId, $id]);
+        $removed += $stmt->rowCount();
+    }
+    return ['ok' => true, 'removed' => $removed];
+}
+
+function rpc_prayer_start_session(mixed $payload, array $user): array
+{
+    $data = is_array($payload) ? $payload : [];
+    $sessionId = rpc_str($data['sessionId'] ?? '') ?: ('ps_' . bin2hex(random_bytes(12)));
+    $cardId = rpc_str($data['cardId'] ?? '');
+    $personCount = max(1, (int) ($data['personCount'] ?? 1));
+    $stmt = db()->prepare(
+        'INSERT INTO prayer_sessions (session_id, user_email, active_card_id, person_count, started_at, last_seen_at, is_active, meta_json)
+         VALUES (?, ?, ?, ?, NOW(), NOW(), 1, ?)
+         ON DUPLICATE KEY UPDATE active_card_id = VALUES(active_card_id), person_count = VALUES(person_count), last_seen_at = NOW(), is_active = 1, ended_at = NULL'
+    );
+    $stmt->execute([$sessionId, rpc_str($user['email'] ?? ''), $cardId, $personCount, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+    return ['ok' => true, 'sessionId' => $sessionId];
+}
+
+function rpc_prayer_heartbeat(mixed $payload): array
+{
+    $sessionId = rpc_str(is_array($payload) ? ($payload['sessionId'] ?? '') : '');
+    if ($sessionId !== '') {
+        $stmt = db()->prepare('UPDATE prayer_sessions SET last_seen_at = NOW() WHERE session_id = ? AND is_active = 1');
+        $stmt->execute([$sessionId]);
+    }
+    return ['ok' => true];
+}
+
+function rpc_prayer_end_session(mixed $payload): array
+{
+    $sessionId = rpc_str(is_array($payload) ? ($payload['sessionId'] ?? '') : '');
+    if ($sessionId === '') {
+        return ['ok' => true];
+    }
+    $stmt = db()->prepare('SELECT user_email, person_count, is_active FROM prayer_sessions WHERE session_id = ? LIMIT 1');
+    $stmt->execute([$sessionId]);
+    $row = $stmt->fetch();
+    if (!is_array($row)) {
+        return ['ok' => true];
+    }
+
+    if ((int) ($row['is_active'] ?? 0) === 1) {
+        $points = max(1, (int) ($row['person_count'] ?? 1));
+        $email = rpc_str($row['user_email'] ?? '');
+        if ($email !== '') {
+            $insert = db()->prepare('INSERT INTO prayer_points (user_email, points, awarded_at, session_id) VALUES (?, ?, NOW(), ?)');
+            $insert->execute([$email, $points, $sessionId]);
+        }
+    }
+    $update = db()->prepare('UPDATE prayer_sessions SET ended_at = NOW(), last_seen_at = NOW(), is_active = 0 WHERE session_id = ?');
+    $update->execute([$sessionId]);
+    return ['ok' => true];
+}
+
+function rpc_prayer_leaderboard(array $user): array
+{
+    $rows = db()->query(
+        "SELECT pp.user_email, COALESCE(u.display_name, pp.user_email) AS name, SUM(pp.points) AS points_month, COUNT(*) AS sessions
+         FROM prayer_points pp
+         LEFT JOIN users u ON u.email = pp.user_email
+         WHERE pp.awarded_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+         GROUP BY pp.user_email, u.display_name
+         ORDER BY points_month DESC, sessions DESC, name ASC"
+    )->fetchAll();
+
+    $ranked = [];
+    $rank = 1;
+    foreach ($rows as $row) {
+        $ranked[] = [
+            'rank' => $rank++,
+            'email' => rpc_str($row['user_email'] ?? ''),
+            'name' => rpc_str($row['name'] ?? ''),
+            'pointsMonth' => (int) ($row['points_month'] ?? 0),
+            'sessions' => (int) ($row['sessions'] ?? 0),
+        ];
+    }
+    $userEmail = rpc_str($user['email'] ?? '');
+    $me = ['rank' => 0, 'pointsMonth' => 0, 'sessions' => 0];
+    foreach ($ranked as $row) {
+        if (rpc_lower(rpc_str($row['email'] ?? '')) === rpc_lower($userEmail)) {
+            $me = $row;
+            break;
+        }
+    }
+    return ['ok' => true, 'top' => array_slice($ranked, 0, 3), 'me' => $me, 'rows' => $ranked];
 }
 
 function rpc_run_import(string $type, array $user): array
