@@ -47,7 +47,12 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => rpc_data_version()],
         'tools_loadUserSmartFilters' => ['ok' => true, 'filters' => []],
         'tools_saveUserSmartFilters' => ['ok' => true],
-        'tools_importKalender', 'tools_importPersonen' => ['ok' => false, 'error' => 'Import bitte ueber Admin-Endpunkte starten.'],
+        'tools_importPersonen' => rpc_run_import('personen', $user),
+        'tools_importFamilien' => rpc_run_import('familien', $user),
+        'tools_importGruppen' => rpc_run_import('gruppen', $user),
+        'tools_importKalender' => rpc_run_import('kalender', $user),
+        'tools_importServiceDetails' => rpc_run_import('service_details', $user),
+        'tools_importAlles' => rpc_run_import('alles', $user),
         'personenUi_getPrayerDeck', 'prayerDeck_getByPool' => ['ok' => true, 'cards' => []],
         'prayerPools_get' => ['ok' => true, 'pools' => []],
         'prayerPools_getMembers' => ['ok' => true, 'members' => []],
@@ -967,6 +972,95 @@ function rpc_dashboard(): array
         'eventsCount' => (int) db()->query('SELECT COUNT(*) AS c FROM calendar_events')->fetch()['c'],
         'serviceCount' => (int) db()->query('SELECT COUNT(*) AS c FROM services')->fetch()['c'],
     ];
+}
+
+function rpc_run_import(string $type, array $user): array
+{
+    if (strtolower(rpc_str($user['role'] ?? '')) !== 'admin') {
+        return ['ok' => false, 'error' => 'Import fuer diese Rolle nicht freigeschaltet.'];
+    }
+
+    $results = [];
+    $startedAt = date('Y-m-d H:i:s');
+
+    try {
+        foreach (rpc_import_steps($type) as $step) {
+            $results[$step] = rpc_run_import_step($step);
+        }
+    } catch (Throwable $e) {
+        return [
+            'ok' => false,
+            'type' => $type,
+            'startedAt' => $startedAt,
+            'finishedAt' => date('Y-m-d H:i:s'),
+            'results' => $results,
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'type' => $type,
+        'startedAt' => $startedAt,
+        'finishedAt' => date('Y-m-d H:i:s'),
+        'results' => $results,
+        'dataVersion' => rpc_data_version(),
+    ];
+}
+
+function rpc_import_steps(string $type): array
+{
+    return match ($type) {
+        'personen' => ['people', 'families', 'groups'],
+        'familien' => ['families'],
+        'gruppen' => ['groups'],
+        'kalender' => ['calendar'],
+        'service_details' => ['service_details'],
+        'alles' => ['people', 'families', 'groups', 'calendar', 'service_details'],
+        default => throw new InvalidArgumentException('Unbekannter Import: ' . $type),
+    };
+}
+
+function rpc_run_import_step(string $step): array
+{
+    return match ($step) {
+        'people' => rpc_import_people_step(),
+        'families' => rpc_import_families_step(),
+        'groups' => rpc_import_groups_step(),
+        'calendar' => rpc_import_calendar_step(),
+        'service_details' => rpc_import_service_details_step(),
+        default => throw new InvalidArgumentException('Unbekannter Importschritt: ' . $step),
+    };
+}
+
+function rpc_import_people_step(): array
+{
+    require_once __DIR__ . '/../../src/import_people.php';
+    return import_people();
+}
+
+function rpc_import_families_step(): array
+{
+    require_once __DIR__ . '/../../src/import_families.php';
+    return import_families();
+}
+
+function rpc_import_groups_step(): array
+{
+    require_once __DIR__ . '/../../src/import_groups.php';
+    return import_groups();
+}
+
+function rpc_import_calendar_step(): array
+{
+    require_once __DIR__ . '/../../src/import_calendar.php';
+    return import_calendar_basic();
+}
+
+function rpc_import_service_details_step(): array
+{
+    require_once __DIR__ . '/../../src/import_service_details.php';
+    return import_service_details();
 }
 
 function rpc_import_runs(): array

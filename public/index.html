@@ -7043,12 +7043,32 @@
 
             <button class="btn btn-primary" type="button" onclick="runImport('personen')">
               <i class="fas fa-users"></i>
-              <span>Personen laden</span>
+              <span>Personen + Familien + Gruppen laden</span>
+            </button>
+
+            <button class="btn btn-secondary" type="button" onclick="runImport('familien')">
+              <i class="fas fa-house-user"></i>
+              <span>Nur Familien laden</span>
+            </button>
+
+            <button class="btn btn-secondary" type="button" onclick="runImport('gruppen')">
+              <i class="fas fa-user-group"></i>
+              <span>Nur Gruppen laden</span>
             </button>
 
             <button class="btn btn-primary" type="button" onclick="runImport('kalender')">
               <i class="fas fa-calendar-check"></i>
               <span>Kalender laden</span>
+            </button>
+
+            <button class="btn btn-secondary" type="button" onclick="runImport('service_details')">
+              <i class="fas fa-list-check"></i>
+              <span>Gottesdienst-Details laden</span>
+            </button>
+
+            <button class="btn btn-secondary" type="button" onclick="runImport('alles')">
+              <i class="fas fa-rotate"></i>
+              <span>Alles nacheinander laden</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runServerCacheRebuild()">
@@ -19085,23 +19105,35 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       async function runImport(type) {
         const box = document.getElementById("sync-status");
-        if (box) box.textContent = "Import läuft...";
+        const labelMap = {
+          personen: "Personen, Familien und Gruppen",
+          familien: "Familien",
+          gruppen: "Gruppen",
+          kalender: "Kalender",
+          service_details: "Gottesdienst-Details",
+          alles: "Alle Daten"
+        };
+        const label = labelMap[type] || "Import";
+        if (box) box.textContent = `${label} werden geladen...`;
 
         try {
-          let res;
-          if (type === "personen") {
-            res = await withGsRetry("tools_importPersonen", [], { retries: 1, retryDelay: 800 });
-          } else {
-            res = await withGsRetry("tools_importKalender", [], { retries: 1, retryDelay: 800 });
-          }
+          const fnMap = {
+            personen: "tools_importPersonen",
+            familien: "tools_importFamilien",
+            gruppen: "tools_importGruppen",
+            kalender: "tools_importKalender",
+            service_details: "tools_importServiceDetails",
+            alles: "tools_importAlles"
+          };
+          const res = await withGsRetry(fnMap[type] || "tools_importPersonen", [], { retries: 1, retryDelay: 800 });
 
           if (!res?.ok) throw new Error(res?.error || "Import fehlgeschlagen.");
 
           await refreshSyncStatus_();
           await forceRefreshAppData(false);
-          if (type === "kalender" && currentTab === "calendar") await refreshCalendarView(false);
+          if ((type === "kalender" || type === "service_details" || type === "alles") && currentTab === "calendar") await refreshCalendarView(false);
 
-          toast(type === "personen" ? "Personen importiert" : "Kalender importiert", 1700);
+          toast(`${label} importiert`, 1700);
         } catch (err) {
           if (box) box.textContent = "Fehler: " + normalizeErrMsg_(err);
           toast("Import fehlgeschlagen", 1800);
