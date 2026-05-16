@@ -8,7 +8,7 @@ Die bestehenden Frontend-Aufrufe laufen weiter ueber `withGsRetry(fnName, args)`
 | Apps Script Funktion | PHP-Endpunkt | Status |
 | --- | --- | --- |
 | `app_ping` | `/api/ping.php` | angelegt |
-| `app_bootstrap` | `/api/bootstrap.php` | geplant |
+| `app_bootstrap` | `/api/rpc.php` | implementiert |
 | `app_loadFilterDefs` | `/api/filter-defs.php` | geplant |
 | `app_loadDashboardStats` | `/api/rpc.php` | implementiert, eigener Endpunkt spaeter |
 | `app_loadContactsLite` | `/api/contacts-lite.php` | geplant |
@@ -74,7 +74,7 @@ Die Uebergangsstrategie ist, `withGsRetry` im Frontend intern umzubauen. Direkte
 ```js
 const RPC_MAP = {
   app_ping: '/api/ping.php',
-  app_bootstrap: '/api/bootstrap.php',
+  app_bootstrap: '/api/rpc.php',
   app_loadContactsLite: '/api/rpc.php'
 };
 

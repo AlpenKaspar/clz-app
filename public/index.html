@@ -7356,14 +7356,14 @@
       let printTitleOverrides = { contacts: "", calendar: "" };
 
       const CACHE_KEYS = {
-        bootstrap: "clz_bootstrap_v189",
-        filterDefs: "clz_filter_defs_v189",
-        dashboardStats: "clz_dashboard_stats_v189",
-        contactsLite: "clz_contacts_lite_v189",
-        personMainPrefix: "clz_person_main_v189_",
-        personExtraPrefix: "clz_person_extra_v189_",
-        groupSectionPrefix: "clz_group_section_v189_",
-        familyPrefix: "clz_family_v189_",
+        bootstrap: "clz_bootstrap_v190",
+        filterDefs: "clz_filter_defs_v190",
+        dashboardStats: "clz_dashboard_stats_v190",
+        contactsLite: "clz_contacts_lite_v190",
+        personMainPrefix: "clz_person_main_v190_",
+        personExtraPrefix: "clz_person_extra_v190_",
+        groupSectionPrefix: "clz_group_section_v190_",
+        familyPrefix: "clz_family_v190_",
         serviceDetailsPrefix: "clz_service_details_v186_"
       };
       const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
@@ -7603,7 +7603,7 @@
         const retryDelay = Number.isFinite(options.retryDelay) ? options.retryDelay : 700;
         const direct = {
           app_ping: '/api/ping.php',
-          app_bootstrap: '/api/bootstrap.php',
+          app_bootstrap: '/api/rpc.php',
           app_loadContactsLite: '/api/rpc.php',
           app_loadFilterDefs: '/api/rpc.php',
           app_loadDashboardStats: '/api/rpc.php',
