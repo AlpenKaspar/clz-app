@@ -12756,25 +12756,7 @@ function updateBottomNavHighlight_() {
         setStatus("status", "", "");
 
         requestAnimationFrame(() => {
-          const normalizedCategoryFilters = contactCategoryFilters.map(x => String(x || "").trim().toLowerCase());
-          const leadershipFilters = contactFilters.slice();
-
-          const matchesNonQueryFilters_ = (c) => {
-            const category = String(c.category || "").trim().toLowerCase();
-            const matchesCategory =
-              normalizedCategoryFilters.length > 0 &&
-              normalizedCategoryFilters.includes(category);
-            if (!matchesCategory) return false;
-
-            if (leadershipFilters.length > 0) {
-              const hasLeadership = leadershipFilters.some(f => (c.leaderships || []).includes(f));
-              if (!hasLeadership) return false;
-            }
-
-            if (activeDashboardFilterKey && !matchesDashboardFilterLocal_(c, activeDashboardFilterKey)) return false;
-            if (!matchesSmartRules_(c, activeSmartRules)) return false;
-            return true;
-          };
+          const matchesNonQueryFilters_ = buildContactBaseFilter_();
 
           const scoreContactSearchMatch_ = (contact) => {
             const displayName = String(contact?.displayName || '').toLowerCase();
@@ -12925,6 +12907,28 @@ function updateBottomNavHighlight_() {
             if (extendedSearchPrefetch.inFlightQuery === raw) extendedSearchPrefetch.inFlightQuery = "";
           }
         }, 650);
+      }
+
+      function buildContactBaseFilter_() {
+        const normalizedCategoryFilters = contactCategoryFilters.map(x => String(x || "").trim().toLowerCase());
+        const leadershipFilters = contactFilters.slice();
+
+        return (c) => {
+          const category = String(c?.category || "").trim().toLowerCase();
+          const matchesCategory =
+            normalizedCategoryFilters.length === 0 ||
+            normalizedCategoryFilters.includes(category);
+          if (!matchesCategory) return false;
+
+          if (leadershipFilters.length > 0) {
+            const hasLeadership = leadershipFilters.some(f => (c?.leaderships || []).includes(f));
+            if (!hasLeadership) return false;
+          }
+
+          if (activeDashboardFilterKey && !matchesDashboardFilterLocal_(c, activeDashboardFilterKey)) return false;
+          if (!matchesSmartRules_(c, activeSmartRules)) return false;
+          return true;
+        };
       }
 
       function normalizeSmartRule_(raw) {
@@ -13142,18 +13146,9 @@ function updateBottomNavHighlight_() {
         if (!raw) return;
 
         if (extendedSearchPrefetch.query === raw && Array.isArray(extendedSearchPrefetch.rows)) {
-          filteredContacts = extendedSearchPrefetch.rows.slice();
-          const normalizedCategoryFilters = contactCategoryFilters.map(x => String(x || "").trim().toLowerCase());
-          const leadershipFilters = contactFilters.slice();
-          const baseRows = (contactsLite || []).filter(c => {
-            const category = String(c.category || "").trim().toLowerCase();
-            const matchesCategory = normalizedCategoryFilters.length > 0 && normalizedCategoryFilters.includes(category);
-            if (!matchesCategory) return false;
-            if (leadershipFilters.length > 0 && !leadershipFilters.some(f => (c.leaderships || []).includes(f))) return false;
-            if (activeDashboardFilterKey && !matchesDashboardFilterLocal_(c, activeDashboardFilterKey)) return false;
-            if (!matchesSmartRules_(c, activeSmartRules)) return false;
-            return true;
-          });
+          const baseFilter = buildContactBaseFilter_();
+          filteredContacts = extendedSearchPrefetch.rows.filter(baseFilter);
+          const baseRows = (contactsLite || []).filter(baseFilter);
           filteredContactFamilies = buildContactFamiliesFromSeed_(filteredContacts, baseRows);
           filteredContactGroups = contactsViewMode === 'groups'
             ? buildContactGroups_(filteredContacts)
@@ -13174,27 +13169,18 @@ function updateBottomNavHighlight_() {
         try {
           const res = await withGsRetry("personenUi_extendedSearch", [raw], { retries: 1, retryDelay: 500 });
           const rows = Array.isArray(res?.contacts) ? res.contacts : [];
-          filteredContacts = rows;
-          const normalizedCategoryFilters = contactCategoryFilters.map(x => String(x || "").trim().toLowerCase());
-          const leadershipFilters = contactFilters.slice();
-          const baseRows = (contactsLite || []).filter(c => {
-            const category = String(c.category || "").trim().toLowerCase();
-            const matchesCategory = normalizedCategoryFilters.length > 0 && normalizedCategoryFilters.includes(category);
-            if (!matchesCategory) return false;
-            if (leadershipFilters.length > 0 && !leadershipFilters.some(f => (c.leaderships || []).includes(f))) return false;
-            if (activeDashboardFilterKey && !matchesDashboardFilterLocal_(c, activeDashboardFilterKey)) return false;
-            if (!matchesSmartRules_(c, activeSmartRules)) return false;
-            return true;
-          });
-          filteredContactFamilies = buildContactFamiliesFromSeed_(rows, baseRows);
+          const baseFilter = buildContactBaseFilter_();
+          filteredContacts = rows.filter(baseFilter);
+          const baseRows = (contactsLite || []).filter(baseFilter);
+          filteredContactFamilies = buildContactFamiliesFromSeed_(filteredContacts, baseRows);
           filteredContactGroups = contactsViewMode === 'groups'
-            ? buildContactGroups_(rows)
+            ? buildContactGroups_(filteredContacts)
             : [];
           contactsOffset = 0;
           renderContactResults_(true);
           const total = contactsViewMode === 'groups'
             ? filteredContactGroups.length
-            : (contactsViewMode === 'households' ? filteredContactFamilies.length : rows.length);
+            : (contactsViewMode === 'households' ? filteredContactFamilies.length : filteredContacts.length);
           setStatus("status", `${total} Treffer`, "");
         } catch (err) {
           setStatus("status", normalizeErrMsg_(err), "status-danger");
