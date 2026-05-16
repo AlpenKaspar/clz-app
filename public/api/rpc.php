@@ -51,7 +51,8 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'prayer_startSession' => ['ok' => true, 'sessionId' => bin2hex(random_bytes(8))],
         'prayer_heartbeat', 'prayer_endSession' => ['ok' => true],
         'prayer_getLeaderboard' => ['ok' => true, 'rows' => []],
-        'app_exportFilteredContactsCsv', 'app_getFilteredContactsPrintRows' => ['ok' => true, 'rows' => []],
+        'app_getFilteredContactsPrintRows' => rpc_contacts_print_rows_response($args[0] ?? [], $args[1] ?? [], $user),
+        'app_exportFilteredContactsCsv' => rpc_contacts_csv_response($args[0] ?? [], $args[1] ?? [], $user),
         default => ['ok' => true],
     };
 }
@@ -388,6 +389,230 @@ function rpc_extended_search(string $query): array
         $contacts = array_values(array_filter($contacts, static fn(array $row): bool => str_contains($row['searchText'] ?? '', $needle)));
     }
     return ['ok' => true, 'contacts' => array_slice($contacts, 0, 200)];
+}
+
+function rpc_contacts_print_rows_response(mixed $ids, mixed $columns, array $user): array
+{
+    if (!rpc_user_can_export_contacts($user)) {
+        return ['ok' => false, 'error' => 'Export fuer diese Rolle nicht freigeschaltet.'];
+    }
+
+    $selected = rpc_contact_export_columns($columns);
+    $rows = rpc_contact_export_rows(rpc_normalize_ids($ids), $selected);
+    return [
+        'ok' => true,
+        'headers' => array_map(static fn(string $key): string => rpc_contact_export_label($key), $selected),
+        'rows' => $rows,
+        'count' => count($rows),
+    ];
+}
+
+function rpc_contacts_csv_response(mixed $ids, mixed $columns, array $user): array
+{
+    if (!rpc_user_can_export_contacts($user)) {
+        return ['ok' => false, 'error' => 'Export fuer diese Rolle nicht freigeschaltet.'];
+    }
+
+    $selected = rpc_contact_export_columns($columns);
+    $headers = array_map(static fn(string $key): string => rpc_contact_export_label($key), $selected);
+    $rows = rpc_contact_export_rows(rpc_normalize_ids($ids), $selected);
+    $csv = rpc_build_csv($headers, $rows);
+    $stamp = (new DateTimeImmutable())->format('Ymd_Hi');
+
+    return [
+        'ok' => true,
+        'filename' => 'kontakte_export_' . $stamp . '.csv',
+        'mimeType' => 'text/csv;charset=utf-8',
+        'base64' => base64_encode($csv),
+        'count' => count($rows),
+    ];
+}
+
+function rpc_user_can_export_contacts(array $user): bool
+{
+    return strtolower(rpc_str($user['role'] ?? '')) === 'admin';
+}
+
+function rpc_normalize_ids(mixed $ids): array
+{
+    if (!is_array($ids)) {
+        return [];
+    }
+
+    $out = [];
+    foreach ($ids as $id) {
+        $value = rpc_str($id);
+        if ($value !== '' && !in_array($value, $out, true)) {
+            $out[] = $value;
+        }
+    }
+    return array_slice($out, 0, 5000);
+}
+
+function rpc_contact_export_columns(mixed $columns): array
+{
+    $allowed = array_keys(rpc_contact_export_column_defs());
+    $fallback = ['Name', 'ALTER', 'BIRTHDAY', 'JAHRGANG', 'HOME ADDRESS', 'PLZ / Ort', 'PHONE', 'MOBILE', 'EMAIL'];
+    if (!is_array($columns) || !$columns) {
+        return $fallback;
+    }
+
+    $selected = [];
+    foreach ($columns as $column) {
+        $key = rpc_str($column);
+        if (in_array($key, $allowed, true) && !in_array($key, $selected, true)) {
+            $selected[] = $key;
+        }
+    }
+    return $selected ?: $fallback;
+}
+
+function rpc_contact_export_column_defs(): array
+{
+    return [
+        'Name' => 'Name',
+        'Preferred Name' => 'Preferred Name',
+        'FIRSTNAME' => 'Vorname',
+        'LASTNAME' => 'Nachname',
+        'KATEGORIE' => 'Kategorie',
+        'HOME ADDRESS' => 'Adresse',
+        'PLZ / Ort' => 'PLZ / Ort',
+        'HOME POSTCODE' => 'PLZ',
+        'HOME CITY' => 'Ort',
+        'PHONE' => 'Telefon',
+        'MOBILE' => 'Mobile',
+        'EMAIL' => 'E-Mail',
+        'GENDER' => 'Geschlecht',
+        'BIRTHDAY' => 'Geburtsdatum',
+        'ALTER' => 'Alter',
+        'JAHRGANG' => 'Jahrgang',
+        'KLEINGRUPPE' => 'Kleingruppe',
+        'IST IN KLEINGRUPPE' => 'Ist in Kleingruppe',
+        'LEITET KLEINGRUPPE' => 'Leitet Kleingruppe',
+        'BERUFE/AUSBILDUNGEN/SKILLS' => 'Beruf/Skills',
+        'DEPARTMENTS' => 'Mitarbeit',
+        'DATE ADDED' => 'Erfasst am',
+    ];
+}
+
+function rpc_contact_export_label(string $key): string
+{
+    $defs = rpc_contact_export_column_defs();
+    return $defs[$key] ?? $key;
+}
+
+function rpc_contact_export_rows(array $ids, array $columns): array
+{
+    if (!$ids || !$columns) {
+        return [];
+    }
+
+    $people = rpc_people_by_ids($ids);
+    $customValues = rpc_people_custom_values();
+    $groupValues = rpc_people_group_values();
+    $familyValues = rpc_people_family_values();
+    $rows = [];
+
+    foreach ($ids as $id) {
+        if (!isset($people[$id])) {
+            continue;
+        }
+
+        $person = $people[$id];
+        $custom = $customValues[$id] ?? [];
+        $groups = $groupValues[$id] ?? ['groups' => [], 'leads' => [], 'assists' => []];
+        $family = $familyValues[$id] ?? [];
+        $lite = rpc_contact_row($person, $custom, $groups, $family);
+        $rows[] = array_map(
+            static fn(string $column): string => rpc_contact_export_value($column, $person, $lite, $custom, $groups),
+            $columns
+        );
+    }
+
+    return $rows;
+}
+
+function rpc_people_by_ids(array $ids): array
+{
+    $out = [];
+    foreach (array_chunk($ids, 300) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $stmt = db()->prepare("SELECT * FROM people WHERE id IN ({$placeholders})");
+        $stmt->execute($chunk);
+        foreach ($stmt as $row) {
+            $id = rpc_str($row['id'] ?? '');
+            if ($id !== '') {
+                $out[$id] = $row;
+            }
+        }
+    }
+    return $out;
+}
+
+function rpc_contact_export_value(string $column, array $person, array $lite, array $custom, array $groups): string
+{
+    return match ($column) {
+        'Name' => rpc_str($lite['displayName'] ?? ''),
+        'Preferred Name' => rpc_str($lite['preferredName'] ?? ''),
+        'FIRSTNAME' => rpc_str($lite['firstName'] ?? ''),
+        'LASTNAME' => rpc_str($lite['lastName'] ?? ''),
+        'KATEGORIE' => rpc_str($lite['category'] ?? ''),
+        'HOME ADDRESS' => rpc_str($lite['address'] ?? ''),
+        'PLZ / Ort' => trim(rpc_str($lite['postcode'] ?? '') . ' ' . rpc_str($lite['city'] ?? '')),
+        'HOME POSTCODE' => rpc_str($lite['postcode'] ?? ''),
+        'HOME CITY' => rpc_str($lite['city'] ?? ''),
+        'PHONE' => rpc_str($lite['phone'] ?? ''),
+        'MOBILE' => rpc_str($lite['mobile'] ?? ''),
+        'EMAIL' => rpc_str($lite['email'] ?? ''),
+        'GENDER' => rpc_str($lite['gender'] ?? ''),
+        'BIRTHDAY' => rpc_ui_date($lite['birthday'] ?? ''),
+        'ALTER' => ($lite['age'] ?? null) !== null ? (string) $lite['age'] : '',
+        'JAHRGANG' => rpc_birth_year($lite['birthday'] ?? ''),
+        'KLEINGRUPPE', 'IST IN KLEINGRUPPE' => implode(', ', $groups['groups'] ?? []),
+        'LEITET KLEINGRUPPE' => implode(', ', $groups['leads'] ?? []),
+        'BERUFE/AUSBILDUNGEN/SKILLS' => rpc_custom_value($custom, ['BERUFE/AUSBILDUNGEN/SKILLS', 'BERUFE / AUSBILDUNGEN / SKILLS', 'BERUF/SKILLS']),
+        'DEPARTMENTS' => rpc_str($person['departments'] ?? ''),
+        'DATE ADDED' => rpc_ui_date(substr(rpc_str($person['date_added'] ?? ''), 0, 10)),
+        default => '',
+    };
+}
+
+function rpc_custom_value(array $custom, array $keys): string
+{
+    foreach ($keys as $key) {
+        $upper = strtoupper($key);
+        if (rpc_str($custom[$upper] ?? '') !== '') {
+            return rpc_str($custom[$upper]);
+        }
+    }
+    return '';
+}
+
+function rpc_birth_year(mixed $birthday): string
+{
+    $raw = rpc_str($birthday);
+    if ($raw === '' || $raw === '0000-00-00') {
+        return '';
+    }
+    return substr($raw, 0, 4);
+}
+
+function rpc_build_csv(array $headers, array $rows): string
+{
+    $handle = fopen('php://temp', 'r+');
+    if (!$handle) {
+        return '';
+    }
+
+    fwrite($handle, "\xEF\xBB\xBF");
+    fputcsv($handle, $headers, ';', '"', "\\");
+    foreach ($rows as $row) {
+        fputcsv($handle, array_map(static fn(mixed $value): string => rpc_str($value), $row), ';', '"', "\\");
+    }
+    rewind($handle);
+    $csv = stream_get_contents($handle) ?: '';
+    fclose($handle);
+    return $csv;
 }
 
 function rpc_family(string $familyId): array
