@@ -43,8 +43,10 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'app_loadSongsLite' => rpc_songs_lite(),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
         'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
-        'tools_getSyncStatus' => ['ok' => true, 'status' => 'ok', 'cache' => [], 'latestRuns' => rpc_import_runs(), 'user' => array_merge($user, ['permissions' => rpc_permissions($user)])],
-        'tools_rebuildServerCaches' => ['ok' => true, 'dataVersion' => rpc_data_version()],
+        'tools_getSyncStatus' => rpc_sync_status($user),
+        'tools_getCacheDiagnostics' => ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()],
+        'tools_debugCachePayloads' => ['ok' => true, 'cache' => rpc_cache_stats(), 'latestRuns' => rpc_import_runs()],
+        'tools_rebuildServerCaches' => rpc_rebuild_server_caches(),
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
@@ -1961,6 +1963,117 @@ function rpc_import_songs_step(): array
 function rpc_import_runs(): array
 {
     return db()->query('SELECT import_type, status, started_at, finished_at, item_count, message FROM import_runs ORDER BY started_at DESC LIMIT 10')->fetchAll();
+}
+
+function rpc_sync_status(array $user): array
+{
+    return [
+        'ok' => true,
+        'status' => 'ok',
+        'personen' => rpc_import_status_group(['people', 'families', 'groups']),
+        'kalender' => rpc_import_status_group(['calendar']),
+        'serviceDetails' => rpc_import_status_group(['service_details']),
+        'songs' => rpc_import_status_group(['songs']),
+        'counts' => rpc_data_counts(),
+        'cache' => rpc_cache_stats(),
+        'latestRuns' => rpc_import_runs(),
+        'user' => array_merge($user, ['permissions' => rpc_permissions($user)]),
+        'dataVersion' => rpc_data_version(),
+    ];
+}
+
+function rpc_rebuild_server_caches(): array
+{
+    set_app_setting('DATA_VERSION', (string) time());
+    return ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()];
+}
+
+function rpc_import_status_group(array $types): array
+{
+    $placeholders = implode(',', array_fill(0, count($types), '?'));
+    $stmt = db()->prepare(
+        "SELECT import_type, status, started_at, finished_at, item_count, message
+         FROM import_runs
+         WHERE import_type IN ({$placeholders})
+         ORDER BY started_at DESC"
+    );
+    $stmt->execute($types);
+    $rows = $stmt->fetchAll();
+    $latest = [];
+    foreach ($rows as $row) {
+        $type = rpc_str($row['import_type'] ?? '');
+        if ($type !== '' && !isset($latest[$type])) {
+            $latest[$type] = $row;
+        }
+    }
+
+    $last = $rows[0] ?? null;
+    $okCount = 0;
+    foreach ($latest as $row) {
+        if (rpc_str($row['status'] ?? '') === 'ok') {
+            $okCount++;
+        }
+    }
+
+    return [
+        'status' => $last ? rpc_str($last['status'] ?? '') : 'missing',
+        'iso' => $last ? rpc_str($last['finished_at'] ?? ($last['started_at'] ?? '')) : '',
+        'count' => $last ? (int) ($last['item_count'] ?? 0) : 0,
+        'message' => $last ? rpc_str($last['message'] ?? '') : '',
+        'stepsOk' => $okCount,
+        'stepsTotal' => count($types),
+        'steps' => $latest,
+    ];
+}
+
+function rpc_data_counts(): array
+{
+    $tables = [
+        'people' => 'people',
+        'families' => 'families',
+        'groups' => 'groups',
+        'calendarEvents' => 'calendar_events',
+        'services' => 'services',
+        'serviceTimes' => 'service_times',
+        'serviceVolunteers' => 'service_volunteers',
+        'servicePlanItems' => 'service_plan_items',
+        'songs' => 'songs',
+    ];
+    $counts = [];
+    foreach ($tables as $key => $table) {
+        try {
+            $counts[$key] = (int) db()->query("SELECT COUNT(*) AS c FROM {$table}")->fetch()['c'];
+        } catch (Throwable) {
+            $counts[$key] = 0;
+        }
+    }
+    return $counts;
+}
+
+function rpc_cache_stats(): array
+{
+    $counts = rpc_data_counts();
+    $runs = rpc_import_runs();
+    $lastRun = $runs[0] ?? [];
+    $dataVersion = rpc_data_version();
+    return [
+        'hits' => 0,
+        'misses' => 0,
+        'writes' => 0,
+        'hitRate' => null,
+        'trackedKeys' => 0,
+        'dataVersion' => $dataVersion,
+        'lastWriteIso' => rpc_str($lastRun['finished_at'] ?? ($lastRun['started_at'] ?? '')),
+        'lastResetIso' => rpc_str($lastRun['finished_at'] ?? ''),
+        'counts' => $counts,
+        'summary' => sprintf(
+            '%d Kontakte, %d Kalender, %d Services, %d Songs',
+            $counts['people'] ?? 0,
+            $counts['calendarEvents'] ?? 0,
+            $counts['services'] ?? 0,
+            $counts['songs'] ?? 0
+        ),
+    ];
 }
 
 function fetch_all_prepared_legacy(string $sql, array $params): array

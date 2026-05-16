@@ -1,0 +1,24 @@
+{
+  "name": "CLZ Spiez",
+  "short_name": "CLZ",
+  "description": "CLZ Spiez Kontakte, Kalender und Songs",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fcfdff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://rollsimply.com/elvanto-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://rollsimply.com/elvanto-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
