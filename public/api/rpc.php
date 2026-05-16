@@ -35,7 +35,11 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
         'kalenderUi_getServiceFlow' => rpc_service_flow($args[0] ?? []),
         'kalenderUi_getServiceDetails', 'kalenderUi_refreshServiceDetails' => rpc_service_details($args[0] ?? []),
-        'kalenderUi_getPersonServiceAssignments' => ['ok' => true, 'serviceIds' => [], 'count' => 0],
+        'kalenderUi_getPersonServiceAssignments' => rpc_person_service_assignments(
+            (string) ($args[0] ?? ''),
+            (string) ($args[1] ?? ''),
+            (string) ($args[2] ?? '')
+        ),
         'app_loadSongsLite' => rpc_songs_lite(),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
         'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
@@ -704,6 +708,60 @@ function rpc_calendar_event(array $row): array
         '_elvantoUrl' => $serviceId !== '' ? 'https://app.elvanto.com/services/' . $serviceId : '',
         'hasServiceFlow' => $serviceId !== '',
         '_serviceLeadInMin' => 0,
+    ];
+}
+
+function rpc_person_service_assignments(string $personId, string $startIso, string $endIso): array
+{
+    $personId = trim($personId);
+    if ($personId === '') {
+        return ['ok' => true, 'serviceIds' => [], 'assignments' => [], 'count' => 0];
+    }
+
+    $start = $startIso !== '' ? $startIso : (new DateTimeImmutable('today'))->format('Y-m-d');
+    $end = $endIso !== '' ? $endIso : (new DateTimeImmutable($start))->modify('+180 days')->format('Y-m-d');
+
+    $rows = fetch_all_prepared_legacy(
+        'SELECT DISTINCT
+            s.service_id, s.title, s.category, s.location, s.service_start, s.service_end,
+            sv.team, sv.role, sv.status
+         FROM service_volunteers sv
+         INNER JOIN services s ON s.service_id = sv.service_id
+         WHERE sv.person_id = ?
+           AND DATE(s.service_start) <= ?
+           AND DATE(COALESCE(s.service_end, s.service_start)) >= ?
+         ORDER BY s.service_start, s.title, sv.team, sv.role',
+        [$personId, $end, $start]
+    );
+
+    $serviceIds = [];
+    $assignments = [];
+    foreach ($rows as $row) {
+        $serviceId = rpc_str($row['service_id'] ?? '');
+        if ($serviceId === '') {
+            continue;
+        }
+
+        rpc_add_unique($serviceIds, $serviceId);
+        $assignments[] = [
+            'serviceId' => $serviceId,
+            'title' => rpc_str($row['title'] ?? ''),
+            'category' => rpc_str($row['category'] ?? ''),
+            'location' => rpc_str($row['location'] ?? ''),
+            'date' => rpc_ui_date(substr(rpc_str($row['service_start'] ?? ''), 0, 10)),
+            'startTime' => rpc_time(substr(rpc_str($row['service_start'] ?? ''), 11, 8)),
+            'endTime' => rpc_time(substr(rpc_str($row['service_end'] ?? ''), 11, 8)),
+            'team' => rpc_str($row['team'] ?? ''),
+            'role' => rpc_str($row['role'] ?? ''),
+            'status' => rpc_str($row['status'] ?? ''),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'serviceIds' => $serviceIds,
+        'assignments' => $assignments,
+        'count' => count($assignments),
     ];
 }
 
