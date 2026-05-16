@@ -7358,14 +7358,14 @@
       let printTitleOverrides = { contacts: "", calendar: "" };
 
       const CACHE_KEYS = {
-        bootstrap: "clz_bootstrap_v191",
-        filterDefs: "clz_filter_defs_v191",
-        dashboardStats: "clz_dashboard_stats_v191",
-        contactsLite: "clz_contacts_lite_v191",
-        personMainPrefix: "clz_person_main_v191_",
-        personExtraPrefix: "clz_person_extra_v191_",
-        groupSectionPrefix: "clz_group_section_v191_",
-        familyPrefix: "clz_family_v191_",
+        bootstrap: "clz_bootstrap_v192",
+        filterDefs: "clz_filter_defs_v192",
+        dashboardStats: "clz_dashboard_stats_v192",
+        contactsLite: "clz_contacts_lite_v192",
+        personMainPrefix: "clz_person_main_v192_",
+        personExtraPrefix: "clz_person_extra_v192_",
+        groupSectionPrefix: "clz_group_section_v192_",
+        familyPrefix: "clz_family_v192_",
         serviceDetailsPrefix: "clz_service_details_v186_"
       };
       const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
@@ -8051,8 +8051,11 @@
       function persistPermissionsCache_(user) {
         try {
           if (!user || typeof user !== 'object') return;
+          if (user.isAuthenticated === false) return;
+          const email = String(user.email || '').trim();
+          if (!email) return;
           const payload = {
-            email: String(user.email || '').trim(),
+            email: email,
             role: String(user.role || 'guest').trim().toLowerCase(),
             permissions: normalizePermissions_(user.permissions || {}),
             ts: Date.now()
@@ -19294,6 +19297,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
         try {
           const data = await withGsRetry("app_getUserAccessLight", [], { retries: 1, retryDelay: 500 });
           if (!data?.ok) return;
+          if (data?.user?.isAuthenticated === false || !String(data?.user?.email || '').trim()) {
+            showAuthExpiredNotice_();
+            return;
+          }
           const userEmail = String(data?.user?.email || "").trim();
           const nextRole = String(data?.user?.role || "guest").trim().toLowerCase() || "guest";
           const nextPerms = normalizePermissions_(data?.user?.permissions || {});

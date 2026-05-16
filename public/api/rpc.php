@@ -233,7 +233,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'address' => rpc_str($row['home_address'] ?? ''),
         'city' => rpc_str($row['home_city'] ?? ''),
         'postcode' => rpc_str($row['home_postcode'] ?? ''),
-        'sub' => implode(' - ', array_values(array_filter([$category, $cityLine]))),
+        'sub' => $cityLine,
         'searchName' => rpc_search_text($first . ' ' . $preferred . ' ' . $last),
         'searchText' => rpc_search_text(implode(' ', array_merge([$display, $first, $preferred, $last, rpc_str($row['home_postcode'] ?? ''), rpc_str($row['home_city'] ?? ''), $category], $kgGroupValues, $departmentsValues, $phoneSearchTokens))),
         'searchMeta' => rpc_search_text(implode(' ', array_merge([$first, $preferred, $last, rpc_str($row['home_postcode'] ?? ''), rpc_str($row['home_city'] ?? ''), $category], $kgGroupValues, $departmentsValues, $phoneSearchTokens))),
