@@ -173,7 +173,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $birthday = rpc_str($row['birthday'] ?? '');
     $age = rpc_age($birthday);
     $departmentsValues = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
-    $leaderships = rpc_split_multi_value($custom['LEITERSCHAFT'] ?? '');
+    $leaderships = rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '');
     $kgGroupValues = $groups['groups'] ?? [];
     $kgLeadGroupValues = $groups['leads'] ?? [];
     $kgAssistantGroupValues = $groups['assists'] ?? [];
@@ -241,11 +241,13 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
 
 function rpc_person_full(string $personId): array
 {
+    $main = rpc_person_main($personId);
+    $familyId = rpc_str($main['meta']['familyId'] ?? '');
     return [
         'ok' => true,
-        'main' => rpc_person_main($personId),
+        'main' => $main,
         'extra' => rpc_person_extra($personId),
-        'family' => null,
+        'family' => $familyId !== '' ? rpc_family($familyId) : null,
     ];
 }
 
@@ -256,14 +258,25 @@ function rpc_person_main(string $personId): array
         return ['displayName' => '', 'details' => [], 'meta' => ['personId' => $personId], 'previewOnly' => true];
     }
 
-    $lite = rpc_contact_row($row);
+    [$custom, $groups, $family] = rpc_person_enrichment($personId);
+    $lite = rpc_contact_row($row, $custom, $groups, $family);
+    $address = rpc_address_block($lite['address'], $lite['postcode'], $lite['city']);
+    $birthday = rpc_ui_date($lite['birthday']);
+    $age = $lite['age'] !== null ? (string) $lite['age'] : '';
+
     $details = [
         rpc_detail('Kategorie', $lite['category']),
         rpc_detail('E-Mail', $lite['email'], 'email', $lite['email'] ? 'mailto:' . $lite['email'] : ''),
-        rpc_detail('Telefon', $lite['phone'], 'phone', $lite['phone'] ? 'tel:' . $lite['phone'] : ''),
-        rpc_detail('Mobile', $lite['mobile'], 'phone', $lite['mobile'] ? 'tel:' . $lite['mobile'] : ''),
-        rpc_detail('Adresse', trim($lite['address'] . ', ' . $lite['postcode'] . ' ' . $lite['city']), 'address'),
-        rpc_detail('Geburtsdatum', $lite['birthday']),
+        rpc_detail('Telefon', $lite['phone'], 'phone', $lite['phone'] ? 'tel:' . rpc_phone_href_value($lite['phone']) : ''),
+        array_merge(
+            rpc_detail('Mobile', $lite['mobile'], 'phone', $lite['mobile'] ? 'tel:' . rpc_phone_href_value($lite['mobile']) : ''),
+            ['waHref' => rpc_whatsapp_href($lite['mobile'])]
+        ),
+        array_merge(rpc_detail('Adresse', $address, 'address'), ['mapHref' => rpc_maps_href($address), 'preline' => true]),
+        rpc_detail('Geburtsdatum', $birthday),
+        rpc_detail('Alter', $age),
+        rpc_detail('Geschlecht', $lite['gender']),
+        $lite['familyId'] !== '' ? rpc_detail('Familie', 'Familie anzeigen', 'family') : rpc_detail('Familie', ''),
         rpc_detail('Picture', $lite['pictureUrl']),
     ];
 
@@ -274,6 +287,7 @@ function rpc_person_main(string $personId): array
             'personId' => $personId,
             'familyId' => $lite['familyId'],
             'pictureUrl' => $lite['pictureUrl'],
+            'elvantoUrl' => rpc_elvanto_person_url($personId),
         ],
     ];
 }
@@ -291,17 +305,61 @@ function rpc_person_extra(string $personId): array
     );
 
     $extra = [];
-    foreach ($custom as $field) {
-        $value = rpc_str($field['field_value'] ?? '');
-        if ($value !== '') {
-            $extra[] = rpc_detail(rpc_str($field['field_name'] ?? ''), $value);
-        }
-    }
-    $groupSections = rpc_person_group_sections($personId);
-    foreach ($groupSections as $section) {
+    foreach (rpc_person_group_sections($personId) as $section) {
         $extra[] = $section;
     }
+
+    if (rpc_str($row['departments'] ?? '') !== '') {
+        $extra[] = rpc_detail('Mitarbeit', rpc_str($row['departments'] ?? ''));
+    }
+
+    if (rpc_str($row['date_added'] ?? '') !== '') {
+        $extra[] = rpc_detail('Hinzugefügt', rpc_ui_date(substr(rpc_str($row['date_added'] ?? ''), 0, 10)));
+    }
+
+    $hiddenLabels = array_flip([
+        'ID', 'DATE ADDED', 'DATE MODIFIED', 'STATUS', 'CATEGORY ID', 'CATEGORY', 'CATEGORY NAME',
+        'AUSGETRETEN', 'EINTRITTSGRUND', 'IST IN KLEINGRUPPE', 'LEITERSCHAFT', 'IN KLEINGRUPPE VON',
+        'FIRSTNAME', 'LASTNAME', 'PREFERRED NAME', 'PICTURE', 'EMAIL', 'PHONE', 'MOBILE',
+        'HOME ADDRESS', 'HOME CITY', 'HOME POSTCODE', 'GENDER', 'BIRTHDAY', 'FAMILY ID',
+    ]);
+    foreach ($custom as $field) {
+        $label = rpc_str($field['field_name'] ?? '');
+        $labelKey = strtoupper($label);
+        $value = rpc_str($field['field_value'] ?? '');
+        if ($value !== '' && !isset($hiddenLabels[$labelKey])) {
+            $extra[] = rpc_detail($label, $value);
+        }
+    }
+
+    usort($extra, static function (array $a, array $b): int {
+        $priority = [
+            'group-section' => 0,
+            'Geburtsdatum' => 10,
+            'Mitarbeit' => 20,
+            'KURSE / TAUFE' => 30,
+            'KIDS & PROMISELAND' => 40,
+            'JUNGE ERWACHSENE' => 50,
+        ];
+        $labelA = rpc_str($a['label'] ?? '');
+        $labelB = rpc_str($b['label'] ?? '');
+        $rankA = ($a['type'] ?? '') === 'group-section' ? ($labelA === 'Leitet Kleingruppe' ? 0 : 1) : ($priority[$labelA] ?? 100);
+        $rankB = ($b['type'] ?? '') === 'group-section' ? ($labelB === 'Leitet Kleingruppe' ? 0 : 1) : ($priority[$labelB] ?? 100);
+        return $rankA <=> $rankB ?: strcasecmp($labelA, $labelB);
+    });
     return $extra;
+}
+
+function rpc_person_enrichment(string $personId): array
+{
+    $customValues = rpc_people_custom_values();
+    $groupValues = rpc_people_group_values();
+    $familyValues = rpc_people_family_values();
+    return [
+        $customValues[$personId] ?? [],
+        $groupValues[$personId] ?? ['groups' => [], 'leads' => [], 'assists' => []],
+        $familyValues[$personId] ?? [],
+    ];
 }
 
 function rpc_fetch_person(string $personId): ?array
@@ -587,7 +645,13 @@ function rpc_contact_filters(): array
         }
     }
 
-    $hasKg = (int) db()->query('SELECT COUNT(*) AS c FROM group_members')->fetch()['c'] > 0;
+    $hasKg = false;
+    foreach (rpc_people_group_values() as $groupInfo) {
+        if (($groupInfo['leads'] ?? []) || ($groupInfo['assists'] ?? [])) {
+            $hasKg = true;
+            break;
+        }
+    }
     if ($hasKg) {
         $seen['Kleingruppen-Leiter/-in'] = true;
         $seen['Stv. Kleingruppen-Leiter/-in'] = true;
@@ -662,7 +726,7 @@ function rpc_people_group_values(): array
 
     $values = [];
     $rows = db()->query(
-        'SELECT gm.person_id, gm.role, gm.position, g.name
+        'SELECT gm.person_id, gm.role, gm.position, g.name, g.category_name, g.status
          FROM group_members gm
          LEFT JOIN groups g ON g.id = gm.group_id'
     )->fetchAll();
@@ -670,7 +734,7 @@ function rpc_people_group_values(): array
     foreach ($rows as $row) {
         $personId = rpc_str($row['person_id'] ?? '');
         $groupName = rpc_str($row['name'] ?? '');
-        if ($personId === '' || $groupName === '') {
+        if ($personId === '' || $groupName === '' || !rpc_is_kleingruppe_group($row)) {
             continue;
         }
 
@@ -744,7 +808,7 @@ function rpc_people_family_values(): array
 function rpc_person_group_sections(string $personId): array
 {
     $rows = fetch_all_prepared_legacy(
-        'SELECT DISTINCT g.*
+        'SELECT g.*, gm.role, gm.position
          FROM groups g
          INNER JOIN group_members gm ON gm.group_id = g.id
          WHERE gm.person_id = ?
@@ -755,11 +819,34 @@ function rpc_person_group_sections(string $personId): array
         return [];
     }
 
-    return [[
-        'type' => 'group-section',
-        'label' => 'Kleingruppe',
-        'items' => array_map(static fn(array $group): array => rpc_group_payload($group), $rows),
-    ]];
+    $leads = [];
+    $members = [];
+    foreach ($rows as $row) {
+        if (!rpc_is_kleingruppe_group($row)) {
+            continue;
+        }
+
+        $group = rpc_group_payload($row);
+        $roleKind = rpc_group_member_role_kind($row);
+        if ($roleKind === 'leader') {
+            $leads[] = $group;
+        } else {
+            if ($roleKind === 'assistant') {
+                $group['roleBadge'] = 'Stv. Leiter';
+                $group['roleTone'] = 'assistant';
+            }
+            $members[] = $group;
+        }
+    }
+
+    $sections = [];
+    if ($leads) {
+        $sections[] = ['type' => 'group-section', 'label' => 'Leitet Kleingruppe', 'items' => $leads];
+    }
+    if ($members) {
+        $sections[] = ['type' => 'group-section', 'label' => 'Ist in Kleingruppe', 'items' => $members];
+    }
+    return $sections;
 }
 
 function rpc_fetch_group_by_name(string $groupName): ?array
@@ -767,14 +854,14 @@ function rpc_fetch_group_by_name(string $groupName): ?array
     $stmt = db()->prepare('SELECT * FROM groups WHERE LOWER(name) = LOWER(?) LIMIT 1');
     $stmt->execute([$groupName]);
     $row = $stmt->fetch();
-    if (is_array($row)) {
+    if (is_array($row) && rpc_is_kleingruppe_group($row)) {
         return $row;
     }
 
     $stmt = db()->prepare('SELECT * FROM groups WHERE name LIKE ? ORDER BY name LIMIT 1');
     $stmt->execute(['%' . $groupName . '%']);
     $row = $stmt->fetch();
-    return is_array($row) ? $row : null;
+    return is_array($row) && rpc_is_kleingruppe_group($row) ? $row : null;
 }
 
 function rpc_group_payload(array $group): array
@@ -806,7 +893,10 @@ function rpc_group_payload(array $group): array
         'leaderPersons' => [],
         'assistantPersons' => [],
         'memberPersons' => [],
+        'roleBadge' => rpc_str($group['roleBadge'] ?? ''),
+        'roleTone' => rpc_str($group['roleTone'] ?? ''),
     ];
+    $payload['mapHref'] = rpc_maps_href($payload['meetingPoint']);
 
     foreach ($members as $member) {
         $person = [
@@ -816,12 +906,12 @@ function rpc_group_payload(array $group): array
             'roleBadge' => '',
             'roleTone' => '',
         ];
-        $roleText = rpc_lower($person['position']);
-        if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
+        $roleKind = rpc_group_member_role_kind($member);
+        if ($roleKind === 'assistant') {
             $person['roleBadge'] = 'Stv. Leiter';
             $person['roleTone'] = 'assistant';
             $payload['assistantPersons'][] = $person;
-        } elseif (str_contains($roleText, 'leiter') || str_contains($roleText, 'leader')) {
+        } elseif ($roleKind === 'leader') {
             $payload['leaderPersons'][] = $person;
         } else {
             $payload['memberPersons'][] = $person;
@@ -829,6 +919,66 @@ function rpc_group_payload(array $group): array
     }
 
     return $payload;
+}
+
+function rpc_is_kleingruppe_group(array $group): bool
+{
+    $status = rpc_lower(rpc_str($group['status'] ?? ''));
+    if ($status !== '' && in_array($status, ['archived', 'inactive', 'inaktiv'], true)) {
+        return false;
+    }
+
+    $haystack = rpc_lower(trim(rpc_str($group['category_name'] ?? '') . ' ' . rpc_str($group['name'] ?? '')));
+    $haystack = strtr($haystack, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue']);
+    return str_contains($haystack, 'kleingruppe') || str_contains($haystack, 'kleingruppen');
+}
+
+function rpc_group_member_role_kind(array $member): string
+{
+    $roleText = rpc_lower(rpc_str($member['role'] ?? '') . ' ' . rpc_str($member['position'] ?? ''));
+    if (str_contains($roleText, 'stv') || str_contains($roleText, 'assistant') || str_contains($roleText, 'assistent')) {
+        return 'assistant';
+    }
+    if (str_contains($roleText, 'leiter') || str_contains($roleText, 'leader')) {
+        return 'leader';
+    }
+    return 'member';
+}
+
+function rpc_address_block(string $address, string $postcode, string $city): string
+{
+    $cityLine = trim($postcode . ' ' . $city);
+    return implode("\n", array_values(array_filter([$address, $cityLine])));
+}
+
+function rpc_maps_href(string $address): string
+{
+    $address = trim($address);
+    return $address !== '' ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($address) : '';
+}
+
+function rpc_phone_href_value(string $phone): string
+{
+    return preg_replace('/[^\d+]/', '', $phone) ?? '';
+}
+
+function rpc_whatsapp_href(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if ($digits === '') {
+        return '';
+    }
+    if (rpc_starts_with($digits, '00')) {
+        $digits = substr($digits, 2);
+    } elseif (rpc_starts_with($digits, '0')) {
+        $digits = '41' . substr($digits, 1);
+    }
+    return 'https://wa.me/' . $digits;
+}
+
+function rpc_elvanto_person_url(string $personId): string
+{
+    return $personId !== '' ? 'https://app.elvanto.com/people/person/' . rawurlencode($personId) : '';
 }
 
 function rpc_add_unique(array &$items, string $value): void
