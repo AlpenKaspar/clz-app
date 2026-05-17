@@ -19601,6 +19601,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const k = data?.kalender || {};
           const s = data?.serviceDetails || {};
           const songsStatus = data?.songs || {};
+          const songDiag = data?.songDiagnostics || {};
           const counts = data?.counts || data?.cache?.counts || {};
           const userEmail = String(data?.user?.email || '').trim();
           currentUserRole = String(data?.user?.role || 'guest').trim().toLowerCase() || 'guest';
@@ -19673,7 +19674,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
           if (personenText) personenText.innerHTML = `Status: <strong>${escapeHtml(p.status || "-")}</strong>${pIso ? ` · ${escapeHtml(pIso)}` : ""}${p.count ? `<br>Anzahl: <strong>${escapeHtml(String(p.count))}</strong>` : ""}`;
           if (kalenderText) kalenderText.innerHTML = `Status: <strong>${escapeHtml(k.status || "-")}</strong>${kIso ? ` · ${escapeHtml(kIso)}` : ""}${k.count ? `<br>Anzahl: <strong>${escapeHtml(String(k.count))}</strong>` : ""}${k.lastImportReason ? `<br>Grund: <strong>${escapeHtml(String(k.lastImportReason || ""))}</strong>` : ""}${kCheckIso ? `<br>Letzter Check: <strong>${escapeHtml(kCheckIso)}</strong>` : ""}${kFullIso ? `<br>Letzter Vollimport: <strong>${escapeHtml(kFullIso)}</strong>` : ""}${k.lastTriggerSource ? `<br>Quelle: <strong>${escapeHtml(String(k.lastTriggerSource || ""))}</strong>` : ""}`;
           if (serviceText) serviceText.innerHTML = `Status: <strong>${escapeHtml(s.status || "-")}</strong>${s.iso ? ` · ${escapeHtml(formatIsoShort_(s.iso) || s.iso)}` : ""}<br>Services: <strong>${escapeHtml(String(counts.services || 0))}</strong> · Ablaufpunkte: <strong>${escapeHtml(String(counts.servicePlanItems || 0))}</strong> · Mitarbeitende: <strong>${escapeHtml(String(counts.serviceVolunteers || 0))}</strong>`;
-          if (songsText) songsText.innerHTML = `Status: <strong>${escapeHtml(songsStatus.status || "-")}</strong>${songsStatus.iso ? ` · ${escapeHtml(formatIsoShort_(songsStatus.iso) || songsStatus.iso)}` : ""}<br>Anzahl: <strong>${escapeHtml(String(counts.songs || songsStatus.count || 0))}</strong>${songsStatus.message ? `<br>${escapeHtml(String(songsStatus.message))}` : ""}`;
+          if (songsText) {
+            const diagLine = songDiag?.ok ? `<br>Mit Tonart: <strong>${escapeHtml(String(songDiag.withKey || 0))}</strong> · URLs: <strong>${escapeHtml(String(songDiag.withAnyUrl || 0))}</strong> · PDFs: <strong>${escapeHtml(String(songDiag.withPdf || 0))}</strong> · Audio: <strong>${escapeHtml(String(songDiag.withAudio || 0))}</strong> · YouTube: <strong>${escapeHtml(String(songDiag.withYoutube || 0))}</strong>` : '';
+            const sampleLine = Array.isArray(songDiag?.samples) && songDiag.samples.length ? `<br>Beispiel: ${escapeHtml(String(songDiag.samples[0]?.title || ''))} · Felder: ${escapeHtml((songDiag.samples[0]?.rawKeys || []).slice(0, 8).join(', '))}` : '';
+            songsText.innerHTML = `Status: <strong>${escapeHtml(songsStatus.status || "-")}</strong>${songsStatus.iso ? ` · ${escapeHtml(formatIsoShort_(songsStatus.iso) || songsStatus.iso)}` : ""}<br>Anzahl: <strong>${escapeHtml(String(counts.songs || songsStatus.count || 0))}</strong>${diagLine}${sampleLine}${songsStatus.message ? `<br>${escapeHtml(String(songsStatus.message))}` : ""}`;
+          }
           if (cacheWrap) cacheWrap.innerHTML = renderCacheStatsLine_(data?.cache || {});
           if (perfWrap) perfWrap.textContent = perfLine ? `App-Performance: ${perfLine}` : '';
         } catch (err) {

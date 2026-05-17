@@ -728,7 +728,7 @@ function rpc_admin_users_list(array $user): array
 {
     rpc_require_real_admin($user);
     $rows = fetch_all_prepared_legacy(
-        'SELECT id, email, display_name, role, is_active, last_login_at, created_at, updated_at
+        'SELECT id, email, display_name, role, is_active, last_login_at
          FROM users
          ORDER BY last_login_at DESC, email ASC',
         []
@@ -745,8 +745,8 @@ function rpc_admin_users_list(array $user): array
                 'role' => rpc_str($row['role'] ?? 'guest') ?: 'guest',
                 'isActive' => ((int) ($row['is_active'] ?? 0)) === 1,
                 'lastLoginAt' => rpc_str($row['last_login_at'] ?? ''),
-                'createdAt' => rpc_str($row['created_at'] ?? ''),
-                'updatedAt' => rpc_str($row['updated_at'] ?? ''),
+                'createdAt' => '',
+                'updatedAt' => '',
             ];
         }, $rows),
     ];
@@ -2567,6 +2567,7 @@ function rpc_sync_status(array $user): array
         'kalender' => rpc_import_status_group(['calendar']),
         'serviceDetails' => rpc_import_status_group(['service_details']),
         'songs' => rpc_import_status_group(['songs']),
+        'songDiagnostics' => rpc_song_diagnostics(),
         'counts' => rpc_data_counts(),
         'cache' => rpc_cache_stats(),
         'latestRuns' => rpc_import_runs(),
@@ -2652,6 +2653,79 @@ function rpc_data_counts(): array
         }
     }
     return $counts;
+}
+
+function rpc_song_diagnostics(): array
+{
+    try {
+        $rows = db()->query('SELECT song_id, title, default_key_name, bpm, raw_json FROM songs ORDER BY title LIMIT 250')->fetchAll();
+    } catch (Throwable $e) {
+        return [
+            'ok' => false,
+            'error' => $e->getMessage(),
+            'total' => 0,
+            'withKey' => 0,
+            'withAnyUrl' => 0,
+            'withPdf' => 0,
+            'withAudio' => 0,
+            'withYoutube' => 0,
+            'samples' => [],
+        ];
+    }
+
+    $diag = [
+        'ok' => true,
+        'total' => (int) (db()->query('SELECT COUNT(*) AS c FROM songs')->fetch()['c'] ?? 0),
+        'checked' => count($rows),
+        'withKey' => 0,
+        'withAnyUrl' => 0,
+        'withPdf' => 0,
+        'withAudio' => 0,
+        'withYoutube' => 0,
+        'samples' => [],
+    ];
+
+    foreach ($rows as $row) {
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+        $urls = array_values(array_unique(array_merge(rpc_song_url_fields($raw), rpc_song_collect_urls($raw))));
+        $keys = rpc_song_key_names($raw, rpc_str($row['default_key_name'] ?? ''));
+        $hasKey = (bool) $keys;
+        $hasPdf = false;
+        $hasAudio = false;
+        $hasYoutube = false;
+        foreach ($urls as $url) {
+            $lower = strtolower($url);
+            $hasPdf = $hasPdf || (bool) preg_match('/\.pdf(\?|$)/i', $url);
+            $hasAudio = $hasAudio || (bool) preg_match('/\.(mp3|wav|m4a|aac|ogg|opus|flac|aif|aiff)(\?|$)/i', $url);
+            $hasYoutube = $hasYoutube || str_contains($lower, 'youtube.com') || str_contains($lower, 'youtu.be');
+        }
+        if ($hasKey) {
+            $diag['withKey']++;
+        }
+        if ($urls) {
+            $diag['withAnyUrl']++;
+        }
+        if ($hasPdf) {
+            $diag['withPdf']++;
+        }
+        if ($hasAudio) {
+            $diag['withAudio']++;
+        }
+        if ($hasYoutube) {
+            $diag['withYoutube']++;
+        }
+        if (count($diag['samples']) < 5) {
+            $diag['samples'][] = [
+                'id' => rpc_str($row['song_id'] ?? ''),
+                'title' => rpc_str($row['title'] ?? ''),
+                'key' => $keys[0] ?? '',
+                'urlCount' => count($urls),
+                'rawKeys' => array_slice(array_keys($raw), 0, 20),
+            ];
+        }
+    }
+
+    return $diag;
 }
 
 function rpc_cache_stats(): array
