@@ -3364,7 +3364,6 @@
       border: 1px solid rgba(148,163,184,0.34);
       overflow: hidden;
       isolation: isolate;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
       flex: 0 0 auto;
     }
 
@@ -3376,7 +3375,6 @@
       height: calc(100% - 8px);
       border-radius: 999px;
       background: linear-gradient(135deg, rgba(37,99,235,0.14), rgba(96,165,250,0.30));
-      box-shadow: 0 6px 14px rgba(15,23,42,0.12);
       transition: transform .22s ease, width .22s ease;
       z-index: 0;
       pointer-events: none;
@@ -4738,12 +4736,10 @@
       border: 1px solid rgba(148,163,184,0.34);
       overflow: hidden;
       isolation: isolate;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
     }
     body.dark .theme-switch {
       background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(30,41,59,0.86));
       border-color: rgba(71,85,105,0.42);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
     }
     .theme-switch-thumb {
       position: absolute;
@@ -4753,14 +4749,12 @@
       height: calc(100% - 8px);
       border-radius: 999px;
       background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
-      box-shadow: 0 8px 18px rgba(15,23,42,0.14);
       transition: transform .22s ease;
       z-index: 0;
       pointer-events: none;
     }
     body.dark .theme-switch-thumb {
       background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
-      box-shadow: 0 8px 18px rgba(2,6,23,0.28);
     }
     .theme-switch[data-mode="auto"] .theme-switch-thumb { transform: translateX(100%); }
     .theme-switch[data-mode="dark"] .theme-switch-thumb { transform: translateX(200%); }
@@ -4909,9 +4903,9 @@
 
     .admin-user-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      align-items: stretch;
       padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 12px;
@@ -4922,26 +4916,24 @@
       font-size: 13px;
       font-weight: 800;
       color: var(--text-main);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
+      line-height: 1.25;
     }
 
     .admin-user-meta {
       margin-top: 2px;
       font-size: 11px;
       color: var(--text-muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
     }
 
     .admin-user-controls {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(118px, 1fr) auto auto;
       align-items: center;
       gap: 6px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: stretch;
     }
 
     .admin-user-controls select {
@@ -4953,6 +4945,7 @@
       font-size: 12px;
       font-weight: 700;
       padding: 0 8px;
+      min-width: 0;
     }
 
     .admin-user-controls .btn {
@@ -4966,6 +4959,12 @@
         grid-template-columns: 1fr 1fr;
       }
       .admin-user-create input[type="email"] {
+        grid-column: 1 / -1;
+      }
+      .admin-user-controls {
+        grid-template-columns: 1fr 1fr;
+      }
+      .admin-user-controls select {
         grid-column: 1 / -1;
       }
     }
@@ -7202,7 +7201,7 @@
 
         <div class="tab-title">
           <div class="tab-title-left">
-            <i class="fas fa-chart-line"></i> Dashboard
+            <i class="fas fa-chart-line"></i> Übersicht
           </div>
           <button id="dash-smart-toggle" class="icon-btn" type="button" onclick="toggleSmartBuilder_()" title="Smart-Filter" aria-label="Smart-Filter">
             <i class="fas fa-sliders"></i>
@@ -7416,7 +7415,7 @@
 
     <button class="nav-item" id="nav-dashboard" onclick="onDashboardNavClick_(event)">
       <i class="fas fa-chart-line"></i>
-      <span>Dashboard</span>
+      <span>Übersicht</span>
     </button>
 
     <button class="nav-item" id="nav-tools" onclick="switchTab('tools')">
@@ -8654,7 +8653,7 @@
         setStatus("dash-status", "", "");
 
         const res = await withGsRetry("app_loadDashboardStats", [], { retries: 2, retryDelay: 700 });
-        if (!res?.ok) throw new Error(res?.error || "Dashboard konnte nicht geladen werden.");
+        if (!res?.ok) throw new Error(res?.error || "Übersicht konnte nicht geladen werden.");
 
         const serverVersion = String(res?.dataVersion || "");
 
@@ -12534,7 +12533,7 @@ function updateBottomNavHighlight_() {
         if (secondary.length) parts.push(`Filter: ${secondary.join(', ')}`);
 
         if (activeDashboardFilterKey) {
-          parts.push(`Dashboard: ${getFilterDisplayLabel_(activeDashboardFilterLabel || activeDashboardFilterKey)}`);
+          parts.push(`Übersicht: ${getFilterDisplayLabel_(activeDashboardFilterLabel || activeDashboardFilterKey)}`);
         }
 
         parts.push(`${(filteredContacts || []).length} Resultate`);
@@ -13021,9 +13020,9 @@ function updateBottomNavHighlight_() {
           el.style.cursor = "default";
           el.style.textDecoration = "none";
           if (activeDashboardFilterKey) {
-            el.textContent = `Dashboard-Filter aktiv: ${getFilterDisplayLabel_(activeDashboardFilterLabel || activeDashboardFilterKey)}`;
+            el.textContent = `Übersicht-Filter aktiv: ${getFilterDisplayLabel_(activeDashboardFilterLabel || activeDashboardFilterKey)}`;
           } else {
-            el.textContent = `Dashboard-Filter aktiv: Smart-Auswahl (${activeSmartRules.length})`;
+            el.textContent = `Übersicht-Filter aktiv: Smart-Auswahl (${activeSmartRules.length})`;
             el.style.cursor = "pointer";
             el.style.textDecoration = "underline";
             el.onclick = function() {
@@ -13209,9 +13208,10 @@ function updateBottomNavHighlight_() {
             if (key === "kg_leaders_all") return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && !!c.leadsKg;
             if (key === "kg_leaders_missing_all") return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && !c.leadsKg;
             if (key.startsWith("ministry_teams_count:")) {
-              const wanted = Number(key.split(":")[1] || "0");
+              const rawWanted = String(key.split(":")[1] || "0");
               const teamCount = Array.isArray(c.departmentsValues) ? c.departmentsValues.length : 0;
-              return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && teamCount === wanted;
+              const matchesCount = rawWanted === "3plus" ? teamCount >= 3 : teamCount === Number(rawWanted || "0");
+              return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && matchesCount;
             }
             if (key === "kidschurch_any") return Array.isArray(c.kidsChurchValues) && c.kidsChurchValues.length > 0;
             if (key === "ypg_any") return Array.isArray(c.youthYpgValues) && c.youthYpgValues.length > 0;
@@ -13899,7 +13899,6 @@ function updateBottomNavHighlight_() {
               <div class="family-result-stack">
                 <div class="result-title">${escapeHtml(String(item.title || 'Gruppe'))}</div>
                 ${meta ? `<div class="family-result-members">${escapeHtml(meta)}</div>` : ``}
-                <div class="family-result-meta">${escapeHtml(String(item.memberCount || 0))} Personen</div>
               </div>
             </div>
             <i class="fas fa-chevron-right" style="color:rgba(148,163,184,0.8)"></i>
@@ -15826,11 +15825,6 @@ function updateBottomNavHighlight_() {
         if (data?.type === "person") {
           const elvantoUrl = data?.meta?.elvantoUrl || "";
           const personId = String(data?.meta?.personId || "").trim();
-          const details = Array.isArray(data?.details) ? data.details : [];
-          const emailDetail = details.find(d => d?.type === "email" && d?.href);
-          const phoneDetail = details.find(d => d?.type === "phone" && d?.href);
-          const whatsappDetail = details.find(d => d?.type === "phone" && d?.waHref);
-          const addressDetail = details.find(d => d?.type === "address" && d?.mapHref);
           const showPoolLink = !!(lastContactPoolAddHint && String(lastContactPoolAddHint.personId || "") === personId);
           const poolLinkHtml = showPoolLink
             ? `<button class="btn btn-primary" onclick="openPoolFromContact_('${escapeAttr(String(lastContactPoolAddHint.poolName || 'Kranke'))}')"><i class="fas fa-layer-group"></i><span>Pool öffnen</span></button>`
@@ -15838,10 +15832,6 @@ function updateBottomNavHighlight_() {
           area.innerHTML = `
             ${elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
             <button class="btn btn-secondary" onclick="openAssignedServicesCalendar()"><i class="fas fa-calendar-check"></i><span>Einsätze</span></button>
-            ${emailDetail ? `<a class="btn btn-secondary" href="${escapeAttr(emailDetail.href)}"><i class="fas fa-envelope"></i><span>E-Mail</span></a>` : ``}
-            ${phoneDetail ? `<a class="btn btn-secondary" href="${escapeAttr(phoneDetail.href)}"><i class="fas fa-phone"></i><span>Anrufen</span></a>` : ``}
-            ${whatsappDetail ? `<a class="btn btn-secondary" href="${escapeAttr(whatsappDetail.waHref)}" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></a>` : ``}
-            ${addressDetail ? `<a class="btn btn-secondary" href="${escapeAttr(addressDetail.mapHref)}" target="_blank" rel="noopener"><i class="fas fa-route"></i><span>Route</span></a>` : ``}
             <button class="btn btn-secondary" onclick="exportVCF()"><i class="fas fa-address-card"></i><span>vCard</span></button>
             <button class="btn btn-secondary" onclick="addCurrentPersonToPool_()"><i class="fas fa-heart-pulse"></i><span>Zum Pool</span></button>
             ${canPrintContact ? `<button class="btn btn-primary" onclick="openPersonDetailPrintPreview_()"><i class="fas fa-print"></i><span>Druckansicht</span></button>` : ``}
@@ -15877,29 +15867,26 @@ function updateBottomNavHighlight_() {
             pools = Array.isArray(res?.pools) ? res.pools : [];
             prayerPoolsCache = { loadedAt: Date.now(), pools: pools.slice() };
           }
-          if (!pools.length) {
-            toast('Keine Pools vorhanden', 1600);
+          let poolName = '';
+          const defaultPool = String(prayerPoolDefaultTarget || pools[0]?.name || 'Kranke').trim() || 'Kranke';
+          const optionsText = pools.length
+            ? pools.map((p, i) => `${i + 1}: ${String(p?.name || 'Pool')}`).join('\n')
+            : 'Noch keine Pools vorhanden.';
+          const input = String(window.prompt(`In welchen Pool hinzufügen?\n\n${optionsText}\n\nNummer oder Poolname eingeben. Neuer Name erstellt einen neuen Pool:`, defaultPool) || '').trim();
+          if (!input) return;
+          if (/^\d+$/.test(input) && pools.length) {
+            const idx = Math.max(1, Number(input)) - 1;
+            poolName = String(pools[idx]?.name || '').trim();
+          } else {
+            const hit = pools.find(p => String(p?.name || '').trim().toLowerCase() === input.toLowerCase());
+            poolName = String(hit?.name || input).trim();
+          }
+          if (!poolName) {
+            toast('Pool-Auswahl ungültig', 1800);
             return;
           }
-          let poolName = '';
-          if (pools.length === 1) {
-            poolName = String(pools[0]?.name || 'Kranke').trim() || 'Kranke';
-          } else {
-            const optionsText = pools.map((p, i) => `${i + 1}: ${String(p?.name || 'Pool')}`).join('\n');
-            const defaultPool = String(prayerPoolDefaultTarget || pools[0]?.name || 'Kranke').trim() || 'Kranke';
-            const input = String(window.prompt(`In welchen Pool hinzufügen?\n\n${optionsText}\n\nNummer oder Poolname eingeben:`, defaultPool) || '').trim();
-            if (!input) return;
-            if (/^\d+$/.test(input)) {
-              const idx = Math.max(1, Number(input)) - 1;
-              poolName = String(pools[idx]?.name || '').trim();
-            } else {
-              const hit = pools.find(p => String(p?.name || '').trim().toLowerCase() === input.toLowerCase());
-              poolName = String(hit?.name || '').trim();
-            }
-            if (!poolName) {
-              toast('Pool-Auswahl ungültig', 1800);
-              return;
-            }
+          if (!pools.some(p => String(p?.name || '').trim().toLowerCase() === poolName.toLowerCase())) {
+            await withGsRetry('prayerPools_create', [{ poolName: poolName }], { retries: 1, retryDelay: 500 });
           }
           await withGsRetry('prayerPools_addMembers', [{ poolName: poolName, personIds: [personId] }], { retries: 1, retryDelay: 500 });
           prayerPoolDefaultTarget = poolName;
@@ -16081,7 +16068,7 @@ function updateBottomNavHighlight_() {
 
         return label
           ? `Filter zeigt nur Personen, die dem Wert "${label}" entsprechen. Alle anderen Personen sind nicht dabei.`
-          : "Filter zeigt nur Personen, die diesem Dashboard-Wert entsprechen.";
+          : "Filter zeigt nur Personen, die diesem Übersicht-Wert entsprechen.";
       }
 
       let activeDashInfoAnchor_ = null;
