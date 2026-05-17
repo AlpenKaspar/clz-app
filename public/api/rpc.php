@@ -58,6 +58,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_importSongs' => rpc_run_import('songs', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
         'tools_adminUsersList' => rpc_admin_users_list($user),
+        'tools_adminCreateUser' => rpc_admin_create_user($args[0] ?? [], $user),
         'tools_adminUpdateUser' => rpc_admin_update_user($args[0] ?? [], $user),
         'tools_adminImpersonateUser' => rpc_admin_impersonate_user((int) ($args[0] ?? 0), $user),
         'tools_adminStopImpersonation' => rpc_admin_stop_impersonation($user),
@@ -766,6 +767,34 @@ function rpc_admin_update_user(mixed $payload, array $user): array
     $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
     $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
     $stmt->execute([$role, $isActive, $id]);
+    return rpc_admin_users_list($user);
+}
+
+function rpc_admin_create_user(mixed $payload, array $user): array
+{
+    rpc_require_real_admin($user);
+    $data = is_array($payload) ? $payload : [];
+    $email = strtolower(rpc_str($data['email'] ?? ''));
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Bitte eine gueltige E-Mail-Adresse eingeben.');
+    }
+    $displayName = rpc_str($data['displayName'] ?? '');
+    $role = strtolower(rpc_str($data['role'] ?? 'guest'));
+    if (!in_array($role, ['admin', 'member', 'guest'], true)) {
+        throw new RuntimeException('Ungueltige Rolle.');
+    }
+    $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
+
+    $stmt = db()->prepare(
+        'INSERT INTO users (email, display_name, role, is_active)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            display_name = IF(VALUES(display_name) = "", display_name, VALUES(display_name)),
+            role = VALUES(role),
+            is_active = VALUES(is_active)'
+    );
+    $stmt->execute([$email, $displayName, $role, $isActive]);
+
     return rpc_admin_users_list($user);
 }
 

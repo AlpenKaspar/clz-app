@@ -4855,6 +4855,39 @@
       margin-top: 12px;
     }
 
+    .admin-user-create {
+      display: grid;
+      grid-template-columns: minmax(160px, 1.1fr) minmax(130px, .9fr) 104px 92px;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--card-bg);
+    }
+
+    .admin-user-create input,
+    .admin-user-create select {
+      width: 100%;
+      min-width: 0;
+      height: 34px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-color);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .admin-user-create .btn {
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
     .admin-user-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -4907,6 +4940,15 @@
       min-height: 32px;
       padding: 0 9px;
       font-size: 12px;
+    }
+
+    @media (max-width: 720px) {
+      .admin-user-create {
+        grid-template-columns: 1fr 1fr;
+      }
+      .admin-user-create input[type="email"] {
+        grid-column: 1 / -1;
+      }
     }
 
     .impersonation-banner {
@@ -7270,6 +7312,18 @@
             <div class="tools-import-note">
               Neue Google-Logins starten als Gast. Gib hier gezielt Admin- oder Mitarbeiterrechte frei.
             </div>
+            <form class="admin-user-create" onsubmit="createAdminUser_(event)">
+              <input id="admin-user-email" type="email" autocomplete="email" placeholder="email@clzspiez.ch" required>
+              <input id="admin-user-name" type="text" autocomplete="name" placeholder="Name optional">
+              <select id="admin-user-role" aria-label="Rolle">
+                <option value="guest">guest</option>
+                <option value="member">member</option>
+                <option value="admin">admin</option>
+              </select>
+              <button class="btn btn-primary" type="submit">
+                <i class="fas fa-plus"></i><span>Hinzufügen</span>
+              </button>
+            </form>
             <div class="admin-users-toolbar">
               <div id="admin-users-status" style="font-size:11px;color:var(--text-muted);font-weight:700;">Noch nicht geladen</div>
               <button class="btn btn-secondary" type="button" onclick="loadAdminUsers_()" style="min-height:34px;padding:0 10px;font-size:12px;">
@@ -19604,7 +19658,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const host = document.getElementById('admin-users-list');
         if (!host) return;
         if (!Array.isArray(adminUsersCache) || !adminUsersCache.length) {
-          host.innerHTML = `<div class="service-empty-box">Noch keine Benutzer. Sie erscheinen nach dem ersten Google-Login.</div>`;
+          host.innerHTML = `<div class="service-empty-box">Noch keine Benutzer. Du kannst oben eine E-Mail vorbereiten oder jemanden per Google-Login starten lassen.</div>`;
           return;
         }
         host.innerHTML = adminUsersCache.map(user => {
@@ -19630,6 +19684,33 @@ function dashDynamicValueCard_(icon, prefix, item) {
             </div>
           `;
         }).join('');
+      }
+
+      async function createAdminUser_(event) {
+        if (event) event.preventDefault();
+        const emailEl = document.getElementById('admin-user-email');
+        const nameEl = document.getElementById('admin-user-name');
+        const roleEl = document.getElementById('admin-user-role');
+        const email = String(emailEl?.value || '').trim().toLowerCase();
+        const displayName = String(nameEl?.value || '').trim();
+        const role = String(roleEl?.value || 'guest').trim().toLowerCase();
+        if (!email) {
+          toast('E-Mail fehlt', 1400);
+          return;
+        }
+        try {
+          const data = await withGsRetry('tools_adminCreateUser', [{ email, displayName, role, isActive: true }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          renderAdminUsers_();
+          if (emailEl) emailEl.value = '';
+          if (nameEl) nameEl.value = '';
+          if (roleEl) roleEl.value = 'guest';
+          const status = document.getElementById('admin-users-status');
+          if (status) status.textContent = `${adminUsersCache.length} Benutzer`;
+          toast('Benutzer gespeichert', 1300);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 2000);
+        }
       }
 
       async function updateAdminUserRole_(id, role) {
