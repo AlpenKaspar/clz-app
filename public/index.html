@@ -7234,7 +7234,7 @@
           </div>
         </div>
 
-        <div class="tools-row">
+        <div class="tools-row member-only">
           <div class="tools-left">
             <i class="fas fa-tower-broadcast"></i>
             <div>
@@ -7249,7 +7249,21 @@
           </label>
         </div>
 
-        <details class="settings-collapsible tools-import-panel">
+        <div class="tools-row">
+          <div class="tools-left">
+            <i class="fas fa-right-from-bracket"></i>
+            <div>
+              <div class="tools-title">Abmelden</div>
+              <div class="tools-sub">Google-Sitzung auf diesem Gerät beenden</div>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary" type="button" onclick="logoutApp_()" style="min-height:34px;padding:0 12px;font-size:12px;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Abmelden</span>
+          </button>
+        </div>
+
+        <details class="settings-collapsible tools-import-panel admin-only">
           <summary>Aus Elvanto aktualisieren</summary>
           <div class="settings-collapsible-body">
             <div class="tools-import-note">
@@ -7306,7 +7320,7 @@
           </div>
         </details>
 
-        <details class="settings-collapsible tools-import-panel" id="admin-users-panel">
+        <details class="settings-collapsible tools-import-panel admin-only" id="admin-users-panel">
           <summary>Benutzer & Rollen</summary>
           <div class="settings-collapsible-body">
             <div class="tools-import-note">
@@ -7316,9 +7330,9 @@
               <input id="admin-user-email" type="email" autocomplete="email" placeholder="email@clzspiez.ch" required>
               <input id="admin-user-name" type="text" autocomplete="name" placeholder="Name optional">
               <select id="admin-user-role" aria-label="Rolle">
-                <option value="guest">guest</option>
-                <option value="member">member</option>
-                <option value="admin">admin</option>
+                <option value="guest">Gast</option>
+                <option value="member">Mitarbeiter</option>
+                <option value="admin">Admin</option>
               </select>
               <button class="btn btn-primary" type="submit">
                 <i class="fas fa-plus"></i><span>Hinzufügen</span>
@@ -7455,7 +7469,7 @@
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
       let currentPermissions = {
-        tabs: { contacts: true, calendar: true, dashboard: false, tools: false },
+        tabs: { contacts: true, calendar: true, songs: true, dashboard: false, tools: true },
         exports: { contactsCsv: false, contactsPrint: false, calendarCsv: false, calendarPrint: false },
         detailPrint: { contact: true, event: true }
       };
@@ -8001,6 +8015,14 @@
         el._timer = setTimeout(() => el.classList.remove("show"), ms);
       }
 
+      function logoutApp_() {
+        try {
+          localStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
+          sessionStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
+        } catch (e) {}
+        window.location.href = '/api/auth/logout.php';
+      }
+
       function showPrayerBotOverlay_(ms = 3400) {
         const el = document.getElementById('prayer-bot-overlay');
         if (!el) {
@@ -8245,7 +8267,7 @@
 
       function normalizePermissions_(perm) {
         const fallback = {
-          tabs: { contacts: true, calendar: true, songs: true, dashboard: false, tools: false },
+          tabs: { contacts: true, calendar: true, songs: true, dashboard: false, tools: true },
           exports: { contactsCsv: false, contactsPrint: false, calendarCsv: false, calendarPrint: false },
           detailPrint: { contact: true, event: true }
         };
@@ -8263,7 +8285,7 @@
         if (tab === 'calendar') return tabs.calendar !== false;
         if (tab === 'songs') return tabs.songs !== false;
         if (tab === 'dashboard') return tabs.dashboard === true;
-        if (tab === 'tools') return tabs.tools === true;
+        if (tab === 'tools') return tabs.tools !== false;
         return false;
       }
 
@@ -8368,6 +8390,21 @@
         return role === "gast" || role === "guest";
       }
 
+      function isAdminRole_() {
+        return String(currentUserRole || "guest").toLowerCase() === "admin";
+      }
+
+      function isMemberRole_() {
+        return String(currentUserRole || "guest").toLowerCase() === "member";
+      }
+
+      function roleLabel_(role) {
+        const value = String(role || "guest").toLowerCase();
+        if (value === "admin") return "Admin";
+        if (value === "member") return "Mitarbeiter";
+        return "Gast";
+      }
+
       function canViewServiceInternals_() {
         return !isGuestRole_();
       }
@@ -8403,6 +8440,13 @@
         const calShare = document.getElementById('calendar-share-trigger');
         if (contactsShare) contactsShare.style.display = (canExportContacts_() || canPrintContacts_()) ? '' : 'none';
         if (calShare) calShare.style.display = (canExportCalendar_() || canPrintCalendar_()) ? '' : 'none';
+
+        document.querySelectorAll('.admin-only').forEach(el => {
+          el.style.display = isAdminRole_() ? '' : 'none';
+        });
+        document.querySelectorAll('.member-only').forEach(el => {
+          el.style.display = (isAdminRole_() || isMemberRole_()) ? '' : 'none';
+        });
 
         const contactsCsvBtn = document.querySelector('#contacts-share-menu button[onclick="shareFilteredContactsCsv()"]');
         const contactsPrintBtn = document.querySelector('#contacts-share-menu button[onclick="printCurrentContacts_()"]');
@@ -19676,7 +19720,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
               </div>
               <div class="admin-user-controls">
                 <select onchange="updateAdminUserRole_(${id}, this.value)" aria-label="Rolle">
-                  ${['guest', 'member', 'admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${r}</option>`).join('')}
+                  ${['guest', 'member', 'admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${roleLabel_(r)}</option>`).join('')}
                 </select>
                 <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
                 <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>

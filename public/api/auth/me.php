@@ -32,7 +32,7 @@ function auth_me_permissions(array $user): array
             'calendar' => true,
             'songs' => true,
             'dashboard' => $isAuthenticated && !$isGuest,
-            'tools' => $isAdmin,
+            'tools' => true,
         ],
         'exports' => [
             'contactsCsv' => $isAdmin,

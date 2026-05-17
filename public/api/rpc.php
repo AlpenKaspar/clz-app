@@ -121,7 +121,7 @@ function rpc_permissions(array $user = []): array
             'calendar' => true,
             'songs' => true,
             'dashboard' => !$isGuest,
-            'tools' => $isAdmin,
+            'tools' => true,
         ],
         'exports' => [
             'contactsCsv' => $isAdmin,
