@@ -397,6 +397,36 @@ function clean_elvanto_value(mixed $value): string
         }
         return implode(', ', array_filter($names));
     }
+    foreach (['department', 'departments', 'sub_department', 'sub_departments', 'position', 'positions'] as $collectionKey) {
+        if (!isset($value[$collectionKey])) {
+            continue;
+        }
+        $names = [];
+        foreach (normalize_collection($value[$collectionKey]) as $item) {
+            if (is_array($item)) {
+                $name = trim((string) ($item['name'] ?? ($item['title'] ?? '')));
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+                foreach (['sub_department', 'sub_departments', 'position', 'positions'] as $nestedKey) {
+                    if (!isset($item[$nestedKey])) {
+                        continue;
+                    }
+                    foreach (normalize_collection($item[$nestedKey]) as $nested) {
+                        if (is_array($nested)) {
+                            $nestedName = trim((string) ($nested['name'] ?? ($nested['title'] ?? '')));
+                            if ($nestedName !== '') {
+                                $names[] = $nestedName;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ($names) {
+            return implode(', ', array_unique($names));
+        }
+    }
 
     return '';
 }

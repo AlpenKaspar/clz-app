@@ -7913,6 +7913,20 @@
           authExpiredShown = false;
           const notice = document.getElementById('auth-expired-notice');
           if (notice) notice.remove();
+          const user = data?.user || {};
+          const nextRole = String(user.role || "guest").trim().toLowerCase() || "guest";
+          const nextPerms = normalizePermissions_(user.permissions || {});
+          const changed = nextRole !== String(currentUserRole || "").toLowerCase()
+            || JSON.stringify(nextPerms) !== JSON.stringify(currentPermissions || {})
+            || String(user.email || "").trim() !== String(currentLoginEmail || "").trim();
+          currentUserRole = nextRole;
+          currentPermissions = nextPerms;
+          currentUserImpersonating = user.impersonating || null;
+          if (String(user.email || "").trim()) currentLoginEmail = String(user.email || "").trim();
+          persistPermissionsCache_(user);
+          updateWelcomeGreeting_();
+          updateImpersonationBanner_();
+          if (changed) applyAccessControlUi_();
         } catch (e) {
           // Keepalive is best-effort; normal API calls still report real errors.
         }
@@ -8230,6 +8244,9 @@
           applyAccessControlUi_();
           updateWelcomeGreeting_();
           updateImpersonationBanner_();
+          if (role === 'guest') {
+            refreshPermissionsInBackground_("cached-guest", true);
+          }
           return true;
         } catch (e) {
           return false;

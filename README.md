@@ -91,6 +91,10 @@ Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in 
 `APP_SESSION_DAYS` steuert, wie lange ein Login gueltig bleibt. Die App erneuert die Session bei normalen API-Aufrufen
 und im Hintergrund automatisch, solange der Browser offen ist.
 
+Die Login-Benutzer und Rollen stehen in MySQL in der Tabelle `users`. Die Liste `APP_ADMIN_EMAILS` liegt nur in `.env`
+und dient als Bootstrap/Override fuer Admins. `.env` wird nicht nach Git committet und liegt nicht unter `public/`.
+E-Mail-Adressen in `users` sind keine Secrets; OAuth-Secret, Elvanto-Key und Datenbankpasswort muessen in `.env` bleiben.
+
 Falls dein User bereits vor dem Setzen von `APP_ADMIN_EMAILS` erstellt wurde, reicht normalerweise ein Logout/Login,
 weil die Rolle beim Laden der Session anhand der Admin-Liste aktualisiert wird. Alternativ kann die Rolle in phpMyAdmin
 direkt gesetzt werden:

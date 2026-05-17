@@ -1470,6 +1470,11 @@ function rpc_songs_lite(): array
             $bpm = rpc_str($row['bpm'] ?? '');
             $raw = rpc_decode_json_array($row['raw_json'] ?? null);
             $arrangements = rpc_song_arrangements_payload($raw, $title, $keyName, $bpm);
+            $songAssets = rpc_song_assets_payload($raw);
+            $pdfLinks = rpc_song_links_payload($raw, ['pdf']);
+            $fileLinks = rpc_song_links_payload($raw, ['file', 'link']);
+            $youtubeUrls = rpc_song_youtube_urls($raw);
+            $keyNames = rpc_song_all_key_names($raw, $arrangements, $keyName);
             $songs[] = [
                 'id' => $songId,
                 'songId' => $songId,
@@ -1477,22 +1482,31 @@ function rpc_songs_lite(): array
                 'songTitle' => $title,
                 'arrangementName' => rpc_str($arrangements[0]['arrangementName'] ?? $title),
                 'artist' => $artist,
-                'album' => rpc_song_scalar($raw['album'] ?? ''),
+                'album' => rpc_song_first_field($raw, ['album', 'Album']),
                 'category' => $category,
                 'key' => $keyName,
-                'keyName' => $keyName,
+                'keyName' => $keyNames[0] ?? $keyName,
+                'keyNames' => $keyNames,
                 'bpm' => $bpm,
-                'ccliNumber' => rpc_song_scalar($raw['ccli_number'] ?? ($raw['ccli'] ?? '')),
-                'youtubeUrl' => rpc_song_youtube_url($raw),
-                'youtubeUrls' => rpc_song_youtube_urls($raw),
-                'youtubeEmbeds' => [],
-                'pdfLinks' => rpc_song_links_payload($raw, ['pdf']),
-                'fileLinks' => rpc_song_links_payload($raw, ['file', 'link']),
-                'assets' => rpc_song_assets_payload($raw),
+                'ccliNumber' => rpc_song_first_field($raw, ['ccli_number', 'ccli', 'CCLI_Number']),
+                'songStatus' => rpc_song_first_field($raw, ['status', 'song_status', 'Song_Status']),
+                'youtubeUrl' => $youtubeUrls[0] ?? '',
+                'youtubeUrls' => $youtubeUrls,
+                'youtubeEmbeds' => rpc_song_youtube_embeds($raw),
+                'pdfLinks' => $pdfLinks,
+                'fileLinks' => $fileLinks,
+                'assets' => $songAssets,
                 'arrangements' => $arrangements,
+                'arrangementsCount' => count($arrangements),
+                'keysCount' => count($keyNames),
+                'pdfLinksCount' => count($pdfLinks),
+                'fileLinksCount' => count($fileLinks),
             ];
         }
-    } catch (Throwable) {
+    } catch (Throwable $e) {
+        if (defined('APP_DEBUG') && APP_DEBUG) {
+            return ['ok' => false, 'error' => $e->getMessage(), 'songs' => [], 'dataVersion' => rpc_data_version()];
+        }
         $songs = [];
     }
 
@@ -1519,11 +1533,16 @@ function rpc_song_arrangements_payload(array $song, string $fallbackTitle, strin
     }
 
     if (!$rawArrangements) {
+        $flatArrangementName = rpc_song_first_field($song, ['Arrangement_Name', 'arrangement_name']);
+        $flatArrangementId = rpc_song_first_field($song, ['Arrangement_ID', 'arrangement_id']);
+        $flatKey = rpc_song_first_field($song, ['Key_Name', 'Arrangement_Key_Name', 'key_name', 'key']);
+        $flatBpm = rpc_song_first_field($song, ['Arrangement_BPM', 'bpm', 'tempo']);
         $rawArrangements = [[
-            'id' => '',
-            'name' => $fallbackTitle,
-            'key_name' => $fallbackKey,
-            'bpm' => $fallbackBpm,
+            'id' => $flatArrangementId,
+            'name' => $flatArrangementName !== '' ? $flatArrangementName : $fallbackTitle,
+            'key_name' => $flatKey !== '' ? $flatKey : $fallbackKey,
+            'bpm' => $flatBpm !== '' ? $flatBpm : $fallbackBpm,
+            '__flat_song' => $song,
         ]];
     }
 
@@ -1532,21 +1551,34 @@ function rpc_song_arrangements_payload(array $song, string $fallbackTitle, strin
         if (!is_array($arrangement)) {
             continue;
         }
-        $name = rpc_song_scalar($arrangement['name'] ?? ($arrangement['title'] ?? ($arrangement['arrangement_name'] ?? $fallbackTitle)));
-        $keyNames = rpc_song_key_names($arrangement, $fallbackKey);
+        $flatSong = is_array($arrangement['__flat_song'] ?? null) ? $arrangement['__flat_song'] : [];
+        unset($arrangement['__flat_song']);
+        $source = $flatSong ?: $arrangement;
+        $name = rpc_song_first_field($source, ['name', 'title', 'arrangement_name', 'Arrangement_Name']);
+        if ($name === '') {
+            $name = $fallbackTitle;
+        }
+        $keyNames = rpc_song_key_names($source, $fallbackKey);
+        $assets = rpc_song_assets_payload($source);
+        $pdfLinks = rpc_song_links_payload($source, ['pdf']);
+        $fileLinks = rpc_song_links_payload($source, ['file', 'link']);
         $arrangements[] = [
-            'arrangementId' => rpc_song_scalar($arrangement['id'] ?? ($arrangement['arrangement_id'] ?? '')),
+            'arrangementId' => rpc_song_first_field($source, ['id', 'arrangement_id', 'Arrangement_ID']),
             'arrangementName' => $name !== '' ? $name : $fallbackTitle,
             'keyName' => $keyNames[0] ?? $fallbackKey,
             'keyNames' => $keyNames,
-            'bpm' => rpc_song_scalar($arrangement['bpm'] ?? ($arrangement['tempo'] ?? $fallbackBpm)),
-            'sequence' => rpc_song_sequence($arrangement),
-            'pdfLinks' => rpc_song_links_payload($arrangement, ['pdf']),
-            'fileLinks' => rpc_song_links_payload($arrangement, ['file', 'link']),
-            'assets' => rpc_song_assets_payload($arrangement),
-            'keyResources' => [],
-            'youtubeUrls' => rpc_song_youtube_urls($arrangement),
-            'youtubeEmbeds' => [],
+            'bpm' => rpc_song_first_field($source, ['bpm', 'tempo', 'Arrangement_BPM']) ?: $fallbackBpm,
+            'minutes' => rpc_song_first_field($source, ['minutes', 'Arrangement_Minutes']),
+            'seconds' => rpc_song_first_field($source, ['seconds', 'Arrangement_Seconds']),
+            'keyMale' => rpc_song_first_field($source, ['key_male', 'Arrangement_Key_Male']),
+            'keyFemale' => rpc_song_first_field($source, ['key_female', 'Arrangement_Key_Female']),
+            'sequence' => rpc_song_sequence($source),
+            'pdfLinks' => $pdfLinks,
+            'fileLinks' => $fileLinks,
+            'assets' => $assets,
+            'keyResources' => rpc_song_key_resources($source, $keyNames),
+            'youtubeUrls' => rpc_song_youtube_urls($source),
+            'youtubeEmbeds' => rpc_song_youtube_embeds($source),
         ];
     }
 
@@ -1587,10 +1619,39 @@ function rpc_song_scalar(mixed $value): string
     return trim(html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 }
 
+function rpc_song_first_field(array $data, array $fields): string
+{
+    foreach ($fields as $field) {
+        $value = rpc_song_scalar($data[$field] ?? '');
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+}
+
+function rpc_song_split_list(mixed $value): array
+{
+    if (is_array($value)) {
+        $out = [];
+        foreach ($value as $item) {
+            $scalar = rpc_song_scalar($item);
+            if ($scalar !== '') {
+                $out[] = $scalar;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+    return array_values(array_unique(array_filter(array_map(
+        static fn(string $item): string => trim($item),
+        preg_split('/[,;\n\r|]+/', rpc_song_scalar($value)) ?: []
+    ))));
+}
+
 function rpc_song_key_names(array $arrangement, string $fallbackKey): array
 {
     $keys = [];
-    foreach (['key_name', 'key', 'default_key_name'] as $field) {
+    foreach (['key_name', 'key', 'default_key_name', 'Key_Name', 'Arrangement_Key_Name'] as $field) {
         $value = rpc_song_scalar($arrangement[$field] ?? '');
         if ($value !== '') {
             $keys[] = $value;
@@ -1610,9 +1671,20 @@ function rpc_song_key_names(array $arrangement, string $fallbackKey): array
     return array_values(array_unique($keys));
 }
 
+function rpc_song_all_key_names(array $song, array $arrangements, string $fallbackKey): array
+{
+    $keys = rpc_song_key_names($song, $fallbackKey);
+    foreach ($arrangements as $arrangement) {
+        foreach (rpc_song_split_list($arrangement['keyNames'] ?? []) as $key) {
+            $keys[] = $key;
+        }
+    }
+    return array_values(array_unique(array_filter($keys)));
+}
+
 function rpc_song_sequence(array $arrangement): array
 {
-    $sequence = $arrangement['sequence'] ?? [];
+    $sequence = $arrangement['sequence'] ?? ($arrangement['Arrangement_Sequence'] ?? []);
     if (is_string($sequence)) {
         return array_values(array_filter(array_map('trim', preg_split('/[,;\n\r]+/', $sequence) ?: [])));
     }
@@ -1641,7 +1713,7 @@ function rpc_song_youtube_url(array $song): string
 function rpc_song_youtube_urls(array $song): array
 {
     $urls = [];
-    foreach (['youtube_url', 'youtubeUrl', 'youtube', 'youtube_embed', 'youtubeEmbed'] as $field) {
+    foreach (['youtube_url', 'youtubeUrl', 'youtube', 'youtube_embed', 'youtubeEmbed', 'YouTube_URL', 'YouTube_Embed', 'Song_YouTube_URLs', 'Arrangement_YouTube_URLs'] as $field) {
         $value = rpc_song_scalar($song[$field] ?? '');
         if ($value !== '' && preg_match('/(youtube\.com|youtu\.be)/i', $value)) {
             $urls[] = $value;
@@ -1655,35 +1727,175 @@ function rpc_song_youtube_urls(array $song): array
     return array_values(array_unique($urls));
 }
 
+function rpc_song_youtube_embeds(array $song): array
+{
+    $embeds = [];
+    foreach (['youtube_embed', 'youtubeEmbed', 'YouTube_Embed', 'Song_YouTube_Embeds', 'Arrangement_YouTube_Embeds'] as $field) {
+        foreach (rpc_song_split_list($song[$field] ?? '') as $value) {
+            if (preg_match('/(youtube\.com|youtu\.be)/i', $value)) {
+                $embeds[] = $value;
+            }
+        }
+    }
+    return array_values(array_unique($embeds));
+}
+
 function rpc_song_links_payload(array $song, array $kinds): array
 {
     $urls = [];
+    foreach (rpc_song_url_fields($song) as $url) {
+        $urls[] = $url;
+    }
     foreach (rpc_song_collect_urls($song) as $url) {
+        $urls[] = $url;
+    }
+    $filtered = [];
+    foreach (array_values(array_unique($urls)) as $url) {
         $isPdf = (bool) preg_match('/\.pdf(\?|$)/i', $url);
         if (in_array('pdf', $kinds, true) && $isPdf) {
-            $urls[] = $url;
+            $filtered[] = $url;
             continue;
         }
         if (!$isPdf && (in_array('file', $kinds, true) || in_array('link', $kinds, true))) {
-            $urls[] = $url;
+            $filtered[] = $url;
         }
     }
-    return array_values(array_unique($urls));
+    return array_values(array_unique($filtered));
 }
 
 function rpc_song_assets_payload(array $song): array
 {
     $assets = [];
-    foreach (rpc_song_collect_urls($song) as $url) {
+    foreach (['Song', 'Arrangement', 'Key'] as $prefix) {
+        $assets = array_merge($assets, rpc_song_assets_from_prefixed_fields($song, $prefix));
+    }
+    foreach (array_values(array_unique(array_merge(rpc_song_url_fields($song), rpc_song_collect_urls($song)))) as $url) {
         if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
             continue;
         }
         $assets[] = [
             'url' => $url,
             'name' => basename(parse_url($url, PHP_URL_PATH) ?: $url),
+            'type' => preg_match('/\.pdf(\?|$)/i', $url) ? 'PDF' : '',
+            'mode' => '',
+            'embed' => '',
+        ];
+    }
+    return rpc_song_unique_assets($assets);
+}
+
+function rpc_song_url_fields(array $song): array
+{
+    $urls = [];
+    foreach ([
+        'url', 'file_url', 'download_url', 'embed', 'link',
+        'Song_PDF_Links', 'Song_File_Links', 'Song_File_URLs', 'Song_File_Embeds',
+        'Arrangement_PDF_Links', 'Arrangement_File_Links', 'Arrangement_File_URLs', 'Arrangement_File_Embeds',
+        'Key_PDF_Links', 'Key_Elvanto_PDF_URL', 'Key_File_Links', 'Key_File_URLs', 'Key_File_Embeds',
+    ] as $field) {
+        foreach (rpc_song_split_list($song[$field] ?? '') as $value) {
+            if (preg_match('/^https?:\/\//i', $value)) {
+                $urls[] = $value;
+            }
+        }
+    }
+    return array_values(array_unique($urls));
+}
+
+function rpc_song_assets_from_prefixed_fields(array $song, string $prefix): array
+{
+    $names = rpc_song_split_list($song[$prefix . '_File_Names'] ?? '');
+    $types = rpc_song_split_list($song[$prefix . '_File_Types'] ?? '');
+    $modes = rpc_song_split_list($song[$prefix . '_File_Modes'] ?? '');
+    $urls = rpc_song_split_list($song[$prefix . '_File_URLs'] ?? '');
+    $embeds = rpc_song_split_list($song[$prefix . '_File_Embeds'] ?? '');
+    $links = rpc_song_split_list($song[$prefix . '_File_Links'] ?? '');
+    $pdfs = rpc_song_split_list($song[$prefix . '_PDF_Links'] ?? '');
+    $count = max(count($names), count($types), count($modes), count($urls), count($embeds), count($links), count($pdfs));
+    $assets = [];
+    for ($i = 0; $i < $count; $i++) {
+        $url = $urls[$i] ?? ($links[$i] ?? ($pdfs[$i] ?? ''));
+        $embed = $embeds[$i] ?? '';
+        if ($url === '' && $embed === '') {
+            continue;
+        }
+        $assets[] = [
+            'name' => $names[$i] ?? basename(parse_url($url ?: $embed, PHP_URL_PATH) ?: ($url ?: $embed)),
+            'type' => $types[$i] ?? (preg_match('/\.pdf(\?|$)/i', $url) ? 'PDF' : ''),
+            'mode' => $modes[$i] ?? '',
+            'url' => $url,
+            'embed' => $embed,
         ];
     }
     return $assets;
+}
+
+function rpc_song_unique_assets(array $assets): array
+{
+    $out = [];
+    $seen = [];
+    foreach ($assets as $asset) {
+        if (!is_array($asset)) {
+            continue;
+        }
+        $url = rpc_song_scalar($asset['url'] ?? '');
+        $embed = rpc_song_scalar($asset['embed'] ?? '');
+        if ($url === '' && $embed === '') {
+            continue;
+        }
+        $item = [
+            'name' => rpc_song_scalar($asset['name'] ?? ''),
+            'type' => rpc_song_scalar($asset['type'] ?? ''),
+            'mode' => rpc_song_scalar($asset['mode'] ?? ''),
+            'url' => $url,
+            'embed' => $embed,
+        ];
+        $key = strtolower(implode('|', $item));
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $item;
+    }
+    return $out;
+}
+
+function rpc_song_key_resources(array $source, array $keyNames): array
+{
+    $resources = [];
+    $labels = $keyNames ?: rpc_song_split_list($source['Key_Name'] ?? '');
+    foreach ($labels as $label) {
+        $key = rpc_song_scalar($label);
+        if ($key === '') {
+            continue;
+        }
+        $keyResources = [
+            'pdfLinks' => rpc_song_links_payload($source, ['pdf']),
+            'fileLinks' => rpc_song_links_payload($source, ['file', 'link']),
+            'assets' => rpc_song_assets_from_prefixed_fields($source, 'Key'),
+            'elvantoPdfUrl' => rpc_song_first_field($source, ['Key_Elvanto_PDF_URL']),
+        ];
+        $resources[$key] = $keyResources;
+    }
+    foreach ([['keys', 'key'], ['keys']] as $path) {
+        foreach (rpc_song_path_list($source, $path) as $keyPayload) {
+            if (!is_array($keyPayload)) {
+                continue;
+            }
+            $label = rpc_song_first_field($keyPayload, ['name', 'title', 'key_name', 'Key_Name', 'key']);
+            if ($label === '') {
+                continue;
+            }
+            $resources[$label] ??= ['pdfLinks' => [], 'fileLinks' => [], 'assets' => [], 'elvantoPdfUrl' => ''];
+            $resources[$label]['pdfLinks'] = array_values(array_unique(array_merge($resources[$label]['pdfLinks'], rpc_song_links_payload($keyPayload, ['pdf']))));
+            $resources[$label]['fileLinks'] = array_values(array_unique(array_merge($resources[$label]['fileLinks'], rpc_song_links_payload($keyPayload, ['file', 'link']))));
+            $resources[$label]['assets'] = rpc_song_unique_assets(array_merge($resources[$label]['assets'], rpc_song_assets_payload($keyPayload)));
+            if ($resources[$label]['elvantoPdfUrl'] === '') {
+                $resources[$label]['elvantoPdfUrl'] = rpc_song_first_field($keyPayload, ['pdf_url', 'elvanto_pdf_url', 'Key_Elvanto_PDF_URL']);
+            }
+        }
+    }
+    return $resources;
 }
 
 function rpc_song_collect_urls(mixed $value): array
