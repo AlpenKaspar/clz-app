@@ -4840,6 +4840,122 @@
       color: var(--text-muted);
       line-height: 1.45;
     }
+
+    .admin-users-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 12px;
+    }
+
+    .admin-users-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .admin-user-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--card-bg) 92%, var(--primary) 8%);
+    }
+
+    .admin-user-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .admin-user-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .admin-user-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .admin-user-controls select {
+      height: 32px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--card-bg);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 8px;
+    }
+
+    .admin-user-controls .btn {
+      min-height: 32px;
+      padding: 0 9px;
+      font-size: 12px;
+    }
+
+    .impersonation-banner {
+      position: fixed;
+      z-index: 90;
+      left: max(12px, env(safe-area-inset-left));
+      right: max(12px, env(safe-area-inset-right));
+      top: max(10px, env(safe-area-inset-top));
+      max-width: calc(var(--desktop-max) - 24px);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: #fff7ed;
+      color: #7c2d12;
+      border: 1px solid #fed7aa;
+      box-shadow: 0 16px 38px rgba(124,45,18,0.18);
+    }
+
+    .impersonation-banner-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .impersonation-banner button {
+      border: 0;
+      border-radius: 999px;
+      background: #ea580c;
+      color: #fff;
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    body.dark .impersonation-banner {
+      background: rgba(124,45,18,0.92);
+      border-color: rgba(251,146,60,0.45);
+      color: #ffedd5;
+    }
         .global-live-banner {
       position: sticky;
       top: 0;
@@ -6452,6 +6568,14 @@
   </div>
 </div>
 
+<div id="impersonation-banner" class="impersonation-banner" style="display:none;">
+  <div class="impersonation-banner-copy">
+    <strong>Simulation aktiv</strong>
+    <span id="impersonation-banner-text"></span>
+  </div>
+  <button type="button" onclick="stopAdminImpersonation_()">Zurück zu Admin</button>
+</div>
+
 <div class="shell">
 
   <div id="detail-backdrop" class="detail-overlay-backdrop" onclick="closeDetailOverlay()"></div>
@@ -7140,6 +7264,22 @@
           </div>
         </details>
 
+        <details class="settings-collapsible tools-import-panel" id="admin-users-panel">
+          <summary>Benutzer & Rollen</summary>
+          <div class="settings-collapsible-body">
+            <div class="tools-import-note">
+              Neue Google-Logins starten als Gast. Gib hier gezielt Admin- oder Mitarbeiterrechte frei.
+            </div>
+            <div class="admin-users-toolbar">
+              <div id="admin-users-status" style="font-size:11px;color:var(--text-muted);font-weight:700;">Noch nicht geladen</div>
+              <button class="btn btn-secondary" type="button" onclick="loadAdminUsers_()" style="min-height:34px;padding:0 10px;font-size:12px;">
+                <i class="fas fa-rotate"></i><span>Laden</span>
+              </button>
+            </div>
+            <div id="admin-users-list" class="admin-users-list"></div>
+          </div>
+        </details>
+
       </div>
     </div>
 
@@ -7256,6 +7396,8 @@
       let dashboardStats = null;
       let currentLoginEmail = "";
       let currentUserRole = "guest";
+      let currentUserImpersonating = null;
+      let adminUsersCache = [];
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
       let currentPermissions = {
@@ -7511,6 +7653,7 @@
 
           currentUserRole = nextRole;
           currentPermissions = nextPerms;
+          currentUserImpersonating = res.user.impersonating || null;
           if (userEmail) currentLoginEmail = userEmail;
           persistPermissionsCache_(res.user);
           // Throttle-Marker setzen, damit der separate refreshPermissionsInBackground_ Call nicht direkt nochmal feuert
@@ -7519,6 +7662,7 @@
             applyAccessControlUi_();
             updateWelcomeGreeting_();
           }
+          updateImpersonationBanner_();
         }
 
         if (Array.isArray(res?.filters)) {
@@ -8081,9 +8225,11 @@
           if (!role) return false;
           currentUserRole = role;
           currentPermissions = perms;
+          currentUserImpersonating = parsed.impersonating || null;
           if (email) currentLoginEmail = email;
           applyAccessControlUi_();
           updateWelcomeGreeting_();
+          updateImpersonationBanner_();
           return true;
         } catch (e) {
           return false;
@@ -8115,6 +8261,7 @@
           const payload = {
             email: email,
             role: String(user.role || 'guest').trim().toLowerCase(),
+            impersonating: user.impersonating || null,
             permissions: normalizePermissions_(user.permissions || {}),
             ts: Date.now()
           };
@@ -8195,6 +8342,10 @@
         if (calCsvBtn) calCsvBtn.style.display = canExportCalendar_() ? '' : 'none';
         if (calPrintBtn) calPrintBtn.style.display = canPrintCalendar_() ? '' : 'none';
 
+        const adminPanel = document.getElementById('admin-users-panel');
+        if (adminPanel) adminPanel.style.display = currentUserRole === 'admin' ? '' : 'none';
+        updateImpersonationBanner_();
+
         if (navChanged && canUseTab_('contacts')) {
           switchTab('contacts');
         } else if (!canUseTab_(currentTab)) {
@@ -8203,6 +8354,21 @@
         }
 
         requestAnimationFrame(() => setTimeout(updateBottomNavHighlight_, 30));
+      }
+
+      function updateImpersonationBanner_() {
+        const banner = document.getElementById('impersonation-banner');
+        const text = document.getElementById('impersonation-banner-text');
+        const info = currentUserImpersonating && currentUserImpersonating.active ? currentUserImpersonating : null;
+        if (!banner || !text) return;
+        if (!info) {
+          banner.style.display = 'none';
+          text.textContent = '';
+          return;
+        }
+        const original = info.originalUser || {};
+        text.textContent = `${currentLoginEmail || 'Benutzer'} als ${currentUserRole || 'guest'} · Admin: ${original.email || ''}`;
+        banner.style.display = 'flex';
       }
 
       function cacheSet_(key, value, meta = {}) {
@@ -9419,6 +9585,7 @@ function updateBottomNavHighlight_() {
         }
         if (tab === 'tools') {
           setTimeout(() => refreshSyncStatus_().catch(() => {}), 80);
+          setTimeout(() => loadAdminUsers_({ silent: true }).catch(() => {}), 120);
         }
       }
 
@@ -19399,6 +19566,115 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
       }
 
+      async function loadAdminUsers_(options = {}) {
+        if (currentUserRole !== 'admin') return;
+        const status = document.getElementById('admin-users-status');
+        const host = document.getElementById('admin-users-list');
+        if (!host) return;
+        if (!options.silent && status) status.textContent = 'Lade Benutzer...';
+        try {
+          const data = await withGsRetry('tools_adminUsersList', [], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : [];
+          renderAdminUsers_();
+          if (status) status.textContent = `${adminUsersCache.length} Benutzer`;
+        } catch (err) {
+          if (status) status.textContent = 'Benutzer konnten nicht geladen werden.';
+          host.innerHTML = `<div class="error-box">${escapeHtml(normalizeErrMsg_(err))}</div>`;
+        }
+      }
+
+      function renderAdminUsers_() {
+        const host = document.getElementById('admin-users-list');
+        if (!host) return;
+        if (!Array.isArray(adminUsersCache) || !adminUsersCache.length) {
+          host.innerHTML = `<div class="service-empty-box">Noch keine Benutzer. Sie erscheinen nach dem ersten Google-Login.</div>`;
+          return;
+        }
+        host.innerHTML = adminUsersCache.map(user => {
+          const id = Number(user?.id || 0);
+          const role = String(user?.role || 'guest').toLowerCase();
+          const active = user?.isActive !== false;
+          const name = String(user?.displayName || user?.email || 'Benutzer');
+          const email = String(user?.email || '');
+          const lastLogin = formatIsoShort_(user?.lastLoginAt || '') || 'noch nie';
+          return `
+            <div class="admin-user-row ${active ? '' : 'is-inactive'}">
+              <div style="min-width:0;">
+                <div class="admin-user-name">${escapeHtml(name)}</div>
+                <div class="admin-user-meta">${escapeHtml(email)} · letzter Login: ${escapeHtml(lastLogin)}</div>
+              </div>
+              <div class="admin-user-controls">
+                <select onchange="updateAdminUserRole_(${id}, this.value)" aria-label="Rolle">
+                  ${['guest', 'member', 'admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${r}</option>`).join('')}
+                </select>
+                <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
+                <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      async function updateAdminUserRole_(id, role) {
+        try {
+          const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
+          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role, isActive: user?.isActive !== false }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          renderAdminUsers_();
+          toast('Rolle gespeichert', 1200);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+          renderAdminUsers_();
+        }
+      }
+
+      async function toggleAdminUserActive_(id, isActive) {
+        try {
+          const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
+          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role: user?.role || 'guest', isActive }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          renderAdminUsers_();
+          toast(isActive ? 'Benutzer aktiviert' : 'Benutzer gesperrt', 1200);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      async function impersonateAdminUser_(id) {
+        try {
+          const data = await withGsRetry('tools_adminImpersonateUser', [id], { retries: 1, retryDelay: 500 });
+          const user = data?.user || {};
+          currentUserRole = String(user.role || 'guest').toLowerCase();
+          currentPermissions = normalizePermissions_(user.permissions || {});
+          currentLoginEmail = String(user.email || '');
+          currentUserImpersonating = user.impersonating || null;
+          persistPermissionsCache_(user);
+          applyAccessControlUi_();
+          updateWelcomeGreeting_();
+          toast('Simulation aktiv', 1400);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      async function stopAdminImpersonation_() {
+        try {
+          const data = await withGsRetry('tools_adminStopImpersonation', [], { retries: 1, retryDelay: 500 });
+          const user = data?.user || {};
+          currentUserRole = String(user.role || 'admin').toLowerCase();
+          currentPermissions = normalizePermissions_(user.permissions || {});
+          currentLoginEmail = String(user.email || '');
+          currentUserImpersonating = user.impersonating || null;
+          persistPermissionsCache_(user);
+          applyAccessControlUi_();
+          updateWelcomeGreeting_();
+          switchTab('tools');
+          toast('Zurück als Admin', 1300);
+        } catch (err) {
+          window.location.href = '/api/auth/google-start.php';
+        }
+      }
+
       async function refreshPermissionsOnly_() {
         try {
           const data = await withGsRetry("app_getUserAccessLight", [], { retries: 1, retryDelay: 500 });
@@ -19415,9 +19691,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           currentUserRole = nextRole;
           currentPermissions = nextPerms;
+          currentUserImpersonating = data?.user?.impersonating || null;
           persistPermissionsCache_(data?.user || {});
           if (userEmail) currentLoginEmail = userEmail;
           updateWelcomeGreeting_();
+          updateImpersonationBanner_();
 
           if (roleChanged || permsChanged) {
             applyAccessControlUi_();

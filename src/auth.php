@@ -100,7 +100,20 @@ function current_user(): ?array
     }
 
     refresh_app_session_cookie();
-    return user_payload($user);
+    $payload = user_payload($user);
+    $impersonatorId = $_SESSION['impersonator_user_id'] ?? null;
+    if ($impersonatorId) {
+        $adminStmt = db()->prepare('SELECT id, email, display_name, role, is_active FROM users WHERE id = ? AND is_active = 1');
+        $adminStmt->execute([(int) $impersonatorId]);
+        $admin = $adminStmt->fetch();
+        if (is_array($admin)) {
+            $payload['impersonating'] = [
+                'active' => true,
+                'originalUser' => user_payload($admin),
+            ];
+        }
+    }
+    return $payload;
 }
 
 function user_payload(array $user): array
@@ -172,6 +185,7 @@ function login_user_from_google(array $profile): array
     start_app_session();
     session_regenerate_id(true);
     $_SESSION['user_id'] = (int) $user['id'];
+    unset($_SESSION['impersonator_user_id']);
     return user_payload($user);
 }
 
@@ -182,7 +196,7 @@ function google_login_role_for_email(string $email): string
         explode(',', (string) env('APP_ADMIN_EMAILS', ''))
     ));
 
-    return in_array(strtolower($email), $adminEmails, true) ? 'admin' : 'member';
+    return in_array(strtolower($email), $adminEmails, true) ? 'admin' : 'guest';
 }
 
 function logout_user(): void

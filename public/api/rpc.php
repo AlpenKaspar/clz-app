@@ -22,7 +22,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
     return match ($fn) {
         'app_ping' => rpc_ping(),
         'app_bootstrap' => rpc_bootstrap($user),
-        'app_getUserAccessLight' => ['ok' => true, 'user' => $user, 'permissions' => rpc_permissions($user)],
+        'app_getUserAccessLight' => ['ok' => true, 'user' => array_merge($user, ['permissions' => rpc_permissions($user)]), 'permissions' => rpc_permissions($user)],
         'app_loadContactsLite' => rpc_contacts_lite(),
         'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? '')),
         'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? '')),
@@ -57,6 +57,10 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_importServiceDetails' => rpc_run_import('service_details', $user),
         'tools_importSongs' => rpc_run_import('songs', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
+        'tools_adminUsersList' => rpc_admin_users_list($user),
+        'tools_adminUpdateUser' => rpc_admin_update_user($args[0] ?? [], $user),
+        'tools_adminImpersonateUser' => rpc_admin_impersonate_user((int) ($args[0] ?? 0), $user),
+        'tools_adminStopImpersonation' => rpc_admin_stop_impersonation($user),
         'tools_installNightlyServerCacheRebuild' => rpc_nightly_cache_notice('install'),
         'tools_removeNightlyServerCacheRebuild' => rpc_nightly_cache_notice('remove'),
         'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck()],
@@ -96,6 +100,7 @@ function rpc_bootstrap(array $user): array
             'email' => $user['email'] ?? '',
             'role' => $user['role'] ?? 'member',
             'permissions' => rpc_permissions($user),
+            'impersonating' => $user['impersonating'] ?? null,
         ],
         'cache' => [],
         'filters' => rpc_contact_filters(),
@@ -105,14 +110,16 @@ function rpc_bootstrap(array $user): array
 
 function rpc_permissions(array $user = []): array
 {
-    $isAdmin = strtolower((string) ($user['role'] ?? '')) === 'admin';
+    $role = strtolower((string) ($user['role'] ?? 'guest'));
+    $isAdmin = $role === 'admin';
+    $isGuest = $role === 'guest' || $role === 'gast';
 
     return [
         'tabs' => [
             'contacts' => true,
             'calendar' => true,
             'songs' => true,
-            'dashboard' => true,
+            'dashboard' => !$isGuest,
             'tools' => $isAdmin,
         ],
         'exports' => [
@@ -467,7 +474,7 @@ function rpc_person_main(string $personId): array
 {
     $row = rpc_fetch_person($personId);
     if (!$row) {
-        return ['displayName' => '', 'details' => [], 'meta' => ['personId' => $personId], 'previewOnly' => true];
+        return ['type' => 'person', 'displayName' => '', 'details' => [], 'meta' => ['personId' => $personId], 'previewOnly' => true];
     }
 
     [$custom, $groups, $family] = rpc_person_enrichment($personId);
@@ -495,6 +502,7 @@ function rpc_person_main(string $personId): array
     ];
 
     return [
+        'type' => 'person',
         'displayName' => $lite['displayName'],
         'details' => array_values(array_filter($details, static fn(array $item): bool => trim((string) ($item['value'] ?? '')) !== '')),
         'meta' => [
@@ -697,6 +705,102 @@ function rpc_contacts_csv_response(mixed $ids, mixed $columns, array $user): arr
 function rpc_user_can_export_contacts(array $user): bool
 {
     return strtolower(rpc_str($user['role'] ?? '')) === 'admin';
+}
+
+function rpc_is_real_admin(array $user): bool
+{
+    if (strtolower(rpc_str($user['role'] ?? '')) === 'admin') {
+        return true;
+    }
+    $original = $user['impersonating']['originalUser'] ?? null;
+    return is_array($original) && strtolower(rpc_str($original['role'] ?? '')) === 'admin';
+}
+
+function rpc_require_real_admin(array $user): void
+{
+    if (!rpc_is_real_admin($user)) {
+        throw new RuntimeException('Nur Admins duerfen diese Aktion ausfuehren.');
+    }
+}
+
+function rpc_admin_users_list(array $user): array
+{
+    rpc_require_real_admin($user);
+    $rows = fetch_all_prepared_legacy(
+        'SELECT id, email, display_name, role, is_active, last_login_at, created_at, updated_at
+         FROM users
+         ORDER BY last_login_at DESC, email ASC',
+        []
+    );
+
+    return [
+        'ok' => true,
+        'roles' => ['admin', 'member', 'guest'],
+        'users' => array_map(static function (array $row): array {
+            return [
+                'id' => (int) ($row['id'] ?? 0),
+                'email' => rpc_str($row['email'] ?? ''),
+                'displayName' => rpc_str($row['display_name'] ?? ''),
+                'role' => rpc_str($row['role'] ?? 'guest') ?: 'guest',
+                'isActive' => ((int) ($row['is_active'] ?? 0)) === 1,
+                'lastLoginAt' => rpc_str($row['last_login_at'] ?? ''),
+                'createdAt' => rpc_str($row['created_at'] ?? ''),
+                'updatedAt' => rpc_str($row['updated_at'] ?? ''),
+            ];
+        }, $rows),
+    ];
+}
+
+function rpc_admin_update_user(mixed $payload, array $user): array
+{
+    rpc_require_real_admin($user);
+    $data = is_array($payload) ? $payload : [];
+    $id = (int) ($data['id'] ?? 0);
+    if ($id <= 0) {
+        throw new RuntimeException('User fehlt.');
+    }
+    $role = strtolower(rpc_str($data['role'] ?? 'guest'));
+    if (!in_array($role, ['admin', 'member', 'guest'], true)) {
+        throw new RuntimeException('Ungueltige Rolle.');
+    }
+    $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
+    $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
+    $stmt->execute([$role, $isActive, $id]);
+    return rpc_admin_users_list($user);
+}
+
+function rpc_admin_impersonate_user(int $targetUserId, array $user): array
+{
+    rpc_require_real_admin($user);
+    if ($targetUserId <= 0) {
+        throw new RuntimeException('User fehlt.');
+    }
+    $stmt = db()->prepare('SELECT id FROM users WHERE id = ? AND is_active = 1');
+    $stmt->execute([$targetUserId]);
+    if (!is_array($stmt->fetch())) {
+        throw new RuntimeException('User ist nicht aktiv.');
+    }
+
+    start_app_session();
+    if (empty($_SESSION['impersonator_user_id'])) {
+        $_SESSION['impersonator_user_id'] = (int) ($user['id'] ?? 0);
+    }
+    $_SESSION['user_id'] = $targetUserId;
+    $nextUser = current_user() ?? [];
+    return ['ok' => true, 'user' => array_merge($nextUser, ['permissions' => rpc_permissions($nextUser)])];
+}
+
+function rpc_admin_stop_impersonation(array $user): array
+{
+    start_app_session();
+    $originalId = (int) ($_SESSION['impersonator_user_id'] ?? 0);
+    if ($originalId <= 0) {
+        return ['ok' => true, 'user' => array_merge($user, ['permissions' => rpc_permissions($user)])];
+    }
+    $_SESSION['user_id'] = $originalId;
+    unset($_SESSION['impersonator_user_id']);
+    $nextUser = current_user() ?? [];
+    return ['ok' => true, 'user' => array_merge($nextUser, ['permissions' => rpc_permissions($nextUser)])];
 }
 
 function rpc_normalize_ids(mixed $ids): array

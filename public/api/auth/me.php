@@ -24,13 +24,14 @@ function auth_me_permissions(array $user): array
     $role = strtolower((string) ($user['role'] ?? 'guest'));
     $isAuthenticated = (bool) ($user['isAuthenticated'] ?? false);
     $isAdmin = $role === 'admin';
+    $isGuest = $role === 'guest' || $role === 'gast';
 
     return [
         'tabs' => [
             'contacts' => true,
             'calendar' => true,
             'songs' => true,
-            'dashboard' => $isAuthenticated,
+            'dashboard' => $isAuthenticated && !$isGuest,
             'tools' => $isAdmin,
         ],
         'exports' => [
