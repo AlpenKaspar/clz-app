@@ -241,7 +241,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $category = rpc_str($row['category_name'] ?? '');
     $birthday = rpc_str($row['birthday'] ?? '');
     $age = rpc_age($birthday);
-    $departmentsValues = rpc_ministry_values($row, $custom);
+    $departmentsValues = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
     $leaderships = rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '');
     $kgGroupValues = $groups['groups'] ?? [];
     $kgLeadGroupValues = $groups['leads'] ?? [];
@@ -298,7 +298,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'kgLeadGroupValues' => $kgLeadGroupValues,
         'kgAssistantGroupValues' => $kgAssistantGroupValues,
         'leaderships' => $leaderships,
-        'nextStepValues' => rpc_next_step_values($custom),
+        'nextStepValues' => rpc_split_multi_value($custom['KURSE / TAUFE'] ?? ''),
         'kidsChurchValues' => rpc_split_multi_value($custom['KIDS & PROMISELAND'] ?? ''),
         'youthYpgValues' => rpc_split_multi_value($custom['JUNGE ERWACHSENE'] ?? ''),
         'new12' => rpc_date_within_months($dateAdded, 12),

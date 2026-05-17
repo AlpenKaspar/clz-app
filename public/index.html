@@ -9155,6 +9155,17 @@
         const match = url.match(/\.([a-z0-9]{2,5})$/i);
         return match ? match[1].toUpperCase() : '';
       }
+      function isSongAudioFileUrl_(url) {
+        return /\.(mp3|wav|m4a|aac|ogg|opus|flac|aif|aiff)(\?|#|$)/i.test(String(url || ''));
+      }
+      function isSongVideoFileUrl_(url) {
+        return /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(String(url || ''));
+      }
+      function isSongNoteFileUrl_(url) {
+        const value = String(url || '').trim();
+        if (!value || isSongAudioFileUrl_(value) || isSongVideoFileUrl_(value)) return false;
+        return /\.(pdf|chopro|cho|pro|onsong|txt|html?)(\?|#|$)/i.test(value);
+      }
 
       function isTechnicalSongFileName_(name) {
         const value = String(name || '').trim();
@@ -9197,8 +9208,8 @@
         const name = String(item.name || '').toLowerCase();
         const url = String(item.url || '').toLowerCase();
         if (String(item.embed || '').trim() || type.includes('video')) return { key: 'video', label: 'Videos', icon: 'fa-film' };
-        if (url.endsWith('.pdf')) return { key: 'pdf', label: 'Noten', icon: 'fa-file-pdf' };
-        if (type.includes('audio') || url.endsWith('.wav') || url.endsWith('.mp3') || url.endsWith('.m4a')) {
+        if (isSongNoteFileUrl_(url)) return { key: 'pdf', label: 'Noten', icon: 'fa-file-pdf' };
+        if (type.includes('audio') || isSongAudioFileUrl_(url)) {
           if (name.includes('demo') || name.includes('playback')) return { key: 'playback', label: 'Playbacks', icon: 'fa-circle-play' };
           if (name.includes('spur') || name.includes('drum') || name.includes('click') || name.includes('track')) return { key: 'tracks', label: 'Spuren', icon: 'fa-wave-square' };
           return { key: 'audio', label: 'Audio', icon: 'fa-headphones' };
@@ -9748,7 +9759,7 @@
         }
 
         // Generic fallback: first links as "Noten 1..n".
-        const merged = Array.from(new Set([...fromArrPdf, ...fromArr, ...fromSongPdf, ...fromSong]));
+        const merged = Array.from(new Set([...fromArrPdf, ...fromArr, ...fromSongPdf, ...fromSong])).filter(isSongNoteFileUrl_);
         merged.slice(0, 8).forEach((url, idx) => push(`Noten ${idx + 1}`, url));
         return out;
       }
@@ -9759,14 +9770,14 @@
         const sharedArrangementFiles = Array.from(new Set([
           ...(Array.isArray(arrangement?.pdfLinks) ? arrangement.pdfLinks : []),
           ...(Array.isArray(arrangement?.fileLinks) ? arrangement.fileLinks : [])
-        ]));
+        ])).filter(isSongNoteFileUrl_);
         const rows = keyNames.map((keyName) => {
           const label = String(keyName || '').trim();
           if (!label) return '';
           const keyRes = keyResources[label] || { pdfLinks: [], fileLinks: [], elvantoPdfUrl: '' };
-          const directFiles = [...(Array.isArray(keyRes.pdfLinks) ? keyRes.pdfLinks : []), ...(Array.isArray(keyRes.fileLinks) ? keyRes.fileLinks : [])];
+          const directFiles = [...(Array.isArray(keyRes.pdfLinks) ? keyRes.pdfLinks : []), ...(Array.isArray(keyRes.fileLinks) ? keyRes.fileLinks : [])].filter(isSongNoteFileUrl_);
           const uniqueFiles = Array.from(new Set(directFiles));
-          const computedKeyFiles = keyRes.elvantoPdfUrl ? [keyRes.elvantoPdfUrl] : [];
+          const computedKeyFiles = keyRes.elvantoPdfUrl && isSongNoteFileUrl_(keyRes.elvantoPdfUrl) ? [keyRes.elvantoPdfUrl] : [];
           const fallbackFiles = uniqueFiles.length ? uniqueFiles : (computedKeyFiles.length ? computedKeyFiles : sharedArrangementFiles);
           const chips = fallbackFiles.map((href, idx) => `<a class="song-note-chip" href="${escapeAttr(String(href || ''))}" target="_blank" rel="noopener">${idx === 0 ? 'Herunterladen' : `Datei ${idx + 1}`}</a>`).join('');
           const note = uniqueFiles.length ? '' : (computedKeyFiles.length ? '<span class="song-key-shared-note">Elvanto</span>' : (sharedArrangementFiles.length ? '<span class="song-key-shared-note">geteilt</span>' : '<span class="song-key-empty">Keine Datei</span>'));
