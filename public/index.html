@@ -6639,7 +6639,7 @@
     <strong>Simulation aktiv</strong>
     <span id="impersonation-banner-text"></span>
   </div>
-  <button type="button" onclick="stopAdminImpersonation_()">Zurück zu Admin</button>
+  <button type="button" onclick="stopAdminImpersonation_()">Zurück zu Super-Admin</button>
 </div>
 
 <div class="shell">
@@ -7344,7 +7344,7 @@
           </div>
         </details>
 
-        <details class="settings-collapsible tools-import-panel admin-only" id="admin-users-panel">
+        <details class="settings-collapsible tools-import-panel super-admin-only" id="admin-users-panel">
           <summary>Benutzer & Rollen</summary>
           <div class="settings-collapsible-body">
             <div class="tools-import-note">
@@ -7357,6 +7357,7 @@
                 <option value="guest">Gast</option>
                 <option value="member">Mitarbeiter</option>
                 <option value="admin">Admin</option>
+                <option value="super_admin">Super-Admin</option>
               </select>
               <button class="btn btn-primary" type="submit">
                 <i class="fas fa-plus"></i><span>Hinzufügen</span>
@@ -7495,7 +7496,8 @@
       let currentPermissions = {
         tabs: { contacts: true, calendar: true, songs: true, dashboard: false, tools: true },
         exports: { contactsCsv: false, contactsPrint: false, calendarCsv: false, calendarPrint: false },
-        detailPrint: { contact: true, event: true }
+        detailPrint: { contact: false, event: false },
+        admin: { imports: false, users: false }
       };
       let activeDashboardFilterKey = "";
       let activeDashboardFilterLabel = "";
@@ -8293,13 +8295,15 @@
         const fallback = {
           tabs: { contacts: true, calendar: true, songs: true, dashboard: false, tools: true },
           exports: { contactsCsv: false, contactsPrint: false, calendarCsv: false, calendarPrint: false },
-          detailPrint: { contact: true, event: true }
+          detailPrint: { contact: false, event: false },
+          admin: { imports: false, users: false }
         };
         const src = perm && typeof perm === 'object' ? perm : {};
         return {
           tabs: Object.assign({}, fallback.tabs, src.tabs || {}),
           exports: Object.assign({}, fallback.exports, src.exports || {}),
-          detailPrint: Object.assign({}, fallback.detailPrint, src.detailPrint || {})
+          detailPrint: Object.assign({}, fallback.detailPrint, src.detailPrint || {}),
+          admin: Object.assign({}, fallback.admin, src.admin || {})
         };
       }
 
@@ -8405,8 +8409,7 @@
       }
 
       function canViewContactExtraInfos_() {
-        const role = String(currentUserRole || "guest").toLowerCase();
-        return role === "admin";
+        return isAdminRole_();
       }
 
       function isGuestRole_() {
@@ -8415,7 +8418,12 @@
       }
 
       function isAdminRole_() {
-        return String(currentUserRole || "guest").toLowerCase() === "admin";
+        const role = String(currentUserRole || "guest").toLowerCase();
+        return role === "admin" || role === "super_admin";
+      }
+
+      function isSuperAdminRole_() {
+        return String(currentUserRole || "guest").toLowerCase() === "super_admin";
       }
 
       function isMemberRole_() {
@@ -8424,9 +8432,18 @@
 
       function roleLabel_(role) {
         const value = String(role || "guest").toLowerCase();
+        if (value === "super_admin") return "Super-Admin";
         if (value === "admin") return "Admin";
         if (value === "member") return "Mitarbeiter";
         return "Gast";
+      }
+
+      function canRunImports_() {
+        return currentPermissions?.admin?.imports === true || isAdminRole_();
+      }
+
+      function canManageUsers_() {
+        return currentPermissions?.admin?.users === true || isSuperAdminRole_();
       }
 
       function canViewServiceInternals_() {
@@ -8466,7 +8483,10 @@
         if (calShare) calShare.style.display = (canExportCalendar_() || canPrintCalendar_()) ? '' : 'none';
 
         document.querySelectorAll('.admin-only').forEach(el => {
-          el.style.display = isAdminRole_() ? '' : 'none';
+          el.style.display = canRunImports_() ? '' : 'none';
+        });
+        document.querySelectorAll('.super-admin-only').forEach(el => {
+          el.style.display = canManageUsers_() ? '' : 'none';
         });
         document.querySelectorAll('.member-only').forEach(el => {
           el.style.display = (isAdminRole_() || isMemberRole_()) ? '' : 'none';
@@ -8482,7 +8502,7 @@
         if (calPrintBtn) calPrintBtn.style.display = canPrintCalendar_() ? '' : 'none';
 
         const adminPanel = document.getElementById('admin-users-panel');
-        if (adminPanel) adminPanel.style.display = currentUserRole === 'admin' ? '' : 'none';
+        if (adminPanel) adminPanel.style.display = canManageUsers_() ? '' : 'none';
         updateImpersonationBanner_();
 
         if (navChanged && canUseTab_('contacts')) {
@@ -8506,7 +8526,7 @@
           return;
         }
         const original = info.originalUser || {};
-        text.textContent = `${currentLoginEmail || 'Benutzer'} als ${currentUserRole || 'guest'} · Admin: ${original.email || ''}`;
+        text.textContent = `${currentLoginEmail || 'Benutzer'} als ${roleLabel_(currentUserRole || 'guest')} · Super-Admin: ${original.email || ''}`;
         banner.style.display = 'flex';
       }
 
@@ -19720,7 +19740,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       async function loadAdminUsers_(options = {}) {
-        if (currentUserRole !== 'admin') return;
+        if (!canManageUsers_()) return;
         const status = document.getElementById('admin-users-status');
         const host = document.getElementById('admin-users-list');
         if (!host) return;
@@ -19758,7 +19778,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
               </div>
               <div class="admin-user-controls">
                 <select onchange="updateAdminUserRole_(${id}, this.value)" aria-label="Rolle">
-                  ${['guest', 'member', 'admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${roleLabel_(r)}</option>`).join('')}
+                  ${['guest', 'member', 'admin', 'super_admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${roleLabel_(r)}</option>`).join('')}
                 </select>
                 <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
                 <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>
@@ -19841,7 +19861,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         try {
           const data = await withGsRetry('tools_adminStopImpersonation', [], { retries: 1, retryDelay: 500 });
           const user = data?.user || {};
-          currentUserRole = String(user.role || 'admin').toLowerCase();
+          currentUserRole = String(user.role || 'super_admin').toLowerCase();
           currentPermissions = normalizePermissions_(user.permissions || {});
           currentLoginEmail = String(user.email || '');
           currentUserImpersonating = user.impersonating || null;
@@ -19849,7 +19869,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           applyAccessControlUi_();
           updateWelcomeGreeting_();
           switchTab('tools');
-          toast('Zurück als Admin', 1300);
+          toast('Zurück als Super-Admin', 1300);
         } catch (err) {
           window.location.href = '/api/auth/google-start.php';
         }

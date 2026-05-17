@@ -82,33 +82,36 @@ Danach in `.env` setzen:
 APP_URL=https://app.clzspiez.ch
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+APP_SUPER_ADMIN_EMAILS=deine.admin.mail@example.ch
 APP_ADMIN_EMAILS=deine.admin.mail@example.ch
 APP_SESSION_DAYS=30
 ```
 
-Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen starten sicherheitshalber als `guest`, bis ein Admin sie in der App freigibt.
-Admins koennen Benutzer auch vorab in der App unter `Mehr > Benutzer & Rollen` anlegen. Beim spaeteren Google-Login
+Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_SUPER_ADMIN_EMAILS` erhalten die Rolle `super_admin`, E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen starten sicherheitshalber als `guest`, bis sie freigegeben werden.
+Nur Super-Admins koennen Benutzer und Rollen in der App unter `Mehr > Benutzer & Rollen` verwalten oder andere Benutzer simulieren. Admins duerfen Daten aktualisieren, aber keine Rollen vergeben. Beim spaeteren Google-Login
 muss die Google-Adresse exakt mit dieser E-Mail uebereinstimmen.
+Mindestens eine echte Verwaltungsadresse sollte deshalb in `APP_SUPER_ADMIN_EMAILS` stehen.
 
 `APP_SESSION_DAYS` steuert, wie lange ein Login gueltig bleibt. Die App erneuert die Session bei normalen API-Aufrufen
 und im Hintergrund automatisch, solange der Browser offen ist.
 
-Die Login-Benutzer und Rollen stehen in MySQL in der Tabelle `users`. Die Liste `APP_ADMIN_EMAILS` liegt nur in `.env`
-und dient als Bootstrap/Override fuer Admins. `.env` wird nicht nach Git committet und liegt nicht unter `public/`.
+Die Login-Benutzer und Rollen stehen in MySQL in der Tabelle `users`. Die Listen `APP_SUPER_ADMIN_EMAILS` und `APP_ADMIN_EMAILS` liegen nur in `.env`
+und dienen als Bootstrap/Override fuer Super-Admins und Admins. `.env` wird nicht nach Git committet und liegt nicht unter `public/`.
 E-Mail-Adressen in `users` sind keine Secrets; OAuth-Secret, Elvanto-Key und Datenbankpasswort muessen in `.env` bleiben.
 
-Falls dein User bereits vor dem Setzen von `APP_ADMIN_EMAILS` erstellt wurde, reicht normalerweise ein Logout/Login,
-weil die Rolle beim Laden der Session anhand der Admin-Liste aktualisiert wird. Alternativ kann die Rolle in phpMyAdmin
+Falls dein User bereits vor dem Setzen von `APP_SUPER_ADMIN_EMAILS` erstellt wurde, reicht normalerweise ein Logout/Login,
+weil die Rolle beim Laden der Session anhand der Listen aktualisiert wird. Alternativ kann die Rolle in phpMyAdmin
 direkt gesetzt werden:
 
 ```sql
-UPDATE users SET role = 'admin' WHERE email = 'deine.admin.mail@example.ch';
+UPDATE users SET role = 'super_admin' WHERE email = 'deine.admin.mail@example.ch';
 ```
 
-Wichtig: Die E-Mail in `APP_ADMIN_EMAILS` muss exakt der Google-Login-Adresse entsprechen. Mehrere Admins werden
+Wichtig: Die E-Mail in `APP_SUPER_ADMIN_EMAILS` oder `APP_ADMIN_EMAILS` muss exakt der Google-Login-Adresse entsprechen. Mehrere Adressen werden
 kommagetrennt eingetragen, zum Beispiel:
 
 ```text
+APP_SUPER_ADMIN_EMAILS=owner@example.ch
 APP_ADMIN_EMAILS=admin1@example.ch,admin2@example.ch
 ```
 
@@ -126,6 +129,7 @@ Copy-Item .env.local.example .env
 
 ```text
 APP_URL=http://localhost:8080
+APP_SUPER_ADMIN_EMAILS=deine.admin.mail@example.ch
 APP_ADMIN_EMAILS=deine.admin.mail@example.ch
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...

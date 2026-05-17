@@ -90,10 +90,11 @@ function current_user(): ?array
     $stmt = db()->prepare('SELECT id, email, display_name, role, is_active FROM users WHERE id = ? AND is_active = 1');
     $stmt->execute([(int) $id]);
     $user = $stmt->fetch();
-    if (is_array($user) && google_login_role_for_email((string) ($user['email'] ?? '')) === 'admin' && ($user['role'] ?? '') !== 'admin') {
-        $upgrade = db()->prepare("UPDATE users SET role = 'admin' WHERE id = ?");
-        $upgrade->execute([(int) $user['id']]);
-        $user['role'] = 'admin';
+    $envRole = is_array($user) ? google_login_role_for_email((string) ($user['email'] ?? '')) : 'guest';
+    if (is_array($user) && in_array($envRole, ['admin', 'super_admin'], true) && ($user['role'] ?? '') !== $envRole) {
+        $upgrade = db()->prepare("UPDATE users SET role = ? WHERE id = ?");
+        $upgrade->execute([$envRole, (int) $user['id']]);
+        $user['role'] = $envRole;
     }
     if (!is_array($user)) {
         return null;
@@ -164,7 +165,7 @@ function login_user_from_google(array $profile): array
         "INSERT INTO users (email, display_name, role, is_active, last_login_at)
          VALUES (:email, :display_name, :role, 1, :last_login_at)
          ON DUPLICATE KEY UPDATE display_name = VALUES(display_name),
-            role = IF(VALUES(role) = 'admin', 'admin', IF(role = 'guest', VALUES(role), role)),
+            role = IF(VALUES(role) IN ('admin', 'super_admin'), VALUES(role), IF(role = 'guest', VALUES(role), role)),
             is_active = 1,
             last_login_at = VALUES(last_login_at)"
     );
@@ -191,12 +192,21 @@ function login_user_from_google(array $profile): array
 
 function google_login_role_for_email(string $email): string
 {
+    $superAdminRaw = (string) env('APP_SUPER_ADMIN_EMAILS', '');
+    $superAdminEmails = array_filter(array_map(
+        static fn(string $item): string => strtolower(trim($item)),
+        explode(',', $superAdminRaw)
+    ));
     $adminEmails = array_filter(array_map(
         static fn(string $item): string => strtolower(trim($item)),
         explode(',', (string) env('APP_ADMIN_EMAILS', ''))
     ));
 
-    return in_array(strtolower($email), $adminEmails, true) ? 'admin' : 'guest';
+    $email = strtolower($email);
+    if (in_array($email, $superAdminEmails, true)) {
+        return 'super_admin';
+    }
+    return in_array($email, $adminEmails, true) ? 'admin' : 'guest';
 }
 
 function logout_user(): void

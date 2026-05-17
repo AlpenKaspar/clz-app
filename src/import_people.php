@@ -535,11 +535,13 @@ function import_run_finish(int $runId, string $status, int $count, string $messa
     $stmt->execute([$status, date('Y-m-d H:i:s'), $count, $message, $runId]);
 }
 
-function set_app_setting(string $key, string $value): void
-{
-    $stmt = db()->prepare(
-        'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)'
-    );
-    $stmt->execute([$key, $value]);
+if (!function_exists('set_app_setting')) {
+    function set_app_setting(string $key, string $value): void
+    {
+        $stmt = db()->prepare(
+            'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)'
+        );
+        $stmt->execute([$key, $value]);
+    }
 }

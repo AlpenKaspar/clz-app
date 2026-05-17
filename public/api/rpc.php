@@ -23,13 +23,13 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'app_ping' => rpc_ping(),
         'app_bootstrap' => rpc_bootstrap($user),
         'app_getUserAccessLight' => ['ok' => true, 'user' => array_merge($user, ['permissions' => rpc_permissions($user)]), 'permissions' => rpc_permissions($user)],
-        'app_loadContactsLite' => rpc_contacts_lite(),
-        'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? '')),
-        'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? '')),
-        'personenUi_getExtraDetails' => rpc_person_extra((string) ($args[0] ?? '')),
-        'personenUi_extendedSearch' => rpc_extended_search((string) ($args[0] ?? '')),
-        'personenUi_getFamily' => rpc_family((string) ($args[0] ?? '')),
-        'personenUi_getGroupByName' => rpc_group((string) ($args[0] ?? '')),
+        'app_loadContactsLite' => rpc_contacts_lite($user),
+        'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? ''), $user),
+        'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? ''), $user),
+        'personenUi_getExtraDetails' => rpc_person_extra((string) ($args[0] ?? ''), $user),
+        'personenUi_extendedSearch' => rpc_extended_search((string) ($args[0] ?? ''), $user),
+        'personenUi_getFamily' => rpc_is_guest_role($user) ? rpc_empty_family((string) ($args[0] ?? '')) : rpc_family((string) ($args[0] ?? '')),
+        'personenUi_getGroupByName' => rpc_is_guest_role($user) ? rpc_empty_group((string) ($args[0] ?? '')) : rpc_group((string) ($args[0] ?? '')),
         'getCalendarEventsRange' => rpc_calendar((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
         'kalenderUi_getServiceOverview' => rpc_service_overview($args[0] ?? []),
         'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
@@ -42,11 +42,11 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         ),
         'app_loadSongsLite' => rpc_songs_lite(),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
-        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_dashboard(), 'dataVersion' => rpc_data_version()],
+        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard(), 'dataVersion' => rpc_data_version()],
         'tools_getSyncStatus' => rpc_sync_status($user),
         'tools_getCacheDiagnostics' => ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()],
         'tools_debugCachePayloads' => ['ok' => true, 'cache' => rpc_cache_stats(), 'latestRuns' => rpc_import_runs()],
-        'tools_rebuildServerCaches' => rpc_rebuild_server_caches(),
+        'tools_rebuildServerCaches' => rpc_rebuild_server_caches($user),
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
@@ -105,14 +105,15 @@ function rpc_bootstrap(array $user): array
         ],
         'cache' => [],
         'filters' => rpc_contact_filters(),
-        'dashboard' => rpc_dashboard(),
+        'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard(),
     ];
 }
 
 function rpc_permissions(array $user = []): array
 {
     $role = strtolower((string) ($user['role'] ?? 'guest'));
-    $isAdmin = $role === 'admin';
+    $isAdmin = in_array($role, ['admin', 'super_admin'], true);
+    $isSuperAdmin = $role === 'super_admin';
     $isGuest = $role === 'guest' || $role === 'gast';
 
     return [
@@ -130,8 +131,12 @@ function rpc_permissions(array $user = []): array
             'calendarPrint' => $isAdmin,
         ],
         'detailPrint' => [
-            'contact' => true,
-            'event' => true,
+            'contact' => $isAdmin,
+            'event' => $isAdmin,
+        ],
+        'admin' => [
+            'imports' => $isAdmin,
+            'users' => $isSuperAdmin,
         ],
     ];
 }
@@ -158,7 +163,7 @@ function rpc_data_version(): string
     return $version;
 }
 
-function rpc_contacts_lite(): array
+function rpc_contacts_lite(array $user = []): array
 {
     $stmt = db()->query(
         "SELECT id, date_added, firstname, preferred_name, lastname, display_name, email, phone, mobile,
@@ -175,12 +180,12 @@ function rpc_contacts_lite(): array
     $contacts = [];
     foreach ($stmt as $row) {
         $personId = rpc_str($row['id'] ?? '');
-        $contacts[] = rpc_contact_row(
+        $contacts[] = rpc_contact_for_role(rpc_contact_row(
             $row,
             $customValues[$personId] ?? [],
             $groupValues[$personId] ?? ['groups' => [], 'leads' => [], 'assists' => []],
             $familyValues[$personId] ?? []
-        );
+        ), $user);
     }
 
     return [
@@ -189,6 +194,40 @@ function rpc_contacts_lite(): array
         'dataVersion' => rpc_data_version(),
         'contacts' => $contacts,
     ];
+}
+
+function rpc_contact_for_role(array $contact, array $user): array
+{
+    if (!rpc_is_guest_role($user)) {
+        return $contact;
+    }
+
+    foreach (['email', 'phone', 'mobile', 'birthday', 'dateAdded', 'gender', 'familyId', 'address', 'age'] as $key) {
+        $contact[$key] = $key === 'age' ? null : '';
+    }
+    foreach (['departmentsValues', 'kgGroupValues', 'kgLeadGroupValues', 'kgAssistantGroupValues', 'leaderships', 'nextStepValues', 'kidsChurchValues', 'youthYpgValues'] as $key) {
+        $contact[$key] = [];
+    }
+    foreach (['hasKg', 'leadsKg', 'hasMitarbeit', 'new12', 'new6', 'new3', 'new14', 'birthdayToday', 'birthdayWeek', 'birthdayMonthFlag'] as $key) {
+        $contact[$key] = false;
+    }
+    $contact['isFamilyMain'] = false;
+    $contact['isSingle'] = false;
+    $contact['householdTypeKey'] = '';
+    $contact['ageBucket'] = '';
+    $contact['birthdayDay'] = '';
+    $contact['birthdayMonth'] = '';
+    $contact['searchText'] = rpc_search_text(implode(' ', [
+        rpc_str($contact['displayName'] ?? ''),
+        rpc_str($contact['firstName'] ?? ''),
+        rpc_str($contact['preferredName'] ?? ''),
+        rpc_str($contact['lastName'] ?? ''),
+        rpc_str($contact['postcode'] ?? ''),
+        rpc_str($contact['city'] ?? ''),
+        rpc_str($contact['category'] ?? ''),
+    ]));
+    $contact['searchMeta'] = $contact['searchText'];
+    return $contact;
 }
 
 function rpc_contact_row(array $row, array $custom = [], array $groups = [], array $family = []): array
@@ -459,19 +498,19 @@ function rpc_ensure_prayer_pool(string $poolName): int
     return (int) db()->lastInsertId();
 }
 
-function rpc_person_full(string $personId): array
+function rpc_person_full(string $personId, array $user = []): array
 {
-    $main = rpc_person_main($personId);
+    $main = rpc_person_main($personId, $user);
     $familyId = rpc_str($main['meta']['familyId'] ?? '');
     return [
         'ok' => true,
         'main' => $main,
-        'extra' => rpc_person_extra($personId),
-        'family' => $familyId !== '' ? rpc_family($familyId) : null,
+        'extra' => rpc_person_extra($personId, $user),
+        'family' => (!rpc_is_guest_role($user) && $familyId !== '') ? rpc_family($familyId) : null,
     ];
 }
 
-function rpc_person_main(string $personId): array
+function rpc_person_main(string $personId, array $user = []): array
 {
     $row = rpc_fetch_person($personId);
     if (!$row) {
@@ -502,6 +541,18 @@ function rpc_person_main(string $personId): array
         rpc_detail('Picture', $lite['pictureUrl']),
     ];
 
+    if (rpc_is_guest_role($user)) {
+        $guestLabels = ['Kategorie' => true, 'Rufname' => true, 'Picture' => true];
+        $details = array_values(array_filter(
+            $details,
+            static fn(array $item): bool => isset($guestLabels[rpc_str($item['label'] ?? '')])
+        ));
+        $location = trim(rpc_str($lite['postcode'] ?? '') . ' ' . rpc_str($lite['city'] ?? ''));
+        if ($location !== '') {
+            $details[] = rpc_detail('Ort', $location);
+        }
+    }
+
     return [
         'type' => 'person',
         'displayName' => $lite['displayName'],
@@ -515,8 +566,12 @@ function rpc_person_main(string $personId): array
     ];
 }
 
-function rpc_person_extra(string $personId): array
+function rpc_person_extra(string $personId, array $user = []): array
 {
+    if (!rpc_is_admin_role($user)) {
+        return [];
+    }
+
     $row = rpc_fetch_person($personId);
     if (!$row) {
         return [];
@@ -606,14 +661,14 @@ function rpc_detail(string $label, string $value, string $type = '', string $hre
     ];
 }
 
-function rpc_extended_search(string $query): array
+function rpc_extended_search(string $query, array $user = []): array
 {
     $needle = rpc_search_text($query);
     if ($needle === '') {
         return ['ok' => true, 'contacts' => []];
     }
 
-    $contacts = rpc_contacts_lite()['contacts'];
+    $contacts = rpc_contacts_lite($user)['contacts'];
     $contacts = array_values(array_filter($contacts, static fn(array $row): bool => rpc_contact_matches_extended_search($row, $query)));
     return ['ok' => true, 'contacts' => $contacts];
 }
@@ -705,16 +760,50 @@ function rpc_contacts_csv_response(mixed $ids, mixed $columns, array $user): arr
 
 function rpc_user_can_export_contacts(array $user): bool
 {
-    return strtolower(rpc_str($user['role'] ?? '')) === 'admin';
+    return rpc_is_admin_role($user);
+}
+
+function rpc_user_role(array $user): string
+{
+    return strtolower(rpc_str($user['role'] ?? 'guest')) ?: 'guest';
+}
+
+function rpc_is_guest_role(array $user): bool
+{
+    return in_array(rpc_user_role($user), ['guest', 'gast'], true);
+}
+
+function rpc_is_member_role(array $user): bool
+{
+    return rpc_user_role($user) === 'member';
+}
+
+function rpc_is_admin_role(array $user): bool
+{
+    return in_array(rpc_user_role($user), ['admin', 'super_admin'], true);
+}
+
+function rpc_is_super_admin_role(array $user): bool
+{
+    return rpc_user_role($user) === 'super_admin';
 }
 
 function rpc_is_real_admin(array $user): bool
 {
-    if (strtolower(rpc_str($user['role'] ?? '')) === 'admin') {
+    if (rpc_is_admin_role($user)) {
         return true;
     }
     $original = $user['impersonating']['originalUser'] ?? null;
-    return is_array($original) && strtolower(rpc_str($original['role'] ?? '')) === 'admin';
+    return is_array($original) && rpc_is_admin_role($original);
+}
+
+function rpc_is_real_super_admin(array $user): bool
+{
+    if (rpc_is_super_admin_role($user)) {
+        return true;
+    }
+    $original = $user['impersonating']['originalUser'] ?? null;
+    return is_array($original) && rpc_is_super_admin_role($original);
 }
 
 function rpc_require_real_admin(array $user): void
@@ -724,9 +813,16 @@ function rpc_require_real_admin(array $user): void
     }
 }
 
+function rpc_require_real_super_admin(array $user): void
+{
+    if (!rpc_is_real_super_admin($user)) {
+        throw new RuntimeException('Nur Super-Admins duerfen diese Aktion ausfuehren.');
+    }
+}
+
 function rpc_admin_users_list(array $user): array
 {
-    rpc_require_real_admin($user);
+    rpc_require_real_super_admin($user);
     $rows = fetch_all_prepared_legacy(
         'SELECT id, email, display_name, role, is_active, last_login_at
          FROM users
@@ -736,7 +832,7 @@ function rpc_admin_users_list(array $user): array
 
     return [
         'ok' => true,
-        'roles' => ['admin', 'member', 'guest'],
+        'roles' => ['super_admin', 'admin', 'member', 'guest'],
         'users' => array_map(static function (array $row): array {
             return [
                 'id' => (int) ($row['id'] ?? 0),
@@ -754,14 +850,14 @@ function rpc_admin_users_list(array $user): array
 
 function rpc_admin_update_user(mixed $payload, array $user): array
 {
-    rpc_require_real_admin($user);
+    rpc_require_real_super_admin($user);
     $data = is_array($payload) ? $payload : [];
     $id = (int) ($data['id'] ?? 0);
     if ($id <= 0) {
         throw new RuntimeException('User fehlt.');
     }
     $role = strtolower(rpc_str($data['role'] ?? 'guest'));
-    if (!in_array($role, ['admin', 'member', 'guest'], true)) {
+    if (!in_array($role, ['super_admin', 'admin', 'member', 'guest'], true)) {
         throw new RuntimeException('Ungueltige Rolle.');
     }
     $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
@@ -772,7 +868,7 @@ function rpc_admin_update_user(mixed $payload, array $user): array
 
 function rpc_admin_create_user(mixed $payload, array $user): array
 {
-    rpc_require_real_admin($user);
+    rpc_require_real_super_admin($user);
     $data = is_array($payload) ? $payload : [];
     $email = strtolower(rpc_str($data['email'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -780,7 +876,7 @@ function rpc_admin_create_user(mixed $payload, array $user): array
     }
     $displayName = rpc_str($data['displayName'] ?? '');
     $role = strtolower(rpc_str($data['role'] ?? 'guest'));
-    if (!in_array($role, ['admin', 'member', 'guest'], true)) {
+    if (!in_array($role, ['super_admin', 'admin', 'member', 'guest'], true)) {
         throw new RuntimeException('Ungueltige Rolle.');
     }
     $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
@@ -800,7 +896,7 @@ function rpc_admin_create_user(mixed $payload, array $user): array
 
 function rpc_admin_impersonate_user(int $targetUserId, array $user): array
 {
-    rpc_require_real_admin($user);
+    rpc_require_real_super_admin($user);
     if ($targetUserId <= 0) {
         throw new RuntimeException('User fehlt.');
     }
@@ -1047,6 +1143,11 @@ function rpc_family(string $familyId): array
     return $family;
 }
 
+function rpc_empty_family(string $familyId): array
+{
+    return ['ok' => true, 'familyId' => $familyId, 'adults' => [], 'kids' => [], 'others' => []];
+}
+
 function rpc_group(string $groupName): array
 {
     $group = rpc_fetch_group_by_name($groupName);
@@ -1060,6 +1161,16 @@ function rpc_group(string $groupName): array
     }
 
     return rpc_group_payload($group);
+}
+
+function rpc_empty_group(string $groupName): array
+{
+    return [
+        'groupName' => $groupName,
+        'leaderPersons' => [],
+        'assistantPersons' => [],
+        'memberPersons' => [],
+    ];
 }
 
 function rpc_calendar(string $startIso, string $endIso): array
@@ -2628,7 +2739,7 @@ function rpc_prayer_leaderboard(array $user): array
 
 function rpc_run_import(string $type, array $user): array
 {
-    if (strtolower(rpc_str($user['role'] ?? '')) !== 'admin') {
+    if (!rpc_is_admin_role($user)) {
         return ['ok' => false, 'error' => 'Import fuer diese Rolle nicht freigeschaltet.'];
     }
 
@@ -2746,8 +2857,11 @@ function rpc_sync_status(array $user): array
     ];
 }
 
-function rpc_rebuild_server_caches(): array
+function rpc_rebuild_server_caches(array $user): array
 {
+    if (!rpc_is_admin_role($user)) {
+        return ['ok' => false, 'error' => 'Cache-Rebuild fuer diese Rolle nicht freigeschaltet.'];
+    }
     set_app_setting('DATA_VERSION', (string) time());
     return ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()];
 }

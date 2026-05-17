@@ -23,7 +23,8 @@ function auth_me_permissions(array $user): array
 {
     $role = strtolower((string) ($user['role'] ?? 'guest'));
     $isAuthenticated = (bool) ($user['isAuthenticated'] ?? false);
-    $isAdmin = $role === 'admin';
+    $isAdmin = in_array($role, ['admin', 'super_admin'], true);
+    $isSuperAdmin = $role === 'super_admin';
     $isGuest = $role === 'guest' || $role === 'gast';
 
     return [
@@ -41,8 +42,12 @@ function auth_me_permissions(array $user): array
             'calendarPrint' => $isAdmin,
         ],
         'detailPrint' => [
-            'contact' => true,
-            'event' => true,
+            'contact' => $isAdmin,
+            'event' => $isAdmin,
+        ],
+        'admin' => [
+            'imports' => $isAdmin,
+            'users' => $isSuperAdmin,
         ],
     ];
 }

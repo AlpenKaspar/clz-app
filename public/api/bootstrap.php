@@ -36,27 +36,21 @@ try {
     ]);
 }
 
-function app_setting(string $key, string $default = ''): string
-{
-    $stmt = db()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = ?');
-    $stmt->execute([$key]);
-    $value = $stmt->fetchColumn();
-    return is_string($value) && $value !== '' ? $value : $default;
-}
-
 function default_permissions(array $user = []): array
 {
     $role = strtolower((string) ($user['role'] ?? 'guest'));
     $isAuthenticated = (bool) ($user['isAuthenticated'] ?? false);
-    $isAdmin = $role === 'admin';
+    $isAdmin = in_array($role, ['admin', 'super_admin'], true);
+    $isSuperAdmin = $role === 'super_admin';
+    $isGuest = $role === 'guest' || $role === 'gast';
 
     return [
         'tabs' => [
             'contacts' => true,
             'calendar' => true,
             'songs' => true,
-            'dashboard' => $isAuthenticated,
-            'tools' => $isAdmin,
+            'dashboard' => $isAuthenticated && !$isGuest,
+            'tools' => true,
         ],
         'exports' => [
             'contactsCsv' => $isAdmin,
@@ -65,8 +59,12 @@ function default_permissions(array $user = []): array
             'calendarPrint' => $isAdmin,
         ],
         'detailPrint' => [
-            'contact' => true,
-            'event' => true,
+            'contact' => $isAdmin,
+            'event' => $isAdmin,
+        ],
+        'admin' => [
+            'imports' => $isAdmin,
+            'users' => $isSuperAdmin,
         ],
     ];
 }
