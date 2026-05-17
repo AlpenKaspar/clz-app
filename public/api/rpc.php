@@ -2181,17 +2181,12 @@ function rpc_dashboard(): array
     $nextStepCounts = rpc_value_counts($adults, 'nextStepValues');
     $kidsCounts = rpc_value_counts($gemeinde, 'kidsChurchValues');
     $ypgCounts = rpc_value_counts($gemeinde, 'youthYpgValues');
-    $ministryBuckets = [
-        ['label' => 'Keine Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:0', 'filterLabel' => 'Keine Teams'],
-        ['label' => '1 Team', 'count' => 0, 'filterKey' => 'ministry_teams_count:1', 'filterLabel' => '1 Team'],
-        ['label' => '2 Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:2', 'filterLabel' => '2 Teams'],
-        ['label' => '3+ Teams', 'count' => 0, 'filterKey' => 'ministry_teams_count:3plus', 'filterLabel' => '3+ Teams'],
-    ];
+    $ministryTeamCountBuckets = [];
     foreach ($adults as $contact) {
         $count = count(is_array($contact['departmentsValues'] ?? null) ? $contact['departmentsValues'] : []);
-        $idx = $count >= 3 ? 3 : $count;
-        $ministryBuckets[$idx]['count']++;
+        $ministryTeamCountBuckets[$count] = ($ministryTeamCountBuckets[$count] ?? 0) + 1;
     }
+    $ministryBuckets = rpc_team_count_buckets_to_items($ministryTeamCountBuckets);
 
     return [
         'peopleCount' => count($contacts),
@@ -2273,6 +2268,31 @@ function rpc_dashboard(): array
             'youthYpg' => ['total' => array_sum($ypgCounts), 'items' => rpc_counts_to_items($ypgCounts)],
         ],
     ];
+}
+
+function rpc_team_count_buckets_to_items(array $map): array
+{
+    $keys = array_map('intval', array_keys($map));
+    sort($keys, SORT_NUMERIC);
+
+    $items = [];
+    foreach ($keys as $teamCount) {
+        if ($teamCount < 0) {
+            continue;
+        }
+        $count = (int) ($map[$teamCount] ?? 0);
+        $teamsWord = $teamCount === 1 ? 'Team' : 'Teams';
+        $label = 'Ist in ' . $teamCount . ' ' . $teamsWord;
+        $items[] = [
+            'key' => (string) $teamCount,
+            'label' => $label,
+            'count' => $count,
+            'filterKey' => 'ministry_teams_count:' . $teamCount,
+            'filterLabel' => $label,
+        ];
+    }
+
+    return $items;
 }
 
 function rpc_load_user_smart_filters(array $user): array
