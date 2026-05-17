@@ -270,9 +270,28 @@
       padding:0 12px;
       align-items:center;
       display:inline-flex;
+      justify-content:flex-start;
+      min-width:0;
+      overflow:hidden;
+      max-width:100%;
+    }
+    .song-detail-card .btn.btn-secondary span {
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .song-detail-card .action-grid {
+      padding:0;
+      border-top:0;
+      background:transparent;
     }
     .song-asset-group {
       margin-top:12px;
+    }
+    .song-asset-group .action-grid {
+      grid-template-columns:1fr;
+      gap:8px;
     }
     .song-asset-group-head {
       display:flex;
@@ -8957,6 +8976,30 @@
         return out;
       }
 
+      function songAssetExtension_(asset) {
+        const url = String(asset?.url || asset?.embed || '').split('?')[0].split('#')[0];
+        const match = url.match(/\.([a-z0-9]{2,5})$/i);
+        return match ? match[1].toUpperCase() : '';
+      }
+
+      function isTechnicalSongFileName_(name) {
+        const value = String(name || '').trim();
+        if (!value) return false;
+        return /^file_[0-9a-f-]{16,}[_-]\d+\.[a-z0-9]+$/i.test(value)
+          || /^[0-9a-f-]{24,}\.[a-z0-9]+$/i.test(value)
+          || /^https?:\/\//i.test(value);
+      }
+
+      function cleanSongAssetName_(asset, fallback) {
+        const name = String(asset?.name || '').trim();
+        const type = String(asset?.type || '').trim();
+        if (name && !isTechnicalSongFileName_(name)) return name;
+        if (fallback) return String(fallback);
+        if (type) return type;
+        const ext = songAssetExtension_(asset);
+        return ext ? ext : 'Datei';
+      }
+
       function renderSongAssetButtons_(assets) {
         const list = normalizeSongAssets_(assets);
         if (!list.length) return '';
@@ -8968,9 +9011,9 @@
             : lowerType.includes('text') ? 'fa-align-left'
             : asset.url.toLowerCase().includes('.pdf') ? 'fa-file-pdf'
             : 'fa-link';
-          const label = asset.name || asset.type || asset.mode || `Datei ${index + 1}`;
+          const label = cleanSongAssetName_(asset, asset.type || asset.mode || `Datei ${index + 1}`);
           const href = asset.url || asset.embed;
-          return `<a class="btn btn-secondary" href="${escapeAttr(href)}" target="_blank" rel="noopener"><i class="fas ${escapeAttr(icon)}"></i><span>${escapeHtml(label)}</span></a>`;
+          return `<a class="btn btn-secondary" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="${escapeAttr(label)}"><i class="fas ${escapeAttr(icon)}"></i><span>${escapeHtml(label)}</span></a>`;
         }).join('');
       }
 
@@ -9087,13 +9130,14 @@
           const url = String(asset.url).trim();
           if (!url || seenUrls.has(url)) return;
           seenUrls.add(url);
-          const fileName = String(asset.name || '').trim();
+          const fileName = cleanSongAssetName_(asset, '');
           const fileType = String(asset.type || '').trim();
           const fileMode = String(asset.mode || '').trim();
+          const songTitle = String(song?.songTitle || song?.arrangementName || '').trim();
           out.push({
             url: url,
-            name: fileName || fileType || 'Audio-Datei',
-            songTitle: String(song?.songTitle || song?.arrangementName || '').trim(),
+            name: fileName || fileType || songTitle || 'Audio-Datei',
+            songTitle: songTitle,
             artist: String(song?.artist || '').trim(),
             album: String(song?.album || '').trim(),
             arrangementName: String(arrangement?.arrangementName || '').trim(),
@@ -9102,6 +9146,7 @@
             songId: String(song?.songId || '').trim(),
             fileType: fileType,
             fileMode: fileMode,
+            extension: songAssetExtension_(asset),
             kind: classifyAudioForPlayer_(asset)
           });
         };
@@ -9167,10 +9212,11 @@
                             it.kind === 'tracks' ? 'Spur' : 'Audio';
           const title = escapeHtml(it.songTitle || it.name);
           const subParts = [];
-          if (it.name && (!it.songTitle || it.name !== it.songTitle)) subParts.push(it.name);
+          if (it.name && (!it.songTitle || it.name !== it.songTitle) && !['audio', 'mp3'].includes(String(it.name || '').toLowerCase())) subParts.push(it.name);
           if (it.artist) subParts.push(it.artist);
           if (it.arrangementName && it.arrangementName !== it.songTitle) subParts.push(it.arrangementName);
           if (it.keyName) subParts.push(it.keyName);
+          if (it.bpm) subParts.push(`${it.bpm} BPM`);
           const sub = escapeHtml(subParts.join(' · '));
           return `
             <div class="songs-player-item${isActive ? ' active' : ''}" data-idx="${idx}" onclick="playSongsPlayerItem_(${idx})">
@@ -9216,7 +9262,7 @@
           if (it.bpm) parts.push(it.bpm + ' BPM');
           const kindLabel = it.kind === 'playback' ? 'Playback' :
                             it.kind === 'tracks' ? 'Spur' : 'Audio';
-          parts.push(kindLabel);
+          parts.push(it.extension ? `${kindLabel} ${it.extension}` : kindLabel);
           meta.textContent = parts.join(' · ');
         }
         if (audio) {

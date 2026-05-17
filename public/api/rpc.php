@@ -2059,7 +2059,20 @@ function rpc_song_assets_payload(array $song): array
     foreach (['Song', 'Arrangement', 'Key'] as $prefix) {
         $assets = array_merge($assets, rpc_song_assets_from_prefixed_fields($song, $prefix));
     }
+    $assets = array_merge($assets, rpc_song_assets_from_native_files($song));
+    $knownUrls = [];
+    foreach ($assets as $asset) {
+        if (is_array($asset)) {
+            $url = rpc_song_scalar($asset['url'] ?? '');
+            if ($url !== '') {
+                $knownUrls[$url] = true;
+            }
+        }
+    }
     foreach (array_values(array_unique(array_merge(rpc_song_url_fields($song), rpc_song_collect_urls($song)))) as $url) {
+        if (isset($knownUrls[$url])) {
+            continue;
+        }
         if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
             continue;
         }
@@ -2072,6 +2085,45 @@ function rpc_song_assets_payload(array $song): array
         ];
     }
     return rpc_song_unique_assets($assets);
+}
+
+function rpc_song_assets_from_native_files(array $song): array
+{
+    $files = [];
+    foreach ([['files', 'file'], ['files']] as $path) {
+        foreach (rpc_song_path_list($song, $path) as $file) {
+            if (is_array($file)) {
+                $files[] = $file;
+            }
+        }
+    }
+
+    $assets = [];
+    foreach ($files as $file) {
+        $content = rpc_song_scalar($file['content'] ?? ($file['url'] ?? ($file['link'] ?? '')));
+        $title = rpc_song_first_field($file, ['title', 'name', 'label']);
+        $type = rpc_song_first_field($file, ['type', 'kind']);
+        $html = rpc_song_scalar($file['html'] ?? '') === '1';
+        $url = preg_match('/^https?:\/\//i', $content) ? $content : '';
+        $embed = ($html && $content !== '') ? $content : '';
+        if ($url === '' && $embed === '') {
+            $collected = rpc_song_collect_urls($content);
+            $url = $collected[0] ?? '';
+        }
+        if ($url === '' && $embed === '') {
+            continue;
+        }
+        $fallbackName = $url !== '' ? basename(parse_url($url, PHP_URL_PATH) ?: $url) : $type;
+        $assets[] = [
+            'name' => $title !== '' ? $title : $fallbackName,
+            'type' => $type,
+            'mode' => '',
+            'url' => $url,
+            'embed' => $embed,
+        ];
+    }
+
+    return $assets;
 }
 
 function rpc_song_url_fields(array $song): array
