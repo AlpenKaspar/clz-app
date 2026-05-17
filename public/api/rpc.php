@@ -194,7 +194,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $category = rpc_str($row['category_name'] ?? '');
     $birthday = rpc_str($row['birthday'] ?? '');
     $age = rpc_age($birthday);
-    $departmentsValues = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
+    $departmentsValues = rpc_ministry_values($row, $custom);
     $leaderships = rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '');
     $kgGroupValues = $groups['groups'] ?? [];
     $kgLeadGroupValues = $groups['leads'] ?? [];
@@ -251,7 +251,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'kgLeadGroupValues' => $kgLeadGroupValues,
         'kgAssistantGroupValues' => $kgAssistantGroupValues,
         'leaderships' => $leaderships,
-        'nextStepValues' => rpc_split_multi_value($custom['KURSE / TAUFE'] ?? ''),
+        'nextStepValues' => rpc_next_step_values($custom),
         'kidsChurchValues' => rpc_split_multi_value($custom['KIDS & PROMISELAND'] ?? ''),
         'youthYpgValues' => rpc_split_multi_value($custom['JUNGE ERWACHSENE'] ?? ''),
         'new12' => rpc_date_within_months($dateAdded, 12),
@@ -264,6 +264,51 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'birthdayWeek' => rpc_birthday_week($birthdayParts),
         'birthdayMonthFlag' => rpc_birthday_month($birthdayParts),
     ];
+}
+
+function rpc_ministry_values(array $row, array $custom): array
+{
+    $values = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        if ($labelKey === 'LEITERSCHAFT') {
+            continue;
+        }
+        $isMinistryField = str_contains($labelKey, 'MITARBEIT')
+            || str_contains($labelKey, 'TEAM')
+            || str_contains($labelKey, 'DIENST')
+            || str_contains($labelKey, 'RESSORT');
+        if (!$isMinistryField) {
+            continue;
+        }
+        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
+            if (!in_array($item, $values, true)) {
+                $values[] = $item;
+            }
+        }
+    }
+    return $values;
+}
+
+function rpc_next_step_values(array $custom): array
+{
+    $values = [];
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        $isNextStepField = str_contains($labelKey, 'KURSE')
+            || str_contains($labelKey, 'TAUFE')
+            || str_contains($labelKey, 'NEXT')
+            || str_contains($labelKey, 'SCHRITT');
+        if (!$isNextStepField) {
+            continue;
+        }
+        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
+            if (!in_array($item, $values, true)) {
+                $values[] = $item;
+            }
+        }
+    }
+    return $values;
 }
 
 function rpc_is_category(array $contact, string $category): bool
@@ -433,6 +478,7 @@ function rpc_person_main(string $personId): array
 
     $details = [
         rpc_detail('Kategorie', $lite['category']),
+        $lite['preferredName'] !== '' ? rpc_detail('Rufname', $lite['preferredName']) : rpc_detail('Rufname', ''),
         rpc_detail('E-Mail', $lite['email'], 'email', $lite['email'] ? 'mailto:' . $lite['email'] : ''),
         rpc_detail('Telefon', $lite['phone'], 'phone', $lite['phone'] ? 'tel:' . rpc_phone_href_value($lite['phone']) : ''),
         array_merge(
@@ -443,6 +489,7 @@ function rpc_person_main(string $personId): array
         rpc_detail('Geburtsdatum', $birthday),
         rpc_detail('Alter', $age),
         rpc_detail('Geschlecht', $lite['gender']),
+        $lite['dateAdded'] !== '' ? rpc_detail('Hinzugefügt', rpc_ui_date(substr($lite['dateAdded'], 0, 10))) : rpc_detail('Hinzugefügt', ''),
         $lite['familyId'] !== '' ? rpc_detail('Familie', 'Familie anzeigen', 'family') : rpc_detail('Familie', ''),
         rpc_detail('Picture', $lite['pictureUrl']),
     ];
@@ -476,8 +523,11 @@ function rpc_person_extra(string $personId): array
         $extra[] = $section;
     }
 
-    if (rpc_str($row['departments'] ?? '') !== '') {
-        $extra[] = rpc_detail('Mitarbeit', rpc_str($row['departments'] ?? ''));
+    $enrichment = rpc_person_enrichment($personId);
+    $customMap = is_array($enrichment[0] ?? null) ? $enrichment[0] : [];
+    $ministryValues = rpc_ministry_values($row, $customMap);
+    if ($ministryValues) {
+        $extra[] = rpc_detail('Mitarbeit', implode(', ', $ministryValues));
     }
 
     if (rpc_str($row['date_added'] ?? '') !== '') {

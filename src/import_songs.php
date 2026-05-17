@@ -66,7 +66,7 @@ function fetch_elvanto_songs(): array
 
         foreach ($batch as $song) {
             if (is_array($song)) {
-                $songs[] = $song;
+                $songs[] = enrich_elvanto_song_payload($song);
             }
         }
 
@@ -77,6 +77,45 @@ function fetch_elvanto_songs(): array
     }
 
     return $songs;
+}
+
+function enrich_elvanto_song_payload(array $song): array
+{
+    $id = normalize_string($song['id'] ?? ($song['song_id'] ?? ''));
+    if ($id === '') {
+        return $song;
+    }
+
+    foreach ([
+        ['songs/getInfo.json', ['id' => $id]],
+        ['songs/getInfo.json', ['song_id' => $id]],
+    ] as [$endpoint, $payload]) {
+        try {
+            $data = elvanto_post($endpoint, $payload);
+            $detail = extract_song_detail_payload($data);
+            if ($detail) {
+                return array_replace_recursive($song, $detail);
+            }
+        } catch (Throwable) {
+            // The list endpoint is enough for a basic song import; detail enrichment is best-effort.
+        }
+    }
+
+    return $song;
+}
+
+function extract_song_detail_payload(array $data): array
+{
+    foreach ([['song'], ['songs', 'song'], ['data', 'song']] as $path) {
+        $items = songs_get_path_array($data, $path);
+        if ($items && is_array($items[0] ?? null)) {
+            return $items[0];
+        }
+    }
+    if (isset($data['id']) || isset($data['title']) || isset($data['name'])) {
+        return $data;
+    }
+    return [];
 }
 
 function extract_songs_payload(array $data): array

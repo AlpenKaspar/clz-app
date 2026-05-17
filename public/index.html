@@ -4077,7 +4077,7 @@
       color: rgba(51,65,85,0.78);
       text-decoration: none;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 500;
       background: none;
       border: none;
       cursor: pointer;
@@ -4808,6 +4808,37 @@
       color: var(--text-muted);
       line-height: 1.55;
       border-top: 1px solid var(--border-color);
+    }
+
+    .tools-import-panel {
+      margin: 14px 16px;
+    }
+
+    .tools-import-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding-top: 12px;
+    }
+
+    .tools-import-grid .btn {
+      min-height: 38px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.15;
+      justify-content: center;
+    }
+
+    .tools-import-grid .btn i {
+      font-size: 13px;
+      margin-right: 2px;
+    }
+
+    .tools-import-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.45;
     }
         .global-live-banner {
       position: sticky;
@@ -6099,6 +6130,24 @@
       margin-bottom: 10px;
     }
 
+    .staff-team-search {
+      flex: 1;
+      min-width: 0;
+      height: 34px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--card-bg);
+      color: var(--text-main);
+      padding: 0 11px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .staff-team-search:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+    }
+
     .staff-team-filter-btn {
       width: 34px;
       height: 34px;
@@ -6985,12 +7034,12 @@
       <div class="search-container">
         <div class="tab-title">
           <div class="tab-title-left">
-            <i class="fas fa-sliders"></i> Einstellungen
+            <i class="fas fa-sliders"></i> Mehr
           </div>
         </div>
 
         <div style="font-size:11px;color:var(--text-muted);font-weight:700;">
-          Einstellungen für diese App (nur auf diesem Gerät gespeichert).
+          Einstellungen und Datenabgleich für diese App.
         </div>
       </div>
 
@@ -7034,53 +7083,53 @@
           </label>
         </div>
 
-        <div style="padding:14px 16px;border-top:1px solid var(--border-color);">
-          <div class="subhead">Aus Elvanto aktualisieren</div>
+        <details class="settings-collapsible tools-import-panel">
+          <summary>Aus Elvanto aktualisieren</summary>
+          <div class="settings-collapsible-body">
+            <div class="tools-import-note">
+              Daten gezielt neu laden. Für den Alltag reichen meistens Personen, Kalender und Services.
+            </div>
 
-          <div class="desc">
-            Beim Drücken der Buttons werden die entsprechenden Daten aus Elvanto neu aktualisiert.
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+          <div class="tools-import-grid">
 
             <button class="btn btn-primary" type="button" onclick="runImport('personen')">
               <i class="fas fa-users"></i>
-              <span>Personen + Familien + Gruppen laden</span>
+              <span>Personen</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runImport('familien')">
               <i class="fas fa-house-user"></i>
-              <span>Nur Familien laden</span>
+              <span>Familien</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runImport('gruppen')">
               <i class="fas fa-user-group"></i>
-              <span>Nur Gruppen laden</span>
+              <span>Gruppen</span>
             </button>
 
             <button class="btn btn-primary" type="button" onclick="runImport('kalender')">
               <i class="fas fa-calendar-check"></i>
-              <span>Kalender laden</span>
+              <span>Kalender</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runImport('service_details')">
               <i class="fas fa-list-check"></i>
-              <span>Gottesdienst-Details laden</span>
+              <span>Services</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runImport('songs')">
               <i class="fas fa-music"></i>
-              <span>Songs laden</span>
+              <span>Songs</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runImport('alles')">
               <i class="fas fa-rotate"></i>
-              <span>Alles nacheinander laden</span>
+              <span>Alles</span>
             </button>
 
             <button class="btn btn-secondary" type="button" onclick="runServerCacheRebuild()">
               <i class="fas fa-database"></i>
-              <span>Server-Schnellspeicher erneuern</span>
+              <span>Cache</span>
             </button>
 
           </div>
@@ -7088,7 +7137,8 @@
           <div id="sync-status" style="margin-top:12px;font-size:11px;color:var(--text-muted);font-weight:700;">
             Status wird geladen...
           </div>
-        </div>
+          </div>
+        </details>
 
       </div>
     </div>
@@ -7119,7 +7169,7 @@
 
     <button class="nav-item" id="nav-tools" onclick="switchTab('tools')">
       <i class="fas fa-sliders"></i>
-      <span>Einstellungen</span>
+      <span>Mehr</span>
     </button>
   </nav>
 
@@ -7181,6 +7231,7 @@
       let currentFlowManualStartedAt = 0;
       let currentFlowLastAutoScrollIndex = -1;
       let currentStaffSubFilter = [];
+      let currentStaffSearch = "";
       let currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
       let currentServiceSeries = [];
       let currentServiceSeriesIndex = 0;
@@ -9317,9 +9368,9 @@ function updateBottomNavHighlight_() {
         const activeIcon = active.querySelector('i');
         const iconRect = activeIcon ? activeIcon.getBoundingClientRect() : activeRect;
 
-        const width = Math.max(92, Math.min(activeRect.width + 14, Math.round(iconRect.width + 72)));
+        const width = Math.max(68, Math.min(activeRect.width - 10, Math.round(iconRect.width + 54)));
         const visualCenter = iconRect.left + (iconRect.width / 2);
-        const x = Math.round((visualCenter - navRect.left) - (width / 2) - 10);
+        const x = Math.round((visualCenter - navRect.left) - (width / 2) - 8);
 
         highlight.classList.add('is-moving');
         highlight.style.width = width + 'px';
@@ -17840,32 +17891,46 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         const activeSubs = Array.isArray(currentStaffSubFilter) ? currentStaffSubFilter : [];
         const hasActiveSubFilter = activeSubs.length > 0;
-        const filteredGroups = hasActiveSubFilter
-          ? normalized.map(group => ({
+        const staffNeedle = normalizeSearchText_(currentStaffSearch || '');
+        const filteredGroups = normalized.map(group => ({
               label: group.label,
               items: (Array.isArray(group.items) ? group.items : []).filter(item => {
                 const sub = String(item?.subLabel || item?.subDepartmentName || '').trim();
-                return !!sub && activeSubs.includes(sub);
+                if (hasActiveSubFilter && (!sub || !activeSubs.includes(sub))) return false;
+                if (!staffNeedle) return true;
+                const haystack = normalizeSearchText_([
+                  item?.name,
+                  item?.positionName,
+                  item?.subLabel,
+                  item?.subDepartmentName,
+                  item?.departmentName,
+                  item?.status,
+                  item?.email,
+                  item?.phone,
+                  item?.note,
+                  item?.extraMeta
+                ].map(v => String(v || '')).join(' '));
+                return haystack.includes(staffNeedle);
               })
-            })).filter(group => group.items.length > 0)
-          : normalized;
+            })).filter(group => group.items.length > 0);
 
         const total = filteredGroups.reduce((sum, group) => sum + group.items.length, 0);
         subtitle.textContent = total ? `${total} Mitarbeitende / Einteilungen` : "";
 
+        const filterBar = `
+          <div class="staff-team-filter-wrap">
+            <input id="service-staff-search" class="staff-team-search" type="search" placeholder="Mitarbeitende suchen..." value="${escapeAttr(currentStaffSearch || '')}" oninput="setServiceStaffSearch_(this.value)">
+            ${hasActiveSubFilter ? `<button type="button" class="filter-reset-link staff-team-filter-reset-link" onclick="resetStaffSubFilter_()">Zurücksetzen</button>` : ``}
+            ${availableSubs.length ? `<button type="button" class="btn btn-secondary staff-team-filter-btn" onclick="openStaffSubFilterOverlay_()" title="Filtern" aria-label="Filtern">
+              <i class="fas fa-filter"></i>
+            </button>` : ``}
+          </div>
+        `;
+
         if (!filteredGroups.length) {
-          host.innerHTML = `${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}<div class="service-empty-box">Keine Mitarbeitenden gefunden.</div>`;
+          host.innerHTML = `${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}${filterBar}<div class="service-empty-box">Keine Mitarbeitenden gefunden.</div>`;
           return;
         }
-
-        const filterBar = availableSubs.length ? `
-          <div class="staff-team-filter-wrap">
-            ${hasActiveSubFilter ? `<button type="button" class="filter-reset-link staff-team-filter-reset-link" onclick="resetStaffSubFilter_()">Zurücksetzen</button>` : ``}
-            <button type="button" class="btn btn-secondary staff-team-filter-btn" onclick="openStaffSubFilterOverlay_()" title="Filtern" aria-label="Filtern">
-              <i class="fas fa-filter"></i>
-            </button>
-          </div>
-        ` : '';
 
         host.innerHTML = `${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}${filterBar}` + filteredGroups.map((group, index) => `
           <details class="service-section service-staff-group" ${index < 2 ? 'open' : ''}>
@@ -17913,6 +17978,17 @@ function dashDynamicValueCard_(icon, prefix, item) {
             </div>
           </details>
         `).join('');
+      }
+
+      function setServiceStaffSearch_(value) {
+        currentStaffSearch = String(value || '');
+        renderServiceStaffGroups_(currentServiceStaffBundle?.staffGroups || []);
+        const input = document.getElementById('service-staff-search');
+        if (input) {
+          input.focus();
+          const pos = input.value.length;
+          try { input.setSelectionRange(pos, pos); } catch (_) {}
+        }
       }
 
       function getStaffSubOptions_() {
@@ -18496,6 +18572,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       async function openCalendarStaffView() {
         if (!canViewServiceInternals_()) return;
         currentStaffSubFilter = [];
+        currentStaffSearch = "";
         closeStaffSubFilterOverlay_();
         showDetailView_("calendar-staff-view");
         updateServiceAdminEditLinks_();

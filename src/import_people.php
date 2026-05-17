@@ -42,11 +42,12 @@ function import_people(): array
         $count = 0;
         $skipped = 0;
         $page = 1;
+        $pageSize = 100;
 
         while (true) {
             $data = elvanto_post('people/getAll.json', [
                 'page' => $page,
-                'page_size' => 1000,
+                'page_size' => $pageSize,
                 'archived' => 'no',
                 'suspended' => 'no',
                 'fields' => $fields,
@@ -71,7 +72,7 @@ function import_people(): array
                 $count++;
             }
 
-            if (count($people) < 1000) {
+            if (count($people) < $pageSize) {
                 break;
             }
             $page++;
@@ -202,7 +203,7 @@ function upsert_custom_field_definitions(array $defs): void
 function person_is_importable(array $person): bool
 {
     $status = strtolower(trim((string) ($person['status'] ?? '')));
-    if ($status !== 'active') {
+    if ($status !== '' && !in_array($status, ['active', 'aktiv'], true)) {
         return false;
     }
     if ((string) ($person['archived'] ?? '0') === '1') {
