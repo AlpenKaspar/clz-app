@@ -1629,6 +1629,9 @@ function rpc_songs_lite(): array
             $keyName = rpc_str($row['default_key_name'] ?? '');
             $bpm = rpc_str($row['bpm'] ?? '');
             $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+            if ($category === '') {
+                $category = rpc_song_category_payload($raw);
+            }
             $arrangements = rpc_song_arrangements_payload($raw, $title, $keyName, $bpm);
             $songAssets = rpc_song_assets_payload($raw);
             $pdfLinks = rpc_song_links_payload($raw, ['pdf']);
@@ -1769,7 +1772,7 @@ function rpc_song_scalar(mixed $value): string
         return '';
     }
     if (is_array($value)) {
-        foreach (['name', 'title', 'label', 'value'] as $key) {
+        foreach (['name', 'title', 'label', 'value', 'key_starting', 'key', 'key_name'] as $key) {
             if (isset($value[$key]) && !is_array($value[$key])) {
                 return rpc_song_scalar($value[$key]);
             }
@@ -1777,6 +1780,22 @@ function rpc_song_scalar(mixed $value): string
         return '';
     }
     return trim(html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+}
+
+function rpc_song_category_payload(array $song): string
+{
+    $direct = rpc_song_first_field($song, ['category', 'category_name']);
+    if ($direct !== '') {
+        return $direct;
+    }
+    $names = [];
+    foreach (rpc_song_path_list($song, ['categories', 'category']) as $category) {
+        $name = rpc_song_scalar($category);
+        if ($name !== '') {
+            $names[] = $name;
+        }
+    }
+    return implode(', ', array_values(array_unique($names)));
 }
 
 function rpc_song_first_field(array $data, array $fields): string
@@ -2042,7 +2061,7 @@ function rpc_song_key_resources(array $source, array $keyNames): array
             if (!is_array($keyPayload)) {
                 continue;
             }
-            $label = rpc_song_first_field($keyPayload, ['name', 'title', 'key_name', 'Key_Name', 'key']);
+            $label = rpc_song_first_field($keyPayload, ['name', 'title', 'key_name', 'Key_Name', 'key', 'key_starting']);
             if ($label === '') {
                 continue;
             }

@@ -87,21 +87,111 @@ function enrich_elvanto_song_payload(array $song): array
     }
 
     foreach ([
-        ['songs/getInfo.json', ['id' => $id]],
-        ['songs/getInfo.json', ['song_id' => $id]],
+        ['songs/getInfo.json', ['id' => $id, 'files' => true]],
+        ['songs/getInfo.json', ['song_id' => $id, 'files' => true]],
     ] as [$endpoint, $payload]) {
         try {
             $data = elvanto_post($endpoint, $payload);
             $detail = extract_song_detail_payload($data);
             if ($detail) {
-                return array_replace_recursive($song, $detail);
+                $song = array_replace_recursive($song, $detail);
+                break;
             }
         } catch (Throwable) {
             // The list endpoint is enough for a basic song import; detail enrichment is best-effort.
         }
     }
 
+    $arrangements = fetch_elvanto_song_arrangements($id);
+    if ($arrangements) {
+        $song['arrangements'] = ['arrangement' => $arrangements];
+    }
+
     return $song;
+}
+
+function fetch_elvanto_song_arrangements(string $songId): array
+{
+    $arrangements = [];
+    $page = 1;
+    $pageSize = 100;
+
+    while (true) {
+        try {
+            $data = elvanto_post('songs/arrangements/getAll.json', [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'song_id' => $songId,
+                'files' => true,
+            ]);
+        } catch (Throwable) {
+            break;
+        }
+
+        $batch = songs_get_path_array($data, ['arrangements', 'arrangement']);
+        if (!$batch) {
+            break;
+        }
+
+        foreach ($batch as $arrangement) {
+            if (!is_array($arrangement)) {
+                continue;
+            }
+            $arrangementId = normalize_string($arrangement['id'] ?? '');
+            if ($arrangementId !== '') {
+                $keys = fetch_elvanto_arrangement_keys($arrangementId);
+                if ($keys) {
+                    $arrangement['keys'] = ['key' => $keys];
+                }
+            }
+            $arrangements[] = $arrangement;
+        }
+
+        if (count($batch) < $pageSize) {
+            break;
+        }
+        $page++;
+    }
+
+    return $arrangements;
+}
+
+function fetch_elvanto_arrangement_keys(string $arrangementId): array
+{
+    $keys = [];
+    $page = 1;
+    $pageSize = 100;
+
+    while (true) {
+        try {
+            $data = elvanto_post('songs/keys/getAll.json', [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'arrangement_id' => $arrangementId,
+                'files' => true,
+            ]);
+        } catch (Throwable) {
+            break;
+        }
+
+        $batch = songs_get_path_array($data, ['keys', 'key']);
+        if (!$batch) {
+            break;
+        }
+
+        foreach ($batch as $key) {
+            if (is_array($key)) {
+                $keys[] = $key;
+            }
+        }
+
+        if (count($batch) < $pageSize) {
+            break;
+        }
+        $page++;
+    }
+
+    return $keys;
 }
 
 function extract_song_detail_payload(array $data): array
@@ -193,7 +283,22 @@ function song_category_name(array $song): string
     if (is_array($category)) {
         return normalize_string($category['name'] ?? ($category['title'] ?? ''));
     }
-    return normalize_string($category);
+    $direct = normalize_string($category);
+    if ($direct !== '') {
+        return $direct;
+    }
+
+    $categories = songs_get_path_array($song, ['categories', 'category']);
+    $names = [];
+    foreach ($categories as $item) {
+        if (is_array($item)) {
+            $name = normalize_string($item['name'] ?? ($item['title'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+    }
+    return implode(', ', array_values(array_unique($names)));
 }
 
 function song_default_key_name(array $song): string
@@ -207,9 +312,18 @@ function song_default_key_name(array $song): string
         if (!is_array($arrangement)) {
             continue;
         }
-        $key = song_first_string($arrangement, ['key_name', 'key', 'default_key_name']);
+        $key = song_first_string($arrangement, ['key_name', 'key', 'default_key_name', 'key_starting']);
         if ($key !== '') {
             return $key;
+        }
+        foreach (songs_get_path_array($arrangement, ['keys', 'key']) as $keyPayload) {
+            if (!is_array($keyPayload)) {
+                continue;
+            }
+            $key = song_first_string($keyPayload, ['name', 'key_name', 'key', 'key_starting']);
+            if ($key !== '') {
+                return $key;
+            }
         }
     }
     return '';

@@ -29,11 +29,16 @@ try {
     $songs = [];
     foreach ($stmt->fetchAll() as $row) {
         $raw = json_decode((string) ($row['raw_json'] ?? ''), true);
+        $category = (string) ($row['category'] ?? '');
+        if ($category === '' && is_array($raw)) {
+            $category = admin_song_category_name($raw);
+        }
+
         $songs[] = [
             'songId' => (string) ($row['song_id'] ?? ''),
             'title' => (string) ($row['title'] ?? ''),
             'artist' => (string) ($row['artist'] ?? ''),
-            'category' => (string) ($row['category'] ?? ''),
+            'category' => $category,
             'keyName' => (string) ($row['default_key_name'] ?? ''),
             'bpm' => (string) ($row['bpm'] ?? ''),
             'importedAt' => (string) ($row['imported_at'] ?? ''),
@@ -53,4 +58,41 @@ try {
     json_error('Songs konnten nicht geladen werden.', 500, [
         'detail' => env('APP_DEBUG', '0') === '1' ? $e->getMessage() : null,
     ]);
+}
+
+function admin_song_category_name(array $song): string
+{
+    $category = $song['category'] ?? ($song['category_name'] ?? '');
+    if (is_array($category)) {
+        $value = trim((string) ($category['name'] ?? ($category['title'] ?? '')));
+        if ($value !== '') {
+            return $value;
+        }
+    } elseif (is_scalar($category)) {
+        $value = trim((string) $category);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    $items = $song['categories']['category'] ?? [];
+    if (!is_array($items)) {
+        return '';
+    }
+    if (!array_is_list($items)) {
+        $items = [$items];
+    }
+
+    $names = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $name = trim((string) ($item['name'] ?? ($item['title'] ?? '')));
+        if ($name !== '') {
+            $names[] = $name;
+        }
+    }
+
+    return implode(', ', array_values(array_unique($names)));
 }
