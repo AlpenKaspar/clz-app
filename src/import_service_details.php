@@ -373,7 +373,15 @@ function extract_service_plan_items(array $service): array
         ] as $path) {
             $items = service_get_path_array($plan, $path);
             if ($items) {
-                $planItems = array_merge($planItems, $items);
+                $timeId = normalize_string($plan['time_id'] ?? '');
+                foreach ($items as $item) {
+                    if (is_array($item)) {
+                        $item['_time_id'] = $timeId;
+                        $item['_plan_service_length'] = $plan['service_length'] ?? null;
+                        $item['_plan_total_length'] = $plan['total_length'] ?? null;
+                    }
+                    $planItems[] = $item;
+                }
                 break;
             }
         }

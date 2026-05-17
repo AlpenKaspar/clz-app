@@ -1172,28 +1172,32 @@ function rpc_service_details(mixed $meta): array
 
 function rpc_service_overview(mixed $meta): array
 {
-    $serviceId = rpc_service_id_from_meta($meta);
+    $context = rpc_service_context($meta);
+    $serviceId = $context['serviceId'];
     $service = rpc_fetch_service($serviceId);
     if (!$service) {
         return ['ok' => true, 'overview' => null];
     }
     $times = rpc_service_times($serviceId);
+    $selectedTime = is_array($context['time'] ?? null) ? $context['time'] : null;
     $raw = rpc_decode_json_array($service['raw_json'] ?? null);
     $rehearsal = rpc_service_named_times($raw, ['rehearsal_times', 'rehearsals']);
     $other = rpc_service_named_times($raw, ['other_times']);
-    $roleSummary = rpc_service_role_summary($serviceId);
+    $roleSummary = rpc_service_role_summary($serviceId, $context['timeId']);
+    $overviewStart = rpc_str($selectedTime['starts_at'] ?? ($service['service_start'] ?? ''));
+    $overviewEnd = rpc_str($selectedTime['ends_at'] ?? ($service['service_end'] ?? ''));
 
     return [
         'ok' => true,
         'overview' => [
             'serviceId' => $serviceId,
-            'timeId' => rpc_str($times[0]['elvanto_time_id'] ?? ''),
+            'timeId' => $context['timeId'],
             'title' => rpc_str($service['title'] ?? ''),
             'category' => rpc_str($service['category'] ?? ''),
-            'date' => rpc_ui_date(substr((string) ($service['service_start'] ?? ''), 0, 10)),
-            'startTime' => rpc_time(substr((string) ($service['service_start'] ?? ''), 11, 8)),
-            'endTime' => rpc_time(substr((string) ($service['service_end'] ?? ''), 11, 8)),
-            'timeLabel' => rpc_service_time_label($times),
+            'date' => rpc_ui_date(substr($overviewStart, 0, 10)),
+            'startTime' => rpc_time(substr($overviewStart, 11, 8)),
+            'endTime' => rpc_time(substr($overviewEnd, 11, 8)),
+            'timeLabel' => $selectedTime ? rpc_service_time_label([$selectedTime]) : rpc_service_time_label($times),
             'rehearsalTimes' => implode(' · ', $rehearsal),
             'otherTimes' => implode(' · ', $other),
             'roleSummary' => $roleSummary,
@@ -1203,19 +1207,23 @@ function rpc_service_overview(mixed $meta): array
 
 function rpc_service_staff(mixed $meta): array
 {
-    $serviceId = rpc_service_id_from_meta($meta);
+    $context = rpc_service_context($meta);
+    $serviceId = $context['serviceId'];
     if ($serviceId === '') {
         return ['ok' => true, 'staffGroups' => [], 'staffCount' => 0];
     }
+    $timeId = $context['timeId'];
 
     $rows = fetch_all_prepared_legacy(
         'SELECT sv.*, p.email, p.phone, p.mobile
          FROM service_volunteers sv
          LEFT JOIN people p ON p.id = sv.person_id
          WHERE sv.service_id = ?
-         ORDER BY sv.team, sv.role, sv.display_name',
+        ORDER BY sv.team, sv.role, sv.display_name',
         [$serviceId]
     );
+    $rows = rpc_filter_service_rows_by_time($rows, $timeId);
+    $rows = rpc_unique_service_rows($rows, ['team', 'role', 'person_id', 'display_name', 'status']);
     $groups = [];
     foreach ($rows as $row) {
         $label = rpc_str($row['team'] ?? '') ?: 'Team';
@@ -1257,17 +1265,21 @@ function rpc_service_staff(mixed $meta): array
 
 function rpc_service_flow(mixed $meta): array
 {
-    $serviceId = rpc_service_id_from_meta($meta);
+    $context = rpc_service_context($meta);
+    $serviceId = $context['serviceId'];
     if ($serviceId === '') {
         return ['ok' => true, 'flow' => [], 'flowCount' => 0];
     }
+    $timeId = $context['timeId'];
 
     $rows = fetch_all_prepared_legacy(
         'SELECT * FROM service_plan_items WHERE service_id = ? ORDER BY item_order',
         [$serviceId]
     );
+    $rows = rpc_filter_service_rows_by_time($rows, $timeId);
+    $rows = rpc_unique_service_rows($rows, ['title', 'duration_min', 'song_title', 'description', 'item_order']);
     $service = rpc_fetch_service($serviceId);
-    $cursor = rpc_service_start_datetime($service);
+    $cursor = rpc_service_start_datetime_from_context($service, $context);
     $flow = array_map(static function (array $row) use (&$cursor): array {
         $title = rpc_str($row['title'] ?? '');
         $raw = rpc_decode_json_array($row['raw_json'] ?? null);
@@ -1370,19 +1382,24 @@ function rpc_service_extract_collection(mixed $value, array $innerKeys = []): ar
     return array_is_list($value) ? $value : [$value];
 }
 
-function rpc_service_role_summary(string $serviceId): string
+function rpc_service_role_summary(string $serviceId, string $timeId = ''): string
 {
     if ($serviceId === '') {
         return '';
     }
     $rows = fetch_all_prepared_legacy(
-        'SELECT team, COUNT(*) AS c FROM service_volunteers WHERE service_id = ? GROUP BY team ORDER BY team',
+        'SELECT team, raw_json FROM service_volunteers WHERE service_id = ? ORDER BY team',
         [$serviceId]
     );
-    $parts = [];
+    $rows = rpc_filter_service_rows_by_time($rows, $timeId);
+    $counts = [];
     foreach ($rows as $row) {
         $team = rpc_str($row['team'] ?? '') ?: 'Team';
-        $count = (int) ($row['c'] ?? 0);
+        $counts[$team] = ($counts[$team] ?? 0) + 1;
+    }
+    ksort($counts, SORT_NATURAL | SORT_FLAG_CASE);
+    $parts = [];
+    foreach ($counts as $team => $count) {
         if ($count > 0) {
             $parts[] = $team . ' (' . $count . ')';
         }
@@ -1467,11 +1484,125 @@ function rpc_service_start_datetime(?array $service): ?DateTimeImmutable
     }
 }
 
+function rpc_service_start_datetime_from_context(?array $service, array $context): ?DateTimeImmutable
+{
+    $time = is_array($context['time'] ?? null) ? $context['time'] : null;
+    $raw = rpc_str($time['starts_at'] ?? '');
+    if ($raw !== '') {
+        try {
+            return new DateTimeImmutable($raw);
+        } catch (Throwable) {
+            // Fall back to the service start below.
+        }
+    }
+    return rpc_service_start_datetime($service);
+}
+
 function rpc_service_id_from_meta(mixed $meta): string
 {
     $meta = is_array($meta) ? $meta : [];
     $elvantoId = rpc_str($meta['elvantoId'] ?? '');
     return rpc_starts_with($elvantoId, 'SERVICE-') ? substr($elvantoId, 8) : rpc_str($meta['serviceId'] ?? '');
+}
+
+function rpc_service_context(mixed $meta): array
+{
+    $meta = is_array($meta) ? $meta : [];
+    $serviceId = rpc_service_id_from_meta($meta);
+    $times = rpc_service_times($serviceId);
+    $timeId = rpc_str($meta['timeId'] ?? ($meta['serviceTimeId'] ?? ''));
+    $selected = null;
+
+    if ($timeId !== '') {
+        foreach ($times as $time) {
+            if (rpc_str($time['elvanto_time_id'] ?? '') === $timeId) {
+                $selected = $time;
+                break;
+            }
+        }
+    }
+
+    if (!$selected) {
+        $eventStart = rpc_service_meta_start_datetime($meta);
+        if ($eventStart instanceof DateTimeImmutable) {
+            foreach ($times as $time) {
+                try {
+                    $timeStart = new DateTimeImmutable(rpc_str($time['starts_at'] ?? ''));
+                } catch (Throwable) {
+                    continue;
+                }
+                if ($timeStart->format('Y-m-d H:i') === $eventStart->format('Y-m-d H:i')) {
+                    $selected = $time;
+                    $timeId = rpc_str($time['elvanto_time_id'] ?? '');
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!$selected && count($times) === 1) {
+        $selected = $times[0];
+        $timeId = rpc_str($selected['elvanto_time_id'] ?? '');
+    }
+
+    return [
+        'serviceId' => $serviceId,
+        'timeId' => $timeId,
+        'time' => $selected,
+    ];
+}
+
+function rpc_service_meta_start_datetime(array $meta): ?DateTimeImmutable
+{
+    $date = rpc_str($meta['StartDatum'] ?? ($meta['startDate'] ?? ''));
+    $time = rpc_str($meta['StartZeit'] ?? ($meta['startTime'] ?? ''));
+    if ($date === '' || $time === '') {
+        return null;
+    }
+    if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $date, $m)) {
+        $date = $m[3] . '-' . $m[2] . '-' . $m[1];
+    }
+    try {
+        return new DateTimeImmutable($date . ' ' . $time);
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function rpc_filter_service_rows_by_time(array $rows, string $timeId): array
+{
+    if ($timeId === '') {
+        return $rows;
+    }
+    $filtered = [];
+    foreach ($rows as $row) {
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+        if (rpc_str($raw['_time_id'] ?? '') === $timeId) {
+            $filtered[] = $row;
+        }
+    }
+    return $filtered ?: $rows;
+}
+
+function rpc_unique_service_rows(array $rows, array $fields): array
+{
+    $out = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        $keyParts = [];
+        foreach ($fields as $field) {
+            $keyParts[] = rpc_lower(rpc_str($row[$field] ?? ''));
+        }
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+        $keyParts[] = rpc_str($raw['_time_id'] ?? '');
+        $key = implode('|', $keyParts);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $row;
+    }
+    return $out;
 }
 
 function rpc_fetch_service(string $serviceId): ?array
