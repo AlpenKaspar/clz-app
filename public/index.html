@@ -5171,10 +5171,10 @@
 
     .songs-player-overlay {
       position: fixed;
-      inset: 0;
+      inset: 0 0 calc(88px + env(safe-area-inset-bottom)) 0;
       background: rgba(15,23,42,0.56);
       backdrop-filter: blur(10px);
-      z-index: 1000;
+      z-index: 80;
       display: none;
       align-items: flex-end;
       justify-content: center;
@@ -5206,19 +5206,28 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 22px 18px 10px;
+      padding: 26px 18px 12px;
       border-bottom: 1px solid var(--border, #e5e7eb);
     }
     .songs-player-head::before {
       content: "";
       position: absolute;
-      top: 8px;
+      top: 9px;
       left: 50%;
       transform: translateX(-50%);
-      width: 42px;
-      height: 4px;
+      width: 72px;
+      height: 5px;
       border-radius: 999px;
       background: rgba(148,163,184,0.55);
+    }
+    .songs-player-handle {
+      position: absolute;
+      inset: 0 74px auto 74px;
+      height: 30px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      z-index: 1;
     }
     body.dark .songs-player-head {
       border-color: #2d3138;
@@ -5259,6 +5268,76 @@
       width: 100%;
       height: 40px;
     }
+    #songs-player-audio:not([controls]) {
+      display: none;
+    }
+    .songs-player-controls {
+      display: grid;
+      grid-template-columns: 42px 1fr 38px;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .songs-player-play-btn,
+    .songs-player-route-btn {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(37,99,235,0.12);
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .songs-player-play-btn {
+      width: 42px;
+      height: 42px;
+      background: var(--primary);
+      color: #fff;
+    }
+    .songs-player-progress-wrap {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .songs-player-time-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted, #6b7280);
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+    }
+    .songs-player-progress {
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(148,163,184,0.24);
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .songs-player-progress-fill {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--primary);
+      transition: width .12s linear;
+    }
+    body.dark .songs-player-play-btn,
+    body.dark .songs-player-route-btn {
+      background: rgba(96,165,250,0.16);
+      color: #93c5fd;
+    }
+    body.dark .songs-player-play-btn {
+      background: var(--primary);
+      color: #fff;
+    }
     .songs-player-search-wrap {
       position: relative;
       padding: 10px 16px 0;
@@ -5298,9 +5377,11 @@
     .songs-player-tabs {
       display: flex;
       gap: 8px;
-      padding: 12px 16px 2px;
-      overflow-x: auto;
+      padding: 12px 16px 4px;
+      overflow: visible;
       scrollbar-width: none;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     .songs-player-tabs::-webkit-scrollbar { display: none; }
     .songs-player-tab {
@@ -5408,6 +5489,69 @@
     body.songs-player-open {
       overflow: hidden;
       touch-action: none;
+    }
+    .songs-mini-player {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(76px + env(safe-area-inset-bottom));
+      z-index: 740;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      min-height: 54px;
+      padding: 8px 10px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.92);
+      color: var(--text-main);
+      border: 1px solid rgba(148,163,184,0.24);
+      box-shadow: 0 12px 30px rgba(15,23,42,0.16);
+      backdrop-filter: blur(18px);
+    }
+    body.dark .songs-mini-player {
+      background: rgba(15,23,42,0.88);
+      border-color: rgba(148,163,184,0.20);
+      box-shadow: 0 12px 30px rgba(2,6,23,0.42);
+    }
+    .songs-mini-player.is-visible {
+      display: flex;
+    }
+    .songs-mini-player-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      cursor: pointer;
+    }
+    .songs-mini-player-title {
+      font-size: 13px;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .songs-mini-player-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .songs-mini-progress {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 5px;
+      height: 3px;
+      border-radius: 999px;
+      background: rgba(148,163,184,0.22);
+      overflow: hidden;
+    }
+    .songs-mini-progress-fill {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: var(--primary);
+      border-radius: inherit;
     }
 
     #calendar-reset-slot .filter-actions { margin: 0; }
@@ -7160,19 +7304,37 @@
     <div id="songs-player-overlay" class="songs-player-overlay" aria-hidden="true">
       <div class="songs-player-modal" role="dialog" aria-modal="true" aria-labelledby="songs-player-title">
         <div class="songs-player-head">
+          <button class="songs-player-handle" type="button" onclick="minimizeSongsPlayer_()" aria-label="Player einklappen"></button>
           <div class="songs-player-title-wrap">
             <i class="fas fa-music"></i>
             <span id="songs-player-title">Audio-Player</span>
           </div>
-          <button class="icon-btn" type="button" onclick="closeSongsPlayer_()" aria-label="Player schließen">
-            <i class="fas fa-xmark"></i>
+          <button class="icon-btn" type="button" onclick="closeSongsPlayer_()" aria-label="Player einklappen">
+            <i class="fas fa-chevron-down"></i>
           </button>
         </div>
 
         <div class="songs-player-now">
           <div id="songs-player-now-title" class="songs-player-now-title">Kein Titel ausgewählt</div>
           <div id="songs-player-now-meta" class="songs-player-now-meta"></div>
-          <audio id="songs-player-audio" preload="metadata" controls></audio>
+          <audio id="songs-player-audio" preload="metadata" x-webkit-airplay="allow"></audio>
+          <div class="songs-player-controls">
+            <button id="songs-player-play" class="songs-player-play-btn" type="button" onclick="toggleSongsPlayerPlayback_()" aria-label="Abspielen">
+              <i class="fas fa-play"></i>
+            </button>
+            <div class="songs-player-progress-wrap">
+              <div class="songs-player-time-row">
+                <span id="songs-player-current-time">0:00</span>
+                <span id="songs-player-duration">0:00</span>
+              </div>
+              <div id="songs-player-progress" class="songs-player-progress" onclick="seekSongsPlayer_(event)">
+                <span id="songs-player-progress-fill" class="songs-player-progress-fill"></span>
+              </div>
+            </div>
+            <button id="songs-player-airplay" class="songs-player-route-btn" type="button" onclick="showSongsPlayerRoutePicker_()" aria-label="AirPlay">
+              <i class="fas fa-tv"></i>
+            </button>
+          </div>
         </div>
 
         <div class="songs-player-search-wrap">
@@ -7193,6 +7355,19 @@
         <div id="songs-player-list" class="songs-player-list"></div>
         <div id="songs-player-empty" class="songs-player-empty" hidden>Keine abspielbaren Dateien gefunden.</div>
       </div>
+    </div>
+    <div id="songs-mini-player" class="songs-mini-player" aria-hidden="true">
+      <button id="songs-mini-play" class="songs-player-play-btn" type="button" onclick="toggleSongsPlayerPlayback_(); event.stopPropagation();" aria-label="Abspielen">
+        <i class="fas fa-play"></i>
+      </button>
+      <div class="songs-mini-player-main" onclick="openSongsPlayer_()">
+        <div id="songs-mini-title" class="songs-mini-player-title">Kein Titel ausgewählt</div>
+        <div id="songs-mini-meta" class="songs-mini-player-meta"></div>
+      </div>
+      <button class="songs-player-route-btn" type="button" onclick="showSongsPlayerRoutePicker_(); event.stopPropagation();" aria-label="AirPlay">
+        <i class="fas fa-tv"></i>
+      </button>
+      <div class="songs-mini-progress"><span id="songs-mini-progress-fill" class="songs-mini-progress-fill"></span></div>
     </div>
 
     <div id="view-dashboard" class="view-hidden">
@@ -9094,7 +9269,8 @@
         currentFilter: 'all',
         currentSearch: '',
         currentIndex: -1,
-        currentUrl: ''
+        currentUrl: '',
+        currentItem: null
       };
 
       function isAudioAssetForPlayer_(asset) {
@@ -9243,11 +9419,96 @@
         songsPlayerState.currentSearch = '';
         renderSongsPlayerList_();
       }
+      function formatSongsPlayerTime_(seconds) {
+        const total = Number.isFinite(Number(seconds)) ? Math.max(0, Math.floor(Number(seconds))) : 0;
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+      }
+      function songsPlayerMetaText_(it) {
+        if (!it) return '';
+        const parts = [];
+        if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
+        if (it.artist) parts.push(it.artist);
+        if (it.keyName) parts.push(it.keyName);
+        if (it.bpm) parts.push(it.bpm + ' BPM');
+        const kindLabel = it.kind === 'playback' ? 'Playback' : it.kind === 'tracks' ? 'Spur' : 'Audio';
+        parts.push(it.extension ? `${kindLabel} ${it.extension}` : kindLabel);
+        return parts.join(' · ');
+      }
+      function updateSongsPlayerButtons_() {
+        const audio = document.getElementById('songs-player-audio');
+        const isPlaying = !!audio && !!audio.src && !audio.paused;
+        ['songs-player-play', 'songs-mini-play'].forEach((id) => {
+          const btn = document.getElementById(id);
+          if (!btn) return;
+          btn.setAttribute('aria-label', isPlaying ? 'Pausieren' : 'Abspielen');
+          btn.innerHTML = `<i class="fas ${isPlaying ? 'fa-pause' : 'fa-play'}"></i>`;
+        });
+      }
+      function updateSongsPlayerProgress_() {
+        const audio = document.getElementById('songs-player-audio');
+        const duration = audio && Number.isFinite(audio.duration) ? audio.duration : 0;
+        const current = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+        const percent = duration > 0 ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
+        ['songs-player-progress-fill', 'songs-mini-progress-fill'].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.style.width = `${percent}%`;
+        });
+        const currentEl = document.getElementById('songs-player-current-time');
+        const durationEl = document.getElementById('songs-player-duration');
+        if (currentEl) currentEl.textContent = formatSongsPlayerTime_(current);
+        if (durationEl) durationEl.textContent = duration > 0 ? formatSongsPlayerTime_(duration) : '0:00';
+      }
+      function updateSongsMiniPlayer_() {
+        const it = songsPlayerState.currentItem;
+        const mini = document.getElementById('songs-mini-player');
+        if (!mini) return;
+        const overlayOpen = document.getElementById('songs-player-overlay')?.getAttribute('aria-hidden') === 'false';
+        const visible = !!it && !overlayOpen;
+        mini.classList.toggle('is-visible', visible);
+        mini.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        const title = document.getElementById('songs-mini-title');
+        const meta = document.getElementById('songs-mini-meta');
+        if (title && it) title.textContent = it.songTitle || it.name || 'Titel';
+        if (meta && it) meta.textContent = songsPlayerMetaText_(it);
+        updateSongsPlayerButtons_();
+        updateSongsPlayerProgress_();
+      }
+      function toggleSongsPlayerPlayback_() {
+        const audio = document.getElementById('songs-player-audio');
+        if (!audio || !audio.src) {
+          if (songsPlayerState.filtered.length) playSongsPlayerItem_(0);
+          return;
+        }
+        if (audio.paused) {
+          const p = audio.play();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } else {
+          audio.pause();
+        }
+        updateSongsPlayerButtons_();
+      }
+      function seekSongsPlayer_(event) {
+        const audio = document.getElementById('songs-player-audio');
+        const bar = document.getElementById('songs-player-progress');
+        if (!audio || !bar || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+        const rect = bar.getBoundingClientRect();
+        const x = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
+        audio.currentTime = (x / rect.width) * audio.duration;
+        updateSongsPlayerProgress_();
+      }
+      function showSongsPlayerRoutePicker_() {
+        const audio = document.getElementById('songs-player-audio');
+        if (audio && typeof audio.webkitShowPlaybackTargetPicker === 'function') {
+          try { audio.webkitShowPlaybackTargetPicker(); return; } catch (e) {}
+        }
+        toast('AirPlay ist auf diesem Gerät/Browser nicht verfügbar', 1800);
+      }
       function playSongsPlayerItem_(idx) {
         const it = songsPlayerState.filtered[idx];
         if (!it) return;
         songsPlayerState.currentIndex = idx;
         songsPlayerState.currentUrl = it.url;
+        songsPlayerState.currentItem = it;
 
         const audio = document.getElementById('songs-player-audio');
         const title = document.getElementById('songs-player-now-title');
@@ -9276,30 +9537,30 @@
         document.querySelectorAll('#songs-player-list .songs-player-item').forEach((el) => {
           el.classList.toggle('active', Number(el.getAttribute('data-idx')) === idx);
         });
+        updateSongsMiniPlayer_();
       }
       function openSongsPlayer_() {
         // Items frisch zusammenstellen (songsLite kann inzwischen aktualisiert sein)
         songsPlayerState.items = buildSongsPlayerItems_();
-        songsPlayerState.currentFilter = 'all';
-        songsPlayerState.currentSearch = '';
         const inp = document.getElementById('songs-player-search');
-        if (inp) inp.value = '';
+        if (inp) inp.value = songsPlayerState.currentSearch || '';
         document.querySelectorAll('#songs-player-tabs .songs-player-tab').forEach((btn) => {
-          btn.classList.toggle('active', btn.getAttribute('data-filter') === 'all');
+          btn.classList.toggle('active', btn.getAttribute('data-filter') === songsPlayerState.currentFilter);
         });
         renderSongsPlayerList_();
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'false');
         document.body.classList.add('songs-player-open');
+        updateSongsMiniPlayer_();
+      }
+      function minimizeSongsPlayer_() {
+        closeSongsPlayer_();
       }
       function closeSongsPlayer_() {
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('songs-player-open');
-        const audio = document.getElementById('songs-player-audio');
-        if (audio) {
-          try { audio.pause(); } catch (e) {}
-        }
+        updateSongsMiniPlayer_();
       }
       (function bindSongsPlayerSearch_() {
         const inp = document.getElementById('songs-player-search');
@@ -9326,10 +9587,20 @@
         const audio = document.getElementById('songs-player-audio');
         if (!audio || audio.dataset.bound) return;
         audio.dataset.bound = '1';
+        ['play', 'pause', 'loadedmetadata', 'durationchange', 'timeupdate', 'seeking'].forEach((eventName) => {
+          audio.addEventListener(eventName, () => {
+            updateSongsPlayerButtons_();
+            updateSongsPlayerProgress_();
+            updateSongsMiniPlayer_();
+          });
+        });
         audio.addEventListener('ended', () => {
           const next = songsPlayerState.currentIndex + 1;
           if (next < songsPlayerState.filtered.length) {
             playSongsPlayerItem_(next);
+          } else {
+            updateSongsPlayerButtons_();
+            updateSongsMiniPlayer_();
           }
         });
       })();
@@ -9762,6 +10033,9 @@ function updateBottomNavHighlight_() {
         if (tab !== 'contacts') {
           setPrayerViewEnabled_(false);
           closePrayerOverlay_();
+        }
+        if (typeof minimizeSongsPlayer_ === 'function') {
+          minimizeSongsPlayer_();
         }
 
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
