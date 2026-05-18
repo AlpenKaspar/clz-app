@@ -19213,8 +19213,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
                   item?.subDepartmentName,
                   item?.departmentName,
                   item?.status,
-                  item?.email,
-                  item?.phone,
                   item?.note,
                   item?.extraMeta
                 ].map(v => String(v || '')).join(' '));
@@ -19266,8 +19264,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 if (compactPos && compactPos !== group.label) inlineMeta.push(compactPos);
 
                 const meta = [];
-                if (item.email) meta.push(item.email);
-                if (item.phone) meta.push(item.phone);
                 if (item.note) meta.push(item.note);
                 if (item.extraMeta) meta.push(item.extraMeta);
 

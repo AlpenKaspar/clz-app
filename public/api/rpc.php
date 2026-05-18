@@ -1300,9 +1300,8 @@ function rpc_service_staff(mixed $meta): array
     $timeId = $context['timeId'];
 
     $rows = fetch_all_prepared_legacy(
-        'SELECT sv.*, p.email, p.phone, p.mobile
+        'SELECT sv.*
          FROM service_volunteers sv
-         LEFT JOIN people p ON p.id = sv.person_id
          WHERE sv.service_id = ?
         ORDER BY sv.team, sv.role, sv.display_name',
         [$serviceId]
@@ -1330,8 +1329,8 @@ function rpc_service_staff(mixed $meta): array
             'statusTone' => $statusTone,
             'statusSortRank' => rpc_service_status_rank($statusTone),
             'positionSort' => rpc_service_position_sort($role),
-            'email' => rpc_str($row['email'] ?? ''),
-            'phone' => rpc_str($row['mobile'] ?? '') ?: rpc_str($row['phone'] ?? ''),
+            'email' => '',
+            'phone' => '',
             'note' => '',
         ];
     }
