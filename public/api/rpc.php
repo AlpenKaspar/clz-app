@@ -2091,13 +2091,19 @@ function rpc_song_youtube_urls(array $song): array
 {
     $urls = [];
     foreach (['youtube_url', 'youtubeUrl', 'youtube', 'youtube_embed', 'youtubeEmbed', 'YouTube_URL', 'YouTube_Embed', 'Song_YouTube_URLs', 'Arrangement_YouTube_URLs'] as $field) {
-        $value = rpc_song_scalar($song[$field] ?? '');
-        if ($value !== '' && preg_match('/(youtube\.com|youtu\.be)/i', $value)) {
+        $parts = rpc_song_split_list($song[$field] ?? '');
+        foreach ($parts as $value) {
+            if ($value !== '' && preg_match('/(youtube(?:-nocookie)?\.com|youtu\.be)/i', $value)) {
+                $urls[] = $value;
+            }
+        }
+        $value = !$parts ? rpc_song_scalar($song[$field] ?? '') : '';
+        if ($value !== '' && preg_match('/(youtube(?:-nocookie)?\.com|youtu\.be)/i', $value)) {
             $urls[] = $value;
         }
     }
     foreach (rpc_song_collect_urls($song) as $url) {
-        if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
+        if (preg_match('/(youtube(?:-nocookie)?\.com|youtu\.be)/i', $url)) {
             $urls[] = $url;
         }
     }
@@ -2109,7 +2115,7 @@ function rpc_song_youtube_embeds(array $song): array
     $embeds = [];
     foreach (['youtube_embed', 'youtubeEmbed', 'YouTube_Embed', 'Song_YouTube_Embeds', 'Arrangement_YouTube_Embeds'] as $field) {
         foreach (rpc_song_split_list($song[$field] ?? '') as $value) {
-            if (preg_match('/(youtube\.com|youtu\.be)/i', $value)) {
+            if (preg_match('/(youtube(?:-nocookie)?\.com|youtu\.be)/i', $value)) {
                 $embeds[] = $value;
             }
         }
@@ -2160,7 +2166,7 @@ function rpc_song_assets_payload(array $song): array
         if (isset($knownUrls[$url])) {
             continue;
         }
-        if (preg_match('/(youtube\.com|youtu\.be)/i', $url)) {
+        if (preg_match('/(youtube(?:-nocookie)?\.com|youtu\.be)/i', $url)) {
             continue;
         }
         $assets[] = [
@@ -2625,10 +2631,11 @@ function rpc_prayer_deck(array $user = []): array
 
     $cards = [];
     foreach ($groups as $familyId => $members) {
+        $familyKey = rpc_str($familyId);
         usort($members, static function (array $a, array $b): int {
             return strcasecmp(rpc_str($a['displayName'] ?? ''), rpc_str($b['displayName'] ?? ''));
         });
-        $isSingle = rpc_starts_with(rpc_lower($familyId), 'einzel_') || count($members) <= 1;
+        $isSingle = rpc_starts_with(rpc_lower($familyKey), 'einzel_') || count($members) <= 1;
         $fallbackName = rpc_str($members[0]['displayName'] ?? 'Einzelperson');
         $lastNames = [];
         foreach ($members as $member) {
@@ -2656,7 +2663,7 @@ function rpc_prayer_deck(array $user = []): array
             continue;
         }
         $cards[] = [
-            'id' => $familyId,
+            'id' => $familyKey,
             'type' => $isSingle ? 'single' : 'family',
             'title' => $title,
             'sortLastName' => $primaryLast ?: rpc_str($members[0]['lastName'] ?? ''),
@@ -3145,7 +3152,7 @@ function rpc_song_diagnostics(): array
             $lower = strtolower($url);
             $hasPdf = $hasPdf || (bool) preg_match('/\.pdf(\?|$)/i', $url);
             $hasAudio = $hasAudio || (bool) preg_match('/\.(mp3|wav|m4a|aac|ogg|opus|flac|aif|aiff)(\?|$)/i', $url);
-            $hasYoutube = $hasYoutube || str_contains($lower, 'youtube.com') || str_contains($lower, 'youtu.be');
+            $hasYoutube = $hasYoutube || str_contains($lower, 'youtube.com') || str_contains($lower, 'youtube-nocookie.com') || str_contains($lower, 'youtu.be');
         }
         if ($hasKey) {
             $diag['withKey']++;
