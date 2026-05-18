@@ -424,10 +424,32 @@ function rpc_prayer_member_payload(array $contact): array
     return [
         'personId' => rpc_str($contact['id'] ?? ''),
         'name' => rpc_str($contact['displayName'] ?? ''),
+        'role' => rpc_str($contact['role'] ?? ''),
         'picture' => rpc_str($contact['pictureUrl'] ?? ''),
         'age' => $contact['age'] ?? null,
         'isChild' => (bool) ($contact['isChild'] ?? false),
     ];
+}
+
+function rpc_prayer_contact_allowed(array $contact): bool
+{
+    $category = rpc_lower(rpc_str($contact['category'] ?? ''));
+    return $category === '' || $category === 'gemeinde' || $category === 'kontakte';
+}
+
+function rpc_prayer_member_role(string $relationship, bool $isSingle): string
+{
+    $relation = rpc_lower($relationship);
+    if ($isSingle || str_contains($relation, 'einzel')) {
+        return 'Einzelperson';
+    }
+    if (str_contains($relation, 'haupt') || str_contains($relation, 'ehe') || str_contains($relation, 'partner') || str_contains($relation, 'spouse')) {
+        return 'Eltern';
+    }
+    if (str_contains($relation, 'kind') || str_contains($relation, 'child')) {
+        return 'Kind';
+    }
+    return 'Familienmitglied';
 }
 
 function rpc_prayer_pool_id(string $poolName): int
@@ -2451,57 +2473,84 @@ function rpc_prayer_deck(): array
 {
     $contacts = array_values(array_filter(
         rpc_contacts_lite()['contacts'] ?? [],
-        static fn(array $c): bool => rpc_is_category($c, 'gemeinde')
+        static fn(array $c): bool => rpc_prayer_contact_allowed($c)
     ));
-    $families = [];
-    $singles = [];
+    $groups = [];
+    $relationshipByPersonId = [];
+    $relationRows = db()->query('SELECT person_id, relationship FROM family_members')->fetchAll();
+    foreach ($relationRows as $row) {
+        $personId = rpc_str($row['person_id'] ?? '');
+        if ($personId !== '') {
+            $relationshipByPersonId[$personId] = rpc_str($row['relationship'] ?? '');
+        }
+    }
 
     foreach ($contacts as $contact) {
-        $familyId = rpc_str($contact['familyId'] ?? '');
-        if ($familyId !== '' && !($contact['isSingle'] ?? false)) {
-            $families[$familyId] ??= [];
-            $families[$familyId][] = $contact;
-            continue;
-        }
-        $singles[] = $contact;
-    }
-
-    $cards = [];
-    foreach ($families as $familyId => $members) {
-        usort($members, static fn(array $a, array $b): int => strcasecmp(rpc_str($a['age'] ?? ''), rpc_str($b['age'] ?? '')));
-        $lastNames = array_values(array_unique(array_filter(array_map(static fn(array $m): string => rpc_str($m['lastName'] ?? ''), $members))));
-        $sortLast = $lastNames[0] ?? '';
-        $title = $sortLast !== '' ? 'Familie ' . $sortLast : 'Familie';
-        $cards[] = [
-            'id' => 'family:' . $familyId,
-            'type' => 'family',
-            'title' => $title,
-            'sortLastName' => $sortLast,
-            'sortFirstName' => '',
-            'sortKey' => rpc_search_text($sortLast . ' ' . $familyId),
-            'location' => rpc_contact_location($members[0] ?? []),
-            'members' => array_map('rpc_prayer_member_payload', $members),
-        ];
-    }
-
-    foreach ($singles as $contact) {
         $personId = rpc_str($contact['id'] ?? '');
         if ($personId === '') {
             continue;
         }
+        $familyId = rpc_str($contact['familyId'] ?? '');
+        $groupId = $familyId !== '' ? $familyId : 'einzel_' . $personId;
+        $groups[$groupId] ??= [];
+        $groups[$groupId][] = $contact;
+    }
+
+    $cards = [];
+    foreach ($groups as $familyId => $members) {
+        usort($members, static function (array $a, array $b): int {
+            return strcasecmp(rpc_str($a['displayName'] ?? ''), rpc_str($b['displayName'] ?? ''));
+        });
+        $isSingle = rpc_starts_with(rpc_lower($familyId), 'einzel_') || count($members) <= 1;
+        $fallbackName = rpc_str($members[0]['displayName'] ?? 'Einzelperson');
+        $lastNames = [];
+        foreach ($members as $member) {
+            $last = rpc_str($member['lastName'] ?? '');
+            if ($last !== '' && !in_array($last, $lastNames, true)) {
+                $lastNames[] = $last;
+            }
+        }
+        $primaryLast = $lastNames[0] ?? '';
+        $familyTitle = $lastNames ? 'Familie ' . implode(' ', $lastNames) : 'Familie';
+        $title = $isSingle ? ($primaryLast !== '' ? 'Familie ' . $primaryLast : $fallbackName) : $familyTitle;
+        $payloadMembers = [];
+        foreach ($members as $member) {
+            $personId = rpc_str($member['id'] ?? '');
+            $relationship = $relationshipByPersonId[$personId] ?? '';
+            $role = rpc_prayer_member_role($relationship, $isSingle);
+            $member['role'] = $role;
+            $member['isChild'] = $role === 'Kind';
+            $payload = rpc_prayer_member_payload($member);
+            if (rpc_str($payload['name'] ?? '') !== '') {
+                $payloadMembers[] = $payload;
+            }
+        }
+        if (!$payloadMembers) {
+            continue;
+        }
         $cards[] = [
-            'id' => 'person:' . $personId,
-            'type' => 'single',
-            'title' => rpc_str($contact['displayName'] ?? ''),
-            'sortLastName' => rpc_str($contact['lastName'] ?? ''),
-            'sortFirstName' => rpc_str($contact['firstName'] ?? ''),
-            'sortKey' => rpc_search_text(rpc_str($contact['lastName'] ?? '') . ' ' . rpc_str($contact['firstName'] ?? '')),
-            'location' => rpc_contact_location($contact),
-            'members' => [rpc_prayer_member_payload($contact)],
+            'id' => $familyId,
+            'type' => $isSingle ? 'single' : 'family',
+            'title' => $title,
+            'sortLastName' => $primaryLast ?: rpc_str($members[0]['lastName'] ?? ''),
+            'sortFirstName' => rpc_str($members[0]['firstName'] ?? ($members[0]['preferredName'] ?? '')),
+            'sortKey' => rpc_str($primaryLast ?: $fallbackName ?: $title),
+            'location' => rpc_contact_location($members[0] ?? []),
+            'members' => $payloadMembers,
         ];
     }
 
-    usort($cards, static fn(array $a, array $b): int => strcasecmp(rpc_str($a['sortKey'] ?? ''), rpc_str($b['sortKey'] ?? '')));
+    usort($cards, static function (array $a, array $b): int {
+        $lastCmp = strcasecmp(rpc_str($a['sortLastName'] ?? ''), rpc_str($b['sortLastName'] ?? ''));
+        if ($lastCmp !== 0) {
+            return $lastCmp;
+        }
+        $firstCmp = strcasecmp(rpc_str($a['sortFirstName'] ?? ''), rpc_str($b['sortFirstName'] ?? ''));
+        if ($firstCmp !== 0) {
+            return $firstCmp;
+        }
+        return strcasecmp(rpc_str($a['title'] ?? ''), rpc_str($b['title'] ?? ''));
+    });
     return $cards;
 }
 
