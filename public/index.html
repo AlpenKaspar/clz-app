@@ -6448,6 +6448,53 @@
       line-height: 1.4;
     }
 
+    .service-flow-song-link {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 0;
+      font: inherit;
+      text-align: left;
+    }
+
+    .service-flow-song-link span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .service-flow-song-link i {
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .service-flow-song-link:hover span,
+    .service-flow-song-link:focus-visible span {
+      text-decoration: underline;
+    }
+
+    .service-flow-song-link:focus-visible {
+      outline: 2px solid rgba(37,99,235,0.28);
+      outline-offset: 3px;
+      border-radius: 8px;
+    }
+
     .service-flow-desc {
       margin-top: 8px;
       font-size: 12px;
@@ -8090,6 +8137,7 @@
       let songsLite = [];
       let songsReady = false;
       let songsLoading = false;
+      let songsLoadPromise = null;
       let songsCategoryFilters = [];
       let songsKeyFilters = [];
       let filteredSongs = [];
@@ -8099,6 +8147,8 @@
       let currentSongNotesExpanded = false;
       let currentSongFilesExpanded = false;
       let currentSongTextState = null;
+      let currentSongDetailReturnView = '';
+      let currentSongDetailReturnFlowIndex = -1;
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
       const CONTACT_PAGE_SIZE = 100;
@@ -9299,27 +9349,31 @@
         `).join('');
       }
 
-      async function ensureSongsLiteLoaded_(force = false) {
-        if (songsReady && !force) return;
-        if (songsLoading) return;
+      function ensureSongsLiteLoaded_(force = false) {
+        if (songsReady && !force) return Promise.resolve();
+        if (songsLoading && songsLoadPromise) return songsLoadPromise;
         songsLoading = true;
         const songsViewVisible = document.getElementById('view-songs')?.classList.contains('view-active');
         if (songsViewVisible && !songsReady) showSongsSkeleton_();
-        try {
-          const res = await withGsRetry('app_loadSongsLite', [], { retries: 2, retryDelay: 700 });
-          if (!res?.ok) throw new Error(res?.error || 'Songs konnten nicht geladen werden.');
-          songsLite = Array.isArray(res?.songs) ? res.songs : [];
-          songsReady = true;
-          renderSongsCategoryChips_();
-          runSongsSearch_();
-        } catch (err) {
-          const box = document.getElementById('songs-results');
-          if (box) {
-            box.innerHTML = `<div class="error-box"><div style="font-weight:900; margin-bottom:4px;"><i class="fas fa-triangle-exclamation"></i> Songs konnten nicht geladen werden</div><div>${escapeHtml(normalizeErrMsg_(err))}</div></div>`;
+        songsLoadPromise = (async () => {
+          try {
+            const res = await withGsRetry('app_loadSongsLite', [], { retries: 2, retryDelay: 700 });
+            if (!res?.ok) throw new Error(res?.error || 'Songs konnten nicht geladen werden.');
+            songsLite = Array.isArray(res?.songs) ? res.songs : [];
+            songsReady = true;
+            renderSongsCategoryChips_();
+            runSongsSearch_();
+          } catch (err) {
+            const box = document.getElementById('songs-results');
+            if (box) {
+              box.innerHTML = `<div class="error-box"><div style="font-weight:900; margin-bottom:4px;"><i class="fas fa-triangle-exclamation"></i> Songs konnten nicht geladen werden</div><div>${escapeHtml(normalizeErrMsg_(err))}</div></div>`;
+            }
+          } finally {
+            songsLoading = false;
+            songsLoadPromise = null;
           }
-        } finally {
-          songsLoading = false;
-        }
+        })();
+        return songsLoadPromise;
       }
 
       function normalizeSongCategoryValue_(value) {
@@ -10151,13 +10205,15 @@
         });
       })();
 
-      function openSongDetail_(songId) {
+      function openSongDetail_(songId, options = {}) {
         const wanted = String(songId || '').trim();
-        const song = (songsLite || []).find(item => String(item.songId || '').trim() === wanted) || null;
+        const song = (songsLite || []).find(item => String(item.songId || item.id || '').trim() === wanted) || null;
         if (!song) {
           toast('Song nicht gefunden', 1400);
           return;
         }
+        currentSongDetailReturnView = String(options?.returnView || '').trim();
+        currentSongDetailReturnFlowIndex = Number.isFinite(Number(options?.returnFlowIndex)) ? Number(options.returnFlowIndex) : -1;
         currentSongData = song;
         currentSongArrangementIndex = 0;
         currentSongSequenceExpanded = false;
@@ -10166,6 +10222,11 @@
         renderSongDetail_(song);
         showDetailView_('song-detail-view');
         openDetailOverlay();
+      }
+
+      async function openSongDetailFromFlow_(songId, flowIndex = -1) {
+        if (!songsReady) await ensureSongsLiteLoaded_();
+        openSongDetail_(songId, { returnView: 'calendar-flow-view', returnFlowIndex: Number(flowIndex) });
       }
 
       function setSongArrangementIndex_(index) {
@@ -15718,6 +15779,16 @@ function updateBottomNavHighlight_() {
           return;
         }
         if (currentDetailOverlayView === "song-detail-view") {
+          const returnView = currentSongDetailReturnView;
+          const returnFlowIndex = currentSongDetailReturnFlowIndex;
+          currentSongDetailReturnView = '';
+          currentSongDetailReturnFlowIndex = -1;
+          currentSongData = null;
+          if (returnView === 'calendar-flow-view') {
+            showDetailView_("calendar-flow-view");
+            setTimeout(() => scrollFlowToRow_(returnFlowIndex), 0);
+            return;
+          }
           closeDetailOverlay();
           return;
         }
@@ -15749,6 +15820,8 @@ function updateBottomNavHighlight_() {
         closeStaffSubFilterOverlay_();
         currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
         stopFlowLiveMode_();
+        currentSongDetailReturnView = '';
+        currentSongDetailReturnFlowIndex = -1;
         resumeContactWarmupQueue_();
       }
 
@@ -20018,19 +20091,78 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return escapeHtml(raw).replace(/\n/g, '<br>');
       }
 
-      function scrollFlowToActiveRow_(activeIndex) {
-        if (!Number.isFinite(activeIndex) || activeIndex < 0) return;
-        if (activeIndex === currentFlowLastAutoScrollIndex) return;
+      function normalizeServiceFlowSongLookup_(value) {
+        return String(value || '')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/&/g, ' und ')
+          .replace(/[()[\]{}]/g, ' ')
+          .replace(/[^a-zA-Z0-9]+/g, ' ')
+          .trim()
+          .toLowerCase();
+      }
+
+      function resolveServiceFlowSong_(songLabel, item = {}) {
+        const directId = String(item?.songId || item?.song_id || '').trim();
+        if (directId) {
+          const direct = (songsLite || []).find(song => String(song?.songId || song?.id || '').trim() === directId);
+          if (direct) return direct;
+        }
+
+        const wanted = normalizeServiceFlowSongLookup_(songLabel);
+        if (!wanted || !Array.isArray(songsLite) || !songsLite.length) return null;
+
+        let best = null;
+        let bestScore = 0;
+        (songsLite || []).forEach(song => {
+          const labels = [
+            song?.songTitle,
+            song?.title,
+            song?.arrangementName,
+            ...(Array.isArray(song?.arrangements) ? song.arrangements.map(arr => arr?.arrangementName) : [])
+          ].map(normalizeServiceFlowSongLookup_).filter(Boolean);
+
+          labels.forEach(label => {
+            let score = 0;
+            if (label === wanted) score = 120;
+            else if (wanted.startsWith(label) || label.startsWith(wanted)) score = 90;
+            else if (wanted.includes(label) || label.includes(wanted)) score = 65;
+            if (score > bestScore) {
+              bestScore = score;
+              best = song;
+            }
+          });
+        });
+        return bestScore >= 65 ? best : null;
+      }
+
+      function renderServiceFlowSong_(songLabel, item, flowIndex) {
+        const label = String(songLabel || '').trim();
+        if (!label) return '';
+        const song = resolveServiceFlowSong_(label, item);
+        const songId = String(song?.songId || song?.id || '').trim();
+        if (!songId) return `<div class="service-flow-song">${escapeHtml(label)}</div>`;
+        return `<div class="service-flow-song"><button type="button" class="service-flow-song-link" onclick="openSongDetailFromFlow_('${escapeAttr(songId)}', ${Number(flowIndex) || 0})" title="Songkarte oeffnen" aria-label="Songkarte ${escapeAttr(label)} oeffnen"><span>${escapeHtml(label)}</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button></div>`;
+      }
+
+      function scrollFlowToRow_(flowIndex) {
+        if (!Number.isFinite(flowIndex) || flowIndex < 0) return;
         const host = document.getElementById("calendar-flow-content");
         if (!host) return;
-        const row = host.querySelector(`.service-flow-row[data-flow-index="${String(activeIndex)}"]`);
+        const row = host.querySelector(`.service-flow-row[data-flow-index="${String(flowIndex)}"]`);
         if (!row) return;
-        currentFlowLastAutoScrollIndex = activeIndex;
         try {
           row.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } catch (e) {
           row.scrollIntoView();
         }
+      }
+
+      function scrollFlowToActiveRow_(activeIndex) {
+        if (!Number.isFinite(activeIndex) || activeIndex < 0) return;
+        if (activeIndex === currentFlowLastAutoScrollIndex) return;
+        currentFlowLastAutoScrollIndex = activeIndex;
+        scrollFlowToRow_(activeIndex);
       }
 
       function renderServiceFlow_(rows, options = {}) {
@@ -20102,7 +20234,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
                           ${navBtn}
                         </div>
                       </div>
-                      ${songLabel ? `<div class="service-flow-song">${escapeHtml(songLabel)}</div>` : ''}
+                      ${renderServiceFlowSong_(songLabel, item, index)}
                       ${descriptionHtml ? `<div class="service-flow-desc">${descriptionHtml}</div>` : ''}
                       ${planDescriptionHtml ? `<div class="service-flow-plan-desc">${planDescriptionHtml}</div>` : ''}
                       ${nextCountdown}
@@ -20175,6 +20307,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
         updateServiceAdminEditLinks_();
         const host = document.getElementById("calendar-flow-content");
         if (host) host.innerHTML = `${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}<div class="service-inline-loader"><div class="service-inline-loader-dot"></div></div>`;
+
+        ensureSongsLiteLoaded_().then(() => {
+          if (currentDetailOverlayView !== 'calendar-flow-view') return;
+          const rowsNow = currentServiceFlowBundle?.flow || [];
+          if (Array.isArray(rowsNow) && rowsNow.length) renderServiceFlow_(rowsNow, { enhanced: true });
+        }).catch(() => {});
 
         prefetchCurrentServiceFlow_(true).then(bundle => {
           if (currentDetailOverlayView !== 'calendar-flow-view') return;

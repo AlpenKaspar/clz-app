@@ -1571,6 +1571,8 @@ function rpc_service_flow(mixed $meta): array
         $raw = rpc_decode_json_array($row['raw_json'] ?? null);
         $description = rpc_strip_tags(rpc_str($row['description'] ?? ''));
         $song = rpc_str($row['song_title'] ?? '');
+        $songPayload = is_array($raw['song'] ?? null) ? $raw['song'] : [];
+        $songId = rpc_str($songPayload['id'] ?? ($songPayload['song_id'] ?? ($raw['song_id'] ?? ($raw['songId'] ?? ''))));
         $duration = rpc_service_duration_minutes($row['duration_min'] ?? null);
         $explicitTime = rpc_time(substr((string) ($row['starts_at'] ?? ''), 11, 8));
         $time = $explicitTime;
@@ -1586,6 +1588,7 @@ function rpc_service_flow(mixed $meta): array
             'title' => $title,
             'description' => $description,
             'song' => $song,
+            'songId' => $songId,
             'note' => rpc_strip_tags(rpc_song_scalar($raw['note'] ?? ($raw['notes'] ?? ''))),
             'planDescription' => $description,
             'type' => rpc_song_scalar($raw['when'] ?? ($row['item_type'] ?? '')),
