@@ -307,6 +307,12 @@
       font-weight: 900;
       color: var(--text-main);
     }
+    .song-text-viewer-title {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+    }
     .song-text-viewer-actions {
       display: inline-flex;
       align-items: center;
@@ -327,7 +333,8 @@
       background:rgba(255,255,255,.55);
     }
     .song-transpose-row,
-    .song-export-row {
+    .song-export-row,
+    .song-sequence-option-row {
       display:flex;
       align-items:center;
       gap:8px;
@@ -383,6 +390,31 @@
       align-items:center;
       gap:7px;
       text-decoration:none;
+    }
+    .song-export-icon-btn {
+      width:30px;
+      height:30px;
+      padding:0;
+      justify-content:center;
+    }
+    .song-sequence-export-toggle {
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      min-height:32px;
+      padding:0 11px;
+      border:1px solid var(--border-color);
+      border-radius:999px;
+      background:var(--card-bg);
+      color:var(--text-main);
+      font-size:12px;
+      font-weight:850;
+      cursor:pointer;
+      user-select:none;
+    }
+    .song-sequence-export-toggle input {
+      margin:0;
+      accent-color:var(--primary);
     }
     .song-text-viewer-body {
       padding: 12px;
@@ -10229,6 +10261,28 @@
         return String(currentSongTextState?.title || currentSongData?.songTitle || 'Song').trim() || 'Song';
       }
 
+      function currentSongSequenceSteps_() {
+        const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
+        const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
+        const arrangementSequence = String(arrangement?.sequence || '').trim();
+        const songSequence = arrangements.length <= 1 ? String(currentSongData?.sequence || '').trim() : '';
+        return parseSongSequenceSteps_(arrangementSequence || songSequence);
+      }
+
+      function songSequenceExportText_() {
+        return currentSongSequenceSteps_()
+          .map(step => String(step || '').trim())
+          .filter(Boolean)
+          .map((step, index) => `${index + 1}. ${step}`)
+          .join('\n');
+      }
+
+      function songSequenceExportHtml_() {
+        const steps = currentSongSequenceSteps_().map(step => String(step || '').trim()).filter(Boolean);
+        if (!steps.length) return '';
+        return `<div class="song-print-sequence"><div class="song-print-sequence-title">Ablauf</div><ol>${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></div>`;
+      }
+
       function songSafeFileName_(name, ext) {
         const base = String(name || 'song').normalize('NFKD').replace(/[^\w\s.-]+/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 80) || 'song';
         return `${base}.${ext}`;
@@ -10291,6 +10345,7 @@
         const baseKey = normalizeSongKeyName_(state.baseKey || '') || '';
         const currentKey = baseKey ? shiftedSongKey_(baseKey, state.transpose || 0) : '';
         const transposeLabel = Number(state.transpose || 0) > 0 ? `+${state.transpose}` : String(state.transpose || 0);
+        const hasSequence = currentSongSequenceSteps_().length > 0;
         return `
           <div class="song-text-viewer-controls">
             <div class="song-transpose-row">
@@ -10306,10 +10361,7 @@
               </select>
               <button class="song-transpose-reset" type="button" onclick="resetSongTextTranspose_()">Original</button>
             </div>
-            <div class="song-export-row">
-              <button class="song-export-btn" type="button" onclick="downloadSongTextAsOnSong_()"><i class="fas fa-file-arrow-down"></i><span>OnSong</span></button>
-              <button class="song-export-btn" type="button" onclick="printSongTextAsPdf_()"><i class="fas fa-file-pdf"></i><span>PDF</span></button>
-            </div>
+            ${hasSequence ? `<div class="song-sequence-option-row"><label class="song-sequence-export-toggle"><input type="checkbox" ${state.includeSequence ? 'checked' : ''} onchange="toggleSongTextSequenceExport_(this.checked)"><span>Ablauf im Export</span></label></div>` : ``}
           </div>
         `;
       }
@@ -10322,8 +10374,10 @@
         slot.innerHTML = `
           <div class="song-text-viewer">
             <div class="song-text-viewer-head">
-              <span><i class="fas fa-align-left"></i> ${escapeHtml(title)}</span>
+              <span class="song-text-viewer-title"><i class="fas fa-align-left"></i> ${escapeHtml(title)}</span>
               <span class="song-text-viewer-actions">
+                <button class="song-export-btn song-export-icon-btn" type="button" onclick="downloadSongTextAsOnSong_()" title="OnSong herunterladen" aria-label="OnSong herunterladen"><i class="fas fa-file-arrow-down"></i></button>
+                <button class="song-export-btn song-export-icon-btn" type="button" onclick="printSongTextAsPdf_()" title="PDF erstellen" aria-label="PDF erstellen"><i class="fas fa-file-pdf"></i></button>
                 ${state.url ? `<a class="icon-btn" href="${escapeAttr(state.url)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ``}
                 <button class="icon-btn" type="button" onclick="closeSongTextViewer_()" title="Schliessen" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
               </span>
@@ -10353,9 +10407,19 @@
         refreshSongTextViewer_();
       }
 
+      function toggleSongTextSequenceExport_(enabled) {
+        if (!currentSongTextState) return;
+        currentSongTextState.includeSequence = !!enabled;
+        refreshSongTextViewer_();
+      }
+
       function downloadSongTextAsOnSong_() {
         if (!currentSongTextState) return;
-        const chordPro = transposeChordProText_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
+        let chordPro = transposeChordProText_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
+        if (currentSongTextState.includeSequence) {
+          const sequenceText = songSequenceExportText_();
+          if (sequenceText) chordPro = `${chordPro}\n\n{start_of_comment: Ablauf}\n${sequenceText}\n{end_of_comment}`;
+        }
         const key = normalizeSongKeyName_(currentSongTextState.baseKey || '') ? '-' + shiftedSongKey_(currentSongTextState.baseKey, currentSongTextState.transpose || 0) : '';
         downloadTextFile_(songSafeFileName_(`${songSheetTitle_()}${key}`, 'chopro'), chordPro);
       }
@@ -10364,9 +10428,10 @@
         if (!currentSongTextState) return;
         const title = songSheetTitle_();
         const html = renderChordSheetHtml_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
+        const sequenceHtml = currentSongTextState.includeSequence ? songSequenceExportHtml_() : '';
         const win = window.open('', '_blank', 'noopener');
         if (!win) return;
-        win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 18px}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}}</style></head><body><div class="song-sheet-print-title">${escapeHtml(title)}</div>${html}</body></html>`);
+        win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 18px}.song-print-sequence{margin:0 0 22px;padding:12px 14px;border:1px solid #dbe4ef;border-radius:12px;background:#f8fafc}.song-print-sequence-title{font-size:12px;font-weight:800;color:#2563eb;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}.song-print-sequence ol{margin:0;padding-left:20px}.song-print-sequence li{margin:0 0 4px}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}}</style></head><body><div class="song-sheet-print-title">${escapeHtml(title)}</div>${sequenceHtml}${html}</body></html>`);
         win.document.close();
         win.focus();
         setTimeout(() => win.print(), 250);
@@ -10416,7 +10481,7 @@
           </div>
         `;
         if (inlineText) {
-          currentSongTextState = { url: '', label: title, title: songSheetTitle_(), rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0 };
+          currentSongTextState = { url: '', label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0, includeSequence: false };
           refreshSongTextViewer_();
           return;
         }
@@ -10430,7 +10495,7 @@
           if (!response.ok || data?.ok === false) {
             throw new Error(data?.detail || data?.error || ('HTTP ' + response.status));
           }
-          currentSongTextState = { url, label: title, title: songSheetTitle_(), rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0 };
+          currentSongTextState = { url, label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0, includeSequence: false };
           refreshSongTextViewer_();
         } catch (err) {
           currentSongTextState = null;
