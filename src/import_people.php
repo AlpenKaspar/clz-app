@@ -306,7 +306,7 @@ function upsert_person(array $person, array $categoryMap): void
         ':home_address' => normalize_string($person['home_address'] ?? ''),
         ':home_city' => normalize_string($person['home_city'] ?? ''),
         ':home_postcode' => normalize_string($person['home_postcode'] ?? ''),
-        ':departments' => clean_elvanto_value($person['departments'] ?? ''),
+        ':departments' => clean_department_value($person['departments'] ?? ''),
         ':picture_url' => $picture,
         ':raw_json' => json_encode($person, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':imported_at' => date('Y-m-d H:i:s'),
@@ -397,38 +397,47 @@ function clean_elvanto_value(mixed $value): string
         }
         return implode(', ', array_filter($names));
     }
-    foreach (['department', 'departments', 'sub_department', 'sub_departments', 'position', 'positions'] as $collectionKey) {
+    return '';
+}
+
+function clean_department_value(mixed $value): string
+{
+    if ($value === null) {
+        return '';
+    }
+    if (is_scalar($value)) {
+        return normalize_string((string) $value);
+    }
+    if (!is_array($value)) {
+        return '';
+    }
+    if (isset($value['name'])) {
+        return normalize_string($value['name']);
+    }
+
+    $names = [];
+    foreach (['department', 'departments'] as $collectionKey) {
         if (!isset($value[$collectionKey])) {
             continue;
         }
-        $names = [];
         foreach (normalize_collection($value[$collectionKey]) as $item) {
             if (is_array($item)) {
-                $name = trim((string) ($item['name'] ?? ($item['title'] ?? '')));
+                $name = normalize_string((string) ($item['name'] ?? ($item['title'] ?? '')));
                 if ($name !== '') {
                     $names[] = $name;
                 }
-                foreach (['sub_department', 'sub_departments', 'position', 'positions'] as $nestedKey) {
-                    if (!isset($item[$nestedKey])) {
-                        continue;
-                    }
-                    foreach (normalize_collection($item[$nestedKey]) as $nested) {
-                        if (is_array($nested)) {
-                            $nestedName = trim((string) ($nested['name'] ?? ($nested['title'] ?? '')));
-                            if ($nestedName !== '') {
-                                $names[] = $nestedName;
-                            }
-                        }
-                    }
+                continue;
+            }
+            if (is_scalar($item)) {
+                $name = normalize_string((string) $item);
+                if ($name !== '') {
+                    $names[] = $name;
                 }
             }
         }
-        if ($names) {
-            return implode(', ', array_unique($names));
-        }
     }
 
-    return '';
+    return implode(', ', array_unique($names));
 }
 
 function extract_custom_option_ids(mixed $value): string

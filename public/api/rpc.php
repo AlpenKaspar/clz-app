@@ -313,51 +313,6 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     ];
 }
 
-function rpc_ministry_values(array $row, array $custom): array
-{
-    $values = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
-    foreach ($custom as $label => $value) {
-        $labelKey = strtoupper(rpc_str($label));
-        if ($labelKey === 'LEITERSCHAFT') {
-            continue;
-        }
-        $isMinistryField = str_contains($labelKey, 'MITARBEIT')
-            || str_contains($labelKey, 'TEAM')
-            || str_contains($labelKey, 'DIENST')
-            || str_contains($labelKey, 'RESSORT');
-        if (!$isMinistryField) {
-            continue;
-        }
-        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
-            if (!in_array($item, $values, true)) {
-                $values[] = $item;
-            }
-        }
-    }
-    return $values;
-}
-
-function rpc_next_step_values(array $custom): array
-{
-    $values = [];
-    foreach ($custom as $label => $value) {
-        $labelKey = strtoupper(rpc_str($label));
-        $isNextStepField = str_contains($labelKey, 'KURSE')
-            || str_contains($labelKey, 'TAUFE')
-            || str_contains($labelKey, 'NEXT')
-            || str_contains($labelKey, 'SCHRITT');
-        if (!$isNextStepField) {
-            continue;
-        }
-        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
-            if (!in_array($item, $values, true)) {
-                $values[] = $item;
-            }
-        }
-    }
-    return $values;
-}
-
 function rpc_is_category(array $contact, string $category): bool
 {
     return rpc_lower(rpc_str($contact['category'] ?? '')) === rpc_lower($category);
@@ -587,11 +542,8 @@ function rpc_person_extra(string $personId, array $user = []): array
         $extra[] = $section;
     }
 
-    $enrichment = rpc_person_enrichment($personId);
-    $customMap = is_array($enrichment[0] ?? null) ? $enrichment[0] : [];
-    $ministryValues = rpc_ministry_values($row, $customMap);
-    if ($ministryValues) {
-        $extra[] = rpc_detail('Mitarbeit', implode(', ', $ministryValues));
+    if (rpc_str($row['departments'] ?? '') !== '') {
+        $extra[] = rpc_detail('Mitarbeit', rpc_str($row['departments'] ?? ''));
     }
 
     if (rpc_str($row['date_added'] ?? '') !== '') {
