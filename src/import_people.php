@@ -426,6 +426,20 @@ function clean_department_value(mixed $value): string
                 if ($name !== '') {
                     $names[] = $name;
                 }
+                foreach (['sub_department', 'sub_departments', 'position', 'positions'] as $nestedKey) {
+                    if (!isset($item[$nestedKey])) {
+                        continue;
+                    }
+                    foreach (normalize_collection($item[$nestedKey]) as $nested) {
+                        if (!is_array($nested)) {
+                            continue;
+                        }
+                        $nestedName = normalize_string((string) ($nested['name'] ?? ($nested['title'] ?? '')));
+                        if ($nestedName !== '') {
+                            $names[] = $nestedName;
+                        }
+                    }
+                }
                 continue;
             }
             if (is_scalar($item)) {
@@ -507,6 +521,17 @@ function clean_picture_url(mixed $value): string
 
 function parse_elvanto_date(mixed $value): ?string
 {
+    if (is_array($value)) {
+        foreach (['date', 'birthday', 'value', 'name'] as $key) {
+            if (isset($value[$key])) {
+                $parsed = parse_elvanto_date($value[$key]);
+                if ($parsed !== null) {
+                    return $parsed;
+                }
+            }
+        }
+        return null;
+    }
     $raw = trim((string) $value);
     if ($raw === '') {
         return null;
@@ -523,6 +548,17 @@ function parse_elvanto_date(mixed $value): ?string
 
 function parse_elvanto_datetime(mixed $value): ?string
 {
+    if (is_array($value)) {
+        foreach (['datetime', 'date_time', 'date', 'value', 'name'] as $key) {
+            if (isset($value[$key])) {
+                $parsed = parse_elvanto_datetime($value[$key]);
+                if ($parsed !== null) {
+                    return $parsed;
+                }
+            }
+        }
+        return null;
+    }
     $raw = trim((string) $value);
     if ($raw === '') {
         return null;

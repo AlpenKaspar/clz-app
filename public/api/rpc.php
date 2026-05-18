@@ -239,9 +239,12 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $listDisplay = trim($last . ' ' . ($preferred ?: $first)) ?: $display;
     $cityLine = trim(rpc_str($row['home_postcode'] ?? '') . ' ' . rpc_str($row['home_city'] ?? ''));
     $category = rpc_str($row['category_name'] ?? '');
-    $birthday = rpc_str($row['birthday'] ?? '');
+    $birthday = rpc_normalize_dashboard_date(
+        rpc_str($row['birthday'] ?? '') ?: rpc_custom_first_value($custom, ['BIRTHDAY', 'GEBURTSDATUM'])
+    );
     $age = rpc_age($birthday);
-    $departmentsValues = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
+    $gender = rpc_str($row['gender'] ?? '') ?: rpc_custom_first_value($custom, ['GENDER', 'GESCHLECHT']);
+    $departmentsValues = rpc_ministry_values($row, $custom);
     $leaderships = rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '');
     $kgGroupValues = $groups['groups'] ?? [];
     $kgLeadGroupValues = $groups['leads'] ?? [];
@@ -273,7 +276,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'mobile' => rpc_str($row['mobile'] ?? ''),
         'category' => $category,
         'familyId' => rpc_str($row['family_id'] ?? ''),
-        'gender' => rpc_str($row['gender'] ?? ''),
+        'gender' => $gender,
         'birthday' => $birthday,
         'dateAdded' => $dateAdded,
         'age' => $age,
@@ -298,7 +301,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'kgLeadGroupValues' => $kgLeadGroupValues,
         'kgAssistantGroupValues' => $kgAssistantGroupValues,
         'leaderships' => $leaderships,
-        'nextStepValues' => rpc_split_multi_value($custom['KURSE / TAUFE'] ?? ''),
+        'nextStepValues' => rpc_next_step_values($custom),
         'kidsChurchValues' => rpc_split_multi_value($custom['KIDS & PROMISELAND'] ?? ''),
         'youthYpgValues' => rpc_split_multi_value($custom['JUNGE ERWACHSENE'] ?? ''),
         'new12' => rpc_date_within_months($dateAdded, 12),
@@ -311,6 +314,87 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'birthdayWeek' => rpc_birthday_week($birthdayParts),
         'birthdayMonthFlag' => rpc_birthday_month($birthdayParts),
     ];
+}
+
+function rpc_custom_first_value(array $custom, array $keys): string
+{
+    $wanted = array_flip(array_map(static fn(string $key): string => strtoupper($key), $keys));
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        if (isset($wanted[$labelKey]) && rpc_str($value) !== '') {
+            return rpc_str($value);
+        }
+    }
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        foreach ($wanted as $key => $_) {
+            if (str_contains($labelKey, $key) && rpc_str($value) !== '') {
+                return rpc_str($value);
+            }
+        }
+    }
+    return '';
+}
+
+function rpc_normalize_dashboard_date(string $value): string
+{
+    $raw = trim($value);
+    if ($raw === '') {
+        return '';
+    }
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $raw, $m)) {
+        return "{$m[1]}-{$m[2]}-{$m[3]}";
+    }
+    if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $raw, $m)) {
+        return "{$m[3]}-{$m[2]}-{$m[1]}";
+    }
+    $ts = strtotime($raw);
+    return $ts ? date('Y-m-d', $ts) : $raw;
+}
+
+function rpc_ministry_values(array $row, array $custom): array
+{
+    $values = rpc_split_multi_value(rpc_str($row['departments'] ?? ''));
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        if ($labelKey === 'LEITERSCHAFT') {
+            continue;
+        }
+        $isMinistryField = str_contains($labelKey, 'MITARBEIT')
+            || str_contains($labelKey, 'TEAM')
+            || str_contains($labelKey, 'DIENST')
+            || str_contains($labelKey, 'RESSORT');
+        if (!$isMinistryField) {
+            continue;
+        }
+        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
+            if (!in_array($item, $values, true)) {
+                $values[] = $item;
+            }
+        }
+    }
+    return $values;
+}
+
+function rpc_next_step_values(array $custom): array
+{
+    $values = [];
+    foreach ($custom as $label => $value) {
+        $labelKey = strtoupper(rpc_str($label));
+        $isNextStepField = str_contains($labelKey, 'KURSE')
+            || str_contains($labelKey, 'TAUFE')
+            || str_contains($labelKey, 'NEXT')
+            || str_contains($labelKey, 'SCHRITT');
+        if (!$isNextStepField) {
+            continue;
+        }
+        foreach (rpc_split_multi_value(rpc_str($value)) as $item) {
+            if (!in_array($item, $values, true)) {
+                $values[] = $item;
+            }
+        }
+    }
+    return $values;
 }
 
 function rpc_is_category(array $contact, string $category): bool
@@ -416,7 +500,26 @@ function rpc_counts_to_items(array $counts): array
 
 function rpc_contact_location(array $contact): string
 {
-    return trim(rpc_str($contact['postcode'] ?? '') . ' ' . rpc_str($contact['city'] ?? ''));
+    $place = trim(rpc_str($contact['postcode'] ?? '') . ' ' . rpc_str($contact['city'] ?? ''));
+    return implode(', ', array_values(array_filter([rpc_str($contact['address'] ?? ''), $place])));
+}
+
+function rpc_family_relationship_kind(string $relationship): string
+{
+    $relation = rpc_lower($relationship);
+    if (str_contains($relation, 'haupt')) {
+        return 'main';
+    }
+    if (str_contains($relation, 'ehe') || str_contains($relation, 'partner') || str_contains($relation, 'spouse')) {
+        return 'adult';
+    }
+    if (str_contains($relation, 'kind') || str_contains($relation, 'child')) {
+        return 'child';
+    }
+    if (str_contains($relation, 'einzel')) {
+        return 'single';
+    }
+    return 'other';
 }
 
 function rpc_prayer_member_payload(array $contact): array
@@ -439,14 +542,14 @@ function rpc_prayer_contact_allowed(array $contact): bool
 
 function rpc_prayer_member_role(string $relationship, bool $isSingle): string
 {
-    $relation = rpc_lower($relationship);
-    if ($isSingle || str_contains($relation, 'einzel')) {
+    $kind = rpc_family_relationship_kind($relationship);
+    if ($isSingle || $kind === 'single') {
         return 'Einzelperson';
     }
-    if (str_contains($relation, 'haupt') || str_contains($relation, 'ehe') || str_contains($relation, 'partner') || str_contains($relation, 'spouse')) {
+    if ($kind === 'main' || $kind === 'adult') {
         return 'Eltern';
     }
-    if (str_contains($relation, 'kind') || str_contains($relation, 'child')) {
+    if ($kind === 'child') {
         return 'Kind';
     }
     return 'Familienmitglied';
@@ -2295,25 +2398,43 @@ function rpc_dashboard(): array
     $last6 = rpc_people_added_between('-1 year -6 months', '-1 year');
     $last12 = rpc_people_added_between('-2 years', '-1 year');
 
-    $households = [];
-    foreach ($gemeinde as $contact) {
-        $key = rpc_str($contact['familyId'] ?? '') ?: 'single_' . rpc_str($contact['id'] ?? '');
-        if ($key === 'single_') {
+    $householdMap = [];
+    $activeHouseholdIds = [];
+    foreach ($contacts as $contact) {
+        $familyId = rpc_str($contact['familyId'] ?? '');
+        $personId = rpc_str($contact['id'] ?? '');
+        $key = $familyId !== '' ? $familyId : ($personId !== '' ? 'einzel_' . $personId : '');
+        if ($key === '') {
             continue;
         }
-        $households[$key] ??= ['adults' => 0, 'kids' => 0, 'count' => 0];
+        $householdMap[$key] ??= ['adults' => 0, 'kids' => 0, 'count' => 0];
         if ($contact['isChild'] ?? false) {
-            $households[$key]['kids']++;
+            $householdMap[$key]['kids']++;
         } else {
-            $households[$key]['adults']++;
+            $householdMap[$key]['adults']++;
         }
-        $households[$key]['count']++;
+        $householdMap[$key]['count']++;
+
+        if (rpc_is_category($contact, 'gemeinde') && (($contact['isFamilyMain'] ?? false) || ($contact['isSingle'] ?? false))) {
+            $activeHouseholdIds[$key] = true;
+        }
     }
+
     $householdDetail = [];
-    foreach ($households as $item) {
+    $familyHouseholds = 0;
+    $singleHouseholds = 0;
+    foreach ($householdMap as $key => $item) {
+        if (!isset($activeHouseholdIds[$key])) {
+            continue;
+        }
         $adultsCount = (int) $item['adults'];
         $kidsCount = (int) $item['kids'];
-        $typeKey = $kidsCount > 0 ? "{$adultsCount}_{$kidsCount}" : ($adultsCount === 1 ? 'single' : 'couple');
+        if ((int) $item['count'] === 1 && $adultsCount === 1 && $kidsCount === 0) {
+            $singleHouseholds++;
+        } else {
+            $familyHouseholds++;
+        }
+        $typeKey = "{$adultsCount}_{$kidsCount}";
         $householdDetail[$typeKey] ??= ['key' => $typeKey, 'adults' => $adultsCount, 'kids' => $kidsCount, 'count' => 0];
         $householdDetail[$typeKey]['count']++;
     }
@@ -2373,9 +2494,9 @@ function rpc_dashboard(): array
         ],
         'male' => rpc_count_contacts($gemeinde, static fn(array $c): bool => rpc_gender_kind(rpc_str($c['gender'] ?? '')) === 'male'),
         'female' => rpc_count_contacts($gemeinde, static fn(array $c): bool => rpc_gender_kind(rpc_str($c['gender'] ?? '')) === 'female'),
-        'families' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['isFamilyMain'] ?? false)),
-        'singles' => rpc_count_contacts($gemeinde, static fn(array $c): bool => (bool) ($c['isSingle'] ?? false)),
-        'households' => count($households),
+        'families' => $familyHouseholds,
+        'singles' => $singleHouseholds,
+        'households' => $familyHouseholds + $singleHouseholds,
         'householdDetail' => array_values($householdDetail),
         'age0_20' => rpc_age_range_count($gemeinde, 0, 20),
         'age21_40' => rpc_age_range_count($gemeinde, 21, 40),
@@ -3162,14 +3283,26 @@ function rpc_people_family_values(): array
         $adultMembers = array_values(array_filter($members, static function (array $member): bool {
             $relationship = rpc_str($member['relationship'] ?? '');
             $age = rpc_age(rpc_str($member['birthday'] ?? ''));
-            return $relationship !== 'Kind' && ($age === null || $age >= 16);
+            return rpc_family_relationship_kind($relationship) !== 'child' && ($age === null || $age >= 16);
         }));
-        $main = $adultMembers[0] ?? ($members[0] ?? null);
+        $main = null;
+        foreach ($members as $member) {
+            if (rpc_family_relationship_kind(rpc_str($member['relationship'] ?? '')) === 'main') {
+                $main = $member;
+                break;
+            }
+        }
+        $main ??= $adultMembers[0] ?? ($members[0] ?? null);
         $mainPersonId = $main ? rpc_str($main['person_id'] ?? '') : '';
-        $isSingleFamily = rpc_starts_with($familyId, 'Einzel_') || count($members) === 1;
-        $hasKids = count($members) > count($adultMembers);
+        $isSingleFamily = rpc_starts_with(rpc_lower($familyId), 'einzel_') || count($members) === 1;
+        $kidsCount = 0;
+        foreach ($members as $member) {
+            if (rpc_family_relationship_kind(rpc_str($member['relationship'] ?? '')) === 'child') {
+                $kidsCount++;
+            }
+        }
         $adultCount = count($adultMembers);
-        $householdTypeKey = $isSingleFamily ? 'single' : ($hasKids ? 'family_with_kids' : ($adultCount > 1 ? 'couple' : 'family'));
+        $householdTypeKey = "{$adultCount}_{$kidsCount}";
 
         foreach ($members as $member) {
             $personId = rpc_str($member['person_id'] ?? '');
