@@ -688,13 +688,61 @@ function rpc_person_extra(string $personId, array $user = []): array
         'FIRSTNAME', 'LASTNAME', 'PREFERRED NAME', 'PICTURE', 'EMAIL', 'PHONE', 'MOBILE',
         'HOME ADDRESS', 'HOME CITY', 'HOME POSTCODE', 'GENDER', 'BIRTHDAY', 'FAMILY ID',
     ]);
+    $keyDetails = [
+        'type' => '',
+        'number' => '',
+        'depot' => '',
+        'returnedAt' => '',
+    ];
+    $pendingReturnedAt = null;
     foreach ($custom as $field) {
         $label = rpc_str($field['field_name'] ?? '');
         $labelKey = strtoupper($label);
         $value = rpc_str($field['field_value'] ?? '');
-        if ($value !== '' && !isset($hiddenLabels[$labelKey])) {
-            $extra[] = rpc_detail($label, $value);
+        if ($value === '' || isset($hiddenLabels[$labelKey])) {
+            continue;
         }
+        $normalizedLabel = rpc_person_extra_label_key($label);
+        if ($normalizedLabel === 'clz schluessel') {
+            $keyDetails['type'] = rpc_person_extra_clean_key_type($value);
+            continue;
+        }
+        if ($normalizedLabel === 'clz schluessel nr') {
+            $keyDetails['number'] = $value;
+            continue;
+        }
+        if ($normalizedLabel === 'schluessel depot') {
+            $keyDetails['depot'] = $value;
+            continue;
+        }
+        if ($normalizedLabel === 'abgabedatum') {
+            $pendingReturnedAt = rpc_person_extra_detail($label, $value);
+            $keyDetails['returnedAt'] = rpc_person_extra_format_value($label, $value);
+            continue;
+        }
+        $extra[] = rpc_person_extra_detail($label, $value);
+    }
+
+    if ($keyDetails['type'] !== '' || $keyDetails['number'] !== '' || $keyDetails['depot'] !== '') {
+        $lines = [];
+        if ($keyDetails['type'] !== '') {
+            $lines[] = $keyDetails['type'];
+        }
+        if ($keyDetails['number'] !== '') {
+            $lines[] = 'CLZ-Schlüssel-Nr.: ' . $keyDetails['number'];
+        }
+        if ($keyDetails['depot'] !== '') {
+            $lines[] = 'Schlüssel-Depot: ' . $keyDetails['depot'];
+        }
+        if ($keyDetails['returnedAt'] !== '') {
+            $lines[] = 'Abgabedatum: ' . $keyDetails['returnedAt'];
+        }
+        $extra[] = array_merge(
+            rpc_detail('CLZ-Schlüssel', implode("\n", $lines)),
+            ['preline' => true, 'copyValue' => implode("\n", $lines)]
+        );
+    } elseif ($pendingReturnedAt !== null) {
+        $extra[] = $pendingReturnedAt;
     }
 
     usort($extra, static function (array $a, array $b): int {
@@ -702,6 +750,7 @@ function rpc_person_extra(string $personId, array $user = []): array
             'group-section' => 0,
             'Geburtsdatum' => 10,
             'Mitarbeit' => 20,
+            'CLZ-Schlüssel' => 25,
             'KURSE / TAUFE' => 30,
             'KIDS & PROMISELAND' => 40,
             'JUNGE ERWACHSENE' => 50,
@@ -713,6 +762,49 @@ function rpc_person_extra(string $personId, array $user = []): array
         return $rankA <=> $rankB ?: strcasecmp($labelA, $labelB);
     });
     return $extra;
+}
+
+function rpc_person_extra_detail(string $label, string $value): array
+{
+    return rpc_detail($label, rpc_person_extra_format_value($label, $value));
+}
+
+function rpc_person_extra_label_key(string $label): string
+{
+    $key = str_replace(['-', '_'], ' ', rpc_search_text($label));
+    return trim(preg_replace('/\s+/', ' ', $key) ?? $key);
+}
+
+function rpc_person_extra_format_value(string $label, string $value): string
+{
+    if (!rpc_person_extra_is_date_label($label)) {
+        return $value;
+    }
+    return rpc_person_extra_format_date($value);
+}
+
+function rpc_person_extra_is_date_label(string $label): bool
+{
+    $key = rpc_person_extra_label_key($label);
+    return str_contains($key, 'datum') || $key === 'besucht am';
+}
+
+function rpc_person_extra_format_date(string $value): string
+{
+    $raw = rpc_str($value);
+    if ($raw === '') {
+        return '';
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $raw)) {
+        return rpc_ui_date(substr($raw, 0, 10));
+    }
+    return $raw;
+}
+
+function rpc_person_extra_clean_key_type(string $value): string
+{
+    $raw = rpc_str($value);
+    return rpc_lower($raw) === 'schluessel' ? 'Schlüssel' : $raw;
 }
 
 function rpc_person_enrichment(string $personId): array
