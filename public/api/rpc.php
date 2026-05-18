@@ -3294,7 +3294,7 @@ function rpc_people_family_values(): array
         }
         $main ??= $adultMembers[0] ?? ($members[0] ?? null);
         $mainPersonId = $main ? rpc_str($main['person_id'] ?? '') : '';
-        $isSingleFamily = rpc_starts_with(rpc_lower($familyId), 'einzel_') || count($members) === 1;
+        $isSingleFamily = rpc_starts_with(rpc_lower(rpc_str($familyId)), 'einzel_') || count($members) === 1;
         $kidsCount = 0;
         foreach ($members as $member) {
             if (rpc_family_relationship_kind(rpc_str($member['relationship'] ?? '')) === 'child') {
