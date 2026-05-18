@@ -10412,6 +10412,15 @@
         return String(currentSongTextState?.title || currentSongData?.songTitle || 'Song').trim() || 'Song';
       }
 
+      function currentSongPrintKeyLabel_() {
+        if (!currentSongTextState) return '';
+        const baseKey = normalizeSongKeyName_(currentSongTextState.baseKey || '');
+        if (!baseKey) return '';
+        const key = shiftedSongKey_(baseKey, currentSongTextState.transpose || 0) || baseKey;
+        const mode = detectSongKeyMode_(currentSongTextState.baseKey || '') === 'Minor' ? 'Moll' : 'Dur';
+        return `${key} ${mode}`;
+      }
+
       function currentSongSequenceSteps_() {
         const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
         const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
@@ -10431,7 +10440,7 @@
       function songSequenceExportHtml_() {
         const steps = currentSongSequenceSteps_().map(step => String(step || '').trim()).filter(Boolean);
         if (!steps.length) return '';
-        return `<div class="song-print-sequence"><div class="song-print-sequence-title">Ablauf</div><ol>${steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol></div>`;
+        return `<div class="song-print-sequence"><div class="song-print-sequence-title">Ablauf</div><div class="song-print-sequence-steps">${steps.map(step => `<span class="song-print-sequence-step">${escapeHtml(step)}</span>`).join('')}</div></div>`;
       }
 
       function songSafeFileName_(name, ext) {
@@ -10619,9 +10628,11 @@
       function printSongTextAsPdf_() {
         if (!currentSongTextState) return;
         const title = songSheetTitle_();
+        const keyLabel = currentSongPrintKeyLabel_();
         const html = renderChordSheetHtml_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
         const sequenceHtml = currentSongTextState.includeSequence ? songSequenceExportHtml_() : '';
-        const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 18px}.song-print-sequence{margin:0 0 22px;padding:12px 14px;border:1px solid #dbe4ef;border-radius:12px;background:#f8fafc}.song-print-sequence-title{font-size:12px;font-weight:800;color:#2563eb;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}.song-print-sequence ol{margin:0;padding-left:20px}.song-print-sequence li{margin:0 0 4px}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}}</style></head><body><div class="song-sheet-print-title">${escapeHtml(title)}</div>${sequenceHtml}${html}</body></html>`;
+        const keyHtml = keyLabel ? `<div class="song-print-key">Tonart: ${escapeHtml(keyLabel)}</div>` : '';
+        const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-print-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 14px}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 4px}.song-print-key{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em}.song-print-sequence{flex:0 0 auto;max-width:48%;margin:0;padding:7px 9px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc;text-align:right}.song-print-sequence-title{font-size:9px;font-weight:900;color:#2563eb;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}.song-print-sequence-steps{display:flex;flex-wrap:wrap;gap:3px 6px;justify-content:flex-end;font-size:9px;line-height:1.25;color:#334155}.song-print-sequence-step{white-space:nowrap}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}.song-print-sequence{max-width:50%}}</style></head><body><div class="song-print-head"><div><div class="song-sheet-print-title">${escapeHtml(title)}</div>${keyHtml}</div>${sequenceHtml}</div>${html}</body></html>`;
         printSongHtmlDocument_(documentHtml, title);
       }
 
