@@ -12,6 +12,7 @@
   <link rel="icon" type="image/x-icon" href="https://rollsimply.com/favicon.ico">
   <link rel="apple-touch-icon" href="https://rollsimply.com/elvanto-icon.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="/vendor/chordsheetjs.bundle.min.js"></script>
 
   <style>
     :root {
@@ -317,6 +318,72 @@
       height: 30px;
       border-radius: 10px;
     }
+    .song-text-viewer-controls {
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid var(--border-color);
+      background:rgba(255,255,255,.55);
+    }
+    .song-transpose-row,
+    .song-export-row {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .song-transpose-stepper {
+      display:inline-flex;
+      align-items:center;
+      gap:2px;
+      padding:3px;
+      border:1px solid var(--border-color);
+      border-radius:999px;
+      background:var(--card-bg);
+    }
+    .song-transpose-stepper button,
+    .song-transpose-reset,
+    .song-export-btn {
+      border:1px solid var(--border-color);
+      background:var(--card-bg);
+      color:var(--text-main);
+      border-radius:999px;
+      min-height:32px;
+      padding:0 11px;
+      font-size:12px;
+      font-weight:850;
+      cursor:pointer;
+      font-family:inherit;
+    }
+    .song-transpose-stepper button {
+      width:32px;
+      padding:0;
+    }
+    .song-transpose-value {
+      min-width:44px;
+      text-align:center;
+      font-size:12px;
+      font-weight:900;
+      color:var(--primary);
+    }
+    .song-key-select {
+      min-height:34px;
+      border:1px solid var(--border-color);
+      border-radius:999px;
+      background:var(--card-bg);
+      color:var(--text-main);
+      padding:0 12px;
+      font-size:12px;
+      font-weight:800;
+      font-family:inherit;
+    }
+    .song-export-btn {
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      text-decoration:none;
+    }
     .song-text-viewer-body {
       padding: 12px;
       max-height: 68vh;
@@ -365,6 +432,54 @@
       font-weight: 800;
       line-height: 1.45;
     }
+    .song-sheet-rendered {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:13px;
+      line-height:1.45;
+    }
+    .song-sheet-rendered .title {
+      display:none;
+    }
+    .song-sheet-rendered .paragraph {
+      margin:0 0 16px;
+    }
+    .song-sheet-rendered .row {
+      display:flex;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      min-height:20px;
+    }
+    .song-sheet-rendered .column {
+      display:inline-flex;
+      flex-direction:column;
+      align-items:flex-start;
+      min-width:0;
+      margin-right:1px;
+    }
+    .song-sheet-rendered .chord {
+      min-height:17px;
+      color:var(--primary);
+      font-weight:900;
+      line-height:1.1;
+      padding-right:2px;
+    }
+    .song-sheet-rendered .lyrics {
+      white-space:pre;
+      min-height:18px;
+    }
+    .song-sheet-rendered .label {
+      margin:14px 0 5px;
+      color:var(--primary);
+      font-size:12px;
+      font-weight:900;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+    .song-sheet-print-title {
+      margin:0 0 12px;
+      font-size:18px;
+      font-weight:900;
+    }
     .song-asset-group {
       margin-top:12px;
     }
@@ -409,6 +524,16 @@
     body.dark-mode .song-key-label { color:#e2e8f0; }
     body.dark-mode .song-text-viewer { background:rgba(15,23,42,.58); border-color:rgba(148,163,184,.16); }
     body.dark-mode .song-text-viewer-head { border-color:rgba(148,163,184,.16); }
+    body.dark-mode .song-text-viewer-controls { background:rgba(15,23,42,.36); border-color:rgba(148,163,184,.16); }
+    body.dark-mode .song-transpose-stepper,
+    body.dark-mode .song-transpose-stepper button,
+    body.dark-mode .song-transpose-reset,
+    body.dark-mode .song-export-btn,
+    body.dark-mode .song-key-select {
+      background:rgba(15,23,42,.70);
+      border-color:rgba(148,163,184,.18);
+      color:#e2e8f0;
+    }
     body.dark-mode .song-text-viewer-body { background:rgba(2,6,23,.30); }
     body.dark-mode .song-chart-meta { background:rgba(96,165,250,.14); color:#93c5fd; }
     body.dark-mode .song-gender-key-box { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); }
@@ -7868,6 +7993,7 @@
       let currentSongSequenceExpanded = false;
       let currentSongNotesExpanded = false;
       let currentSongFilesExpanded = false;
+      let currentSongTextState = null;
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
       const CONTACT_PAGE_SIZE = 100;
@@ -9858,7 +9984,7 @@
           const url = String(href || '');
           const text = String(label || 'Noten');
           if (isSongTextViewerUrl_(url)) {
-            return `<button class="song-note-chip" type="button" onclick="openSongTextViewer_('${escapeAttr(url)}','${escapeAttr(text)}')">${escapeHtml(text)}</button>`;
+            return `<button class="song-note-chip" type="button" onclick="openSongTextViewer_('${escapeAttr(url)}','${escapeAttr(text)}','','${escapeAttr(text)}')">${escapeHtml(text)}</button>`;
           }
           return `<a class="song-note-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
         };
@@ -9926,10 +10052,217 @@
         return html.join('');
       }
 
-      async function openSongTextViewer_(url, label) {
+      const SONG_KEY_OPTIONS_ = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+      const SONG_KEY_STEPS_ = { C: 0, 'B#': 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, 'E#': 5, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11 };
+
+      function normalizeSongSheetText_(rawText) {
+        let text = String(rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (/<[a-z][\s\S]*>/i.test(text) && !/\[[A-G](?:#|b)?/i.test(text)) {
+          const doc = new DOMParser().parseFromString(text, 'text/html');
+          text = doc.body ? doc.body.textContent || '' : text.replace(/<[^>]+>/g, '');
+        }
+        return text.trim();
+      }
+
+      function normalizeSongKeyName_(value) {
+        const match = String(value || '').trim().match(/[A-G](?:#|b)?m?/i);
+        if (!match) return '';
+        const key = match[0].replace(/^([a-g])/, m => m.toUpperCase());
+        return key.endsWith('m') ? key.slice(0, -1) : key;
+      }
+
+      function songKeyDelta_(fromKey, toKey) {
+        const from = normalizeSongKeyName_(fromKey);
+        const to = normalizeSongKeyName_(toKey);
+        if (!(from in SONG_KEY_STEPS_) || !(to in SONG_KEY_STEPS_)) return 0;
+        let delta = SONG_KEY_STEPS_[to] - SONG_KEY_STEPS_[from];
+        while (delta > 6) delta -= 12;
+        while (delta < -6) delta += 12;
+        return delta;
+      }
+
+      function shiftedSongKey_(fromKey, steps) {
+        const from = normalizeSongKeyName_(fromKey) || 'C';
+        const fromStep = SONG_KEY_STEPS_[from] ?? 0;
+        const next = (fromStep + Number(steps || 0) + 120) % 12;
+        return SONG_KEY_OPTIONS_.find(key => SONG_KEY_STEPS_[key] === next && !key.includes('#')) || SONG_KEY_OPTIONS_.find(key => SONG_KEY_STEPS_[key] === next) || '';
+      }
+
+      function songSheetTitle_() {
+        return String(currentSongTextState?.title || currentSongData?.songTitle || 'Song').trim() || 'Song';
+      }
+
+      function songSafeFileName_(name, ext) {
+        const base = String(name || 'song').normalize('NFKD').replace(/[^\w\s.-]+/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 80) || 'song';
+        return `${base}.${ext}`;
+      }
+
+      function ensureChordSheetJs_() {
+        return !!(window.ChordSheetJS && window.ChordSheetJS.ChordProParser && window.ChordSheetJS.ChordProFormatter);
+      }
+
+      function parseChordSheet_(text) {
+        if (!ensureChordSheetJs_()) throw new Error('ChordSheetJS ist nicht geladen.');
+        return new window.ChordSheetJS.ChordProParser().parse(text);
+      }
+
+      function transposeChordNameFallback_(chord, steps) {
+        if (!steps) return chord;
+        return String(chord || '').replace(/\b([A-G](?:#|b)?)([^/\s]*)(?:\/([A-G](?:#|b)?))?/g, (match, root, suffix, bass) => {
+          const nextRoot = shiftedSongKey_(root, steps) || root;
+          const nextBass = bass ? '/' + (shiftedSongKey_(bass, steps) || bass) : '';
+          return nextRoot + String(suffix || '') + nextBass;
+        });
+      }
+
+      function transposeChordProText_(text, steps) {
+        const clean = normalizeSongSheetText_(text);
+        if (!clean) return '';
+        try {
+          const song = parseChordSheet_(clean);
+          const transposed = Number(steps || 0) ? song.transpose(Number(steps || 0)) : song;
+          return new window.ChordSheetJS.ChordProFormatter().format(transposed);
+        } catch (err) {
+          return clean.replace(/\[([^\]]+)\]/g, (full, chord) => `[${transposeChordNameFallback_(chord, Number(steps || 0))}]`);
+        }
+      }
+
+      function renderChordSheetHtml_(text, steps) {
+        const chordPro = transposeChordProText_(text, steps);
+        try {
+          const song = parseChordSheet_(chordPro);
+          return `<div class="song-sheet-rendered">${new window.ChordSheetJS.HtmlDivFormatter().format(song)}</div>`;
+        } catch (err) {
+          return renderSongTextChart_(chordPro);
+        }
+      }
+
+      function downloadTextFile_(filename, text, type = 'text/plain;charset=utf-8') {
+        const blob = new Blob([text], { type });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 800);
+      }
+
+      function renderSongTextViewerControls_() {
+        const state = currentSongTextState || {};
+        const baseKey = normalizeSongKeyName_(state.baseKey || '') || '';
+        const currentKey = baseKey ? shiftedSongKey_(baseKey, state.transpose || 0) : '';
+        const transposeLabel = Number(state.transpose || 0) > 0 ? `+${state.transpose}` : String(state.transpose || 0);
+        return `
+          <div class="song-text-viewer-controls">
+            <div class="song-transpose-row">
+              <span class="song-chart-meta">Tonart: ${escapeHtml(currentKey || baseKey || '-')}</span>
+              <span class="song-transpose-stepper">
+                <button type="button" onclick="changeSongTextTranspose_(-1)" title="Halbton tiefer" aria-label="Halbton tiefer"><i class="fas fa-minus"></i></button>
+                <span class="song-transpose-value">${escapeHtml(transposeLabel)}</span>
+                <button type="button" onclick="changeSongTextTranspose_(1)" title="Halbton hoeher" aria-label="Halbton hoeher"><i class="fas fa-plus"></i></button>
+              </span>
+              <select class="song-key-select" onchange="setSongTextTargetKey_(this.value)" aria-label="Zieltonart">
+                <option value="">Zieltonart</option>
+                ${SONG_KEY_OPTIONS_.map(key => `<option value="${escapeAttr(key)}" ${currentKey === key ? 'selected' : ''}>${escapeHtml(key)}</option>`).join('')}
+              </select>
+              <button class="song-transpose-reset" type="button" onclick="resetSongTextTranspose_()">Original</button>
+            </div>
+            <div class="song-export-row">
+              <button class="song-export-btn" type="button" onclick="downloadSongTextAsOnSong_()"><i class="fas fa-file-arrow-down"></i><span>OnSong</span></button>
+              <button class="song-export-btn" type="button" onclick="printSongTextAsPdf_()"><i class="fas fa-file-pdf"></i><span>PDF</span></button>
+            </div>
+          </div>
+        `;
+      }
+
+      function refreshSongTextViewer_() {
+        const slot = document.getElementById('song-text-viewer-slot');
+        if (!slot || !currentSongTextState) return;
+        const state = currentSongTextState;
+        const title = String(state.label || 'Songtext').trim() || 'Songtext';
+        slot.innerHTML = `
+          <div class="song-text-viewer">
+            <div class="song-text-viewer-head">
+              <span><i class="fas fa-align-left"></i> ${escapeHtml(title)}</span>
+              <span class="song-text-viewer-actions">
+                ${state.url ? `<a class="icon-btn" href="${escapeAttr(state.url)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ``}
+                <button class="icon-btn" type="button" onclick="closeSongTextViewer_()" title="Schliessen" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
+              </span>
+            </div>
+            ${renderSongTextViewerControls_()}
+            <div class="song-text-viewer-body">${renderChordSheetHtml_(state.rawText || '', state.transpose || 0)}</div>
+          </div>
+        `;
+      }
+
+      function changeSongTextTranspose_(delta) {
+        if (!currentSongTextState) return;
+        currentSongTextState.transpose = Math.max(-11, Math.min(11, Number(currentSongTextState.transpose || 0) + Number(delta || 0)));
+        refreshSongTextViewer_();
+      }
+
+      function resetSongTextTranspose_() {
+        if (!currentSongTextState) return;
+        currentSongTextState.transpose = 0;
+        refreshSongTextViewer_();
+      }
+
+      function setSongTextTargetKey_(key) {
+        if (!currentSongTextState) return;
+        const baseKey = normalizeSongKeyName_(currentSongTextState.baseKey || '');
+        currentSongTextState.transpose = baseKey ? songKeyDelta_(baseKey, key) : 0;
+        refreshSongTextViewer_();
+      }
+
+      function downloadSongTextAsOnSong_() {
+        if (!currentSongTextState) return;
+        const chordPro = transposeChordProText_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
+        const key = normalizeSongKeyName_(currentSongTextState.baseKey || '') ? '-' + shiftedSongKey_(currentSongTextState.baseKey, currentSongTextState.transpose || 0) : '';
+        downloadTextFile_(songSafeFileName_(`${songSheetTitle_()}${key}`, 'chopro'), chordPro);
+      }
+
+      function printSongTextAsPdf_() {
+        if (!currentSongTextState) return;
+        const title = songSheetTitle_();
+        const html = renderChordSheetHtml_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
+        const win = window.open('', '_blank', 'noopener');
+        if (!win) return;
+        win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 18px}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}}</style></head><body><div class="song-sheet-print-title">${escapeHtml(title)}</div>${html}</body></html>`);
+        win.document.close();
+        win.focus();
+        setTimeout(() => win.print(), 250);
+      }
+
+      function buildSongArrangementChordProText_(song, arrangement) {
+        const title = String(song?.songTitle || song?.title || '').trim();
+        const key = String(arrangement?.chordChartKey || arrangement?.keyName || song?.keyName || '').trim();
+        const bpm = String(arrangement?.bpm || song?.bpm || '').trim();
+        const copyright = String(arrangement?.copyright || '').trim();
+        const body = String(arrangement?.chordChart || arrangement?.lyrics || '').trim();
+        if (!body) return '';
+        const meta = [];
+        if (title) meta.push(`{title: ${title}}`);
+        if (key) meta.push(`{key: ${key}}`);
+        if (bpm) meta.push(`{tempo: ${bpm}}`);
+        if (copyright) meta.push(`{copyright: ${copyright}}`);
+        return `${meta.join('\n')}\n${body}`.trim();
+      }
+
+      function openSongArrangementTextViewer_() {
+        if (!currentSongData) return;
+        const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
+        const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
+        const text = buildSongArrangementChordProText_(currentSongData, arrangement);
+        if (!text) return;
+        openSongTextViewer_('', 'Akkorde & Text', text, arrangement?.chordChartKey || arrangement?.keyName || currentSongData?.keyName || '');
+      }
+
+      async function openSongTextViewer_(url, label, inlineText = '', baseKey = '') {
         const slot = document.getElementById('song-text-viewer-slot');
         if (!slot) {
-          window.open(url, '_blank', 'noopener');
+          if (url) window.open(url, '_blank', 'noopener');
           return;
         }
         const title = String(label || 'Songtext').trim() || 'Songtext';
@@ -9945,6 +10278,11 @@
             <div class="song-text-viewer-body"><div class="song-chart-line">Lade Songtext...</div></div>
           </div>
         `;
+        if (inlineText) {
+          currentSongTextState = { url: '', label: title, title: songSheetTitle_(), rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0 };
+          refreshSongTextViewer_();
+          return;
+        }
         try {
           const response = await fetch('/api/song-text.php?url=' + encodeURIComponent(url), {
             method: 'GET',
@@ -9955,9 +10293,10 @@
           if (!response.ok || data?.ok === false) {
             throw new Error(data?.detail || data?.error || ('HTTP ' + response.status));
           }
-          const body = slot.querySelector('.song-text-viewer-body');
-          if (body) body.innerHTML = renderSongTextChart_(data.text || '');
+          currentSongTextState = { url, label: title, title: songSheetTitle_(), rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0 };
+          refreshSongTextViewer_();
         } catch (err) {
+          currentSongTextState = null;
           const body = slot.querySelector('.song-text-viewer-body');
           if (body) {
             body.innerHTML = `<div class="song-chart-error">Konnte nicht direkt angezeigt werden.<br>${escapeHtml(normalizeErrMsg_(err))}</div><div style="margin-top:10px;"><a class="song-note-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener">Original öffnen</a></div>`;
@@ -9966,6 +10305,7 @@
       }
 
       function closeSongTextViewer_() {
+        currentSongTextState = null;
         const slot = document.getElementById('song-text-viewer-slot');
         if (slot) slot.innerHTML = '';
       }
@@ -9992,6 +10332,7 @@
         const allAssets = normalizeSongAssets_([...arrangementAssets, ...songAssets]);
         const ytUrl = resolveSongYoutubeUrl_(song, activeArrangement);
         const embedUrls = collectSongVideoEmbeds_(song, activeArrangement);
+        const hasArrangementText = !!buildSongArrangementChordProText_(song, activeArrangement);
         const heroMeta = [song.artist, song.album, song.ccliNumber ? `CCLI ${song.ccliNumber}` : ''].map(v => String(v || '').trim()).filter(Boolean).join(' · ');
         box.innerHTML = `
           <div class="profile-header song-detail-header song-detail-header-v2">
@@ -10058,6 +10399,7 @@
         const actions = document.getElementById('song-detail-actions');
         if (actions) {
           const html = `
+            ${hasArrangementText ? `<button class="btn btn-secondary" type="button" onclick="openSongArrangementTextViewer_()"><i class="fas fa-align-left"></i><span>Akkorde & Text</span></button>` : ``}
             ${renderGroupedSongAssets_(allAssets)}
             ${ytUrl ? `<a class="btn btn-secondary" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener"><i class="fab fa-youtube"></i><span>YouTube</span></a>` : ``}
           `;
