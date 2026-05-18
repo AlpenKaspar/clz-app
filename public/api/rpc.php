@@ -64,9 +64,9 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_adminStopImpersonation' => rpc_admin_stop_impersonation($user),
         'tools_installNightlyServerCacheRebuild' => rpc_nightly_cache_notice('install'),
         'tools_removeNightlyServerCacheRebuild' => rpc_nightly_cache_notice('remove'),
-        'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck()],
-        'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''))],
-        'prayerPools_get' => ['ok' => true, 'pools' => rpc_prayer_pools()],
+        'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck($user)],
+        'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''), $user)],
+        'prayerPools_get' => ['ok' => true, 'pools' => rpc_prayer_pools($user)],
         'prayerPools_getMembers' => ['ok' => true, 'members' => rpc_prayer_pool_members((string) ($args[0] ?? 'Kranke'))],
         'prayerPools_create' => rpc_prayer_pool_create($args[0] ?? [], $user),
         'prayerPools_delete' => rpc_prayer_pool_delete((string) ($args[0] ?? '')),
@@ -2596,10 +2596,10 @@ function rpc_save_user_smart_filters(mixed $payload, array $user): array
     return ['ok' => true];
 }
 
-function rpc_prayer_deck(): array
+function rpc_prayer_deck(array $user = []): array
 {
     $contacts = array_values(array_filter(
-        rpc_contacts_lite()['contacts'] ?? [],
+        rpc_contacts_lite($user)['contacts'] ?? [],
         static fn(array $c): bool => rpc_prayer_contact_allowed($c)
     ));
     $groups = [];
@@ -2681,7 +2681,7 @@ function rpc_prayer_deck(): array
     return $cards;
 }
 
-function rpc_prayer_deck_by_pool(string $poolName): array
+function rpc_prayer_deck_by_pool(string $poolName, array $user = []): array
 {
     $personIds = array_flip(array_map(
         static fn(array $m): string => rpc_str($m['personId'] ?? ''),
@@ -2691,7 +2691,7 @@ function rpc_prayer_deck_by_pool(string $poolName): array
         return [];
     }
 
-    return array_values(array_filter(rpc_prayer_deck(), static function (array $card) use ($personIds): bool {
+    return array_values(array_filter(rpc_prayer_deck($user), static function (array $card) use ($personIds): bool {
         foreach (($card['members'] ?? []) as $member) {
             if (isset($personIds[rpc_str($member['personId'] ?? '')])) {
                 return true;
@@ -2701,7 +2701,7 @@ function rpc_prayer_deck_by_pool(string $poolName): array
     }));
 }
 
-function rpc_prayer_pools(): array
+function rpc_prayer_pools(array $user = []): array
 {
     rpc_ensure_prayer_pool('Kranke');
     $rows = db()->query(
@@ -2717,7 +2717,7 @@ function rpc_prayer_pools(): array
         return [
             'name' => $poolName,
             'membersCount' => (int) ($row['members_count'] ?? 0),
-            'cardsCount' => count(rpc_prayer_deck_by_pool($poolName)),
+            'cardsCount' => count(rpc_prayer_deck_by_pool($poolName, $user)),
         ];
     }, $rows);
 }
