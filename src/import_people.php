@@ -491,6 +491,12 @@ function normalize_string(mixed $value): string
 
 function translate_to_german(string $value): string
 {
+    if ($value === 'Male') {
+        return 'Männlich';
+    }
+    if ($value === 'Female') {
+        return 'Weiblich';
+    }
     return [
         'Male' => 'Männlich',
         'Female' => 'Weiblich',

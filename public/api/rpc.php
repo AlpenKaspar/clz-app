@@ -42,7 +42,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         ),
         'app_loadSongsLite' => rpc_songs_lite(),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
-        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard(), 'dataVersion' => rpc_data_version()],
+        'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard($user), 'dataVersion' => rpc_data_version()],
         'tools_getSyncStatus' => rpc_sync_status($user),
         'tools_getCacheDiagnostics' => ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()],
         'tools_debugCachePayloads' => ['ok' => true, 'cache' => rpc_cache_stats(), 'latestRuns' => rpc_import_runs()],
@@ -105,7 +105,7 @@ function rpc_bootstrap(array $user): array
         ],
         'cache' => [],
         'filters' => rpc_contact_filters(),
-        'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard(),
+        'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard($user),
     ];
 }
 
@@ -239,11 +239,13 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
     $listDisplay = trim($last . ' ' . ($preferred ?: $first)) ?: $display;
     $cityLine = trim(rpc_str($row['home_postcode'] ?? '') . ' ' . rpc_str($row['home_city'] ?? ''));
     $category = rpc_str($row['category_name'] ?? '');
+    $familyId = rpc_str($row['family_id'] ?? '') ?: rpc_str($family['familyId'] ?? '');
     $birthday = rpc_normalize_dashboard_date(
         rpc_str($row['birthday'] ?? '') ?: rpc_custom_first_value($custom, ['BIRTHDAY', 'GEBURTSDATUM'])
     );
     $age = rpc_age($birthday);
     $gender = rpc_str($row['gender'] ?? '') ?: rpc_custom_first_value($custom, ['GENDER', 'GESCHLECHT']);
+    $relationshipKind = rpc_family_relationship_kind(rpc_str($family['relationship'] ?? ''));
     $departmentsValues = rpc_ministry_values($row, $custom);
     $leaderships = rpc_split_leadership_values($custom['LEITERSCHAFT'] ?? '');
     $kgGroupValues = $groups['groups'] ?? [];
@@ -275,13 +277,13 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'phone' => rpc_str($row['phone'] ?? ''),
         'mobile' => rpc_str($row['mobile'] ?? ''),
         'category' => $category,
-        'familyId' => rpc_str($row['family_id'] ?? ''),
+        'familyId' => $familyId,
         'gender' => $gender,
         'birthday' => $birthday,
         'dateAdded' => $dateAdded,
         'age' => $age,
         'ageBucket' => rpc_age_bucket($age),
-        'isChild' => ($family['relationship'] ?? '') === 'Kind' || ($age !== null && $age < 16),
+        'isChild' => $relationshipKind === 'child' || ($age !== null && $age < 16),
         'isFamilyMain' => (bool) ($family['isFamilyMain'] ?? false),
         'isSingle' => (bool) ($family['isSingle'] ?? false),
         'householdTypeKey' => rpc_str($family['householdTypeKey'] ?? ''),
@@ -450,6 +452,9 @@ function rpc_trend(int $current, int $previous): string
 function rpc_gender_kind(string $gender): string
 {
     $value = rpc_lower($gender);
+    if (str_contains($value, 'männ')) {
+        return 'male';
+    }
     if ($value === 'm' || str_contains($value, 'mann') || str_contains($value, 'male') || str_contains($value, 'männ')) {
         return 'male';
     }
@@ -2381,9 +2386,9 @@ function rpc_contact_filters(): array
     return $filters;
 }
 
-function rpc_dashboard(): array
+function rpc_dashboard(array $user = []): array
 {
-    $contacts = rpc_contacts_lite()['contacts'] ?? [];
+    $contacts = rpc_contacts_lite($user)['contacts'] ?? [];
     $gemeinde = array_values(array_filter($contacts, static fn(array $c): bool => rpc_is_category($c, 'gemeinde')));
     $kontakte = array_values(array_filter($contacts, static fn(array $c): bool => rpc_is_category($c, 'kontakte')));
     $adults = array_values(array_filter($gemeinde, static fn(array $c): bool => !($c['isChild'] ?? false)));
@@ -2632,7 +2637,7 @@ function rpc_prayer_deck(): array
         }
         $primaryLast = $lastNames[0] ?? '';
         $familyTitle = $lastNames ? 'Familie ' . implode(' ', $lastNames) : 'Familie';
-        $title = $isSingle ? ($primaryLast !== '' ? 'Familie ' . $primaryLast : $fallbackName) : $familyTitle;
+        $title = $isSingle ? $fallbackName : $familyTitle;
         $payloadMembers = [];
         foreach ($members as $member) {
             $personId = rpc_str($member['id'] ?? '');
@@ -3310,6 +3315,7 @@ function rpc_people_family_values(): array
                 continue;
             }
             $values[$personId] = [
+                'familyId' => rpc_str($familyId),
                 'relationship' => rpc_str($member['relationship'] ?? ''),
                 'isFamilyMain' => $personId === $mainPersonId && !$isSingleFamily,
                 'isSingle' => $personId === $mainPersonId && $isSingleFamily,
