@@ -156,7 +156,9 @@ function rpc_data_version(): string
                 COALESCE((SELECT MAX(imported_at) FROM services), '1970-01-01 00:00:00')
             ) AS version_value"
         )->fetch();
-        $version = preg_replace('/\D+/', '', (string) ($row['version_value'] ?? '')) ?: '1';
+        $dataVersion = preg_replace('/\D+/', '', (string) ($row['version_value'] ?? '')) ?: '1';
+        $codeVersion = max((int) (@filemtime(__FILE__) ?: 0), (int) (@filemtime(__DIR__ . '/../../src/import_people.php') ?: 0));
+        $version = $dataVersion . '-' . $codeVersion;
     } catch (Throwable) {
         $version = '1';
     }
