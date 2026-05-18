@@ -11962,13 +11962,10 @@ function updateBottomNavHighlight_() {
         }
 
         try {
-          let cards = getPrayerDeckSourceCards_();
-          if (!cards.length) {
-            const res = await withGsRetry("personenUi_getPrayerDeck", [], { retries: 1, retryDelay: 500 });
-            cards = Array.isArray(res?.cards) ? res.cards : [];
-            prayerDeckPrefetch.cards = cards.slice();
-            prayerDeckPrefetch.loadedAt = Date.now();
-          }
+          const res = await withGsRetry("personenUi_getPrayerDeck", [], { retries: 1, retryDelay: 500 });
+          const cards = Array.isArray(res?.cards) ? res.cards : [];
+          prayerDeckPrefetch.cards = cards.slice();
+          prayerDeckPrefetch.loadedAt = Date.now();
           if (prayerDeckMode === 'shuffle') {
             prayerDeckCards = buildWeightedPrayerDeckOrder_(cards);
           } else {
