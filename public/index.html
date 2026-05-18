@@ -5591,6 +5591,13 @@
       background: var(--primary);
       color: #fff;
     }
+    .songs-mini-close-btn {
+      width: 34px;
+      height: 34px;
+      background: rgba(148,163,184,0.12);
+      color: var(--text-muted);
+      flex: 0 0 auto;
+    }
     .songs-player-progress-wrap {
       min-width: 0;
       display: grid;
@@ -7669,6 +7676,9 @@
       </div>
       <button class="songs-player-route-btn" type="button" onclick="showSongsPlayerRoutePicker_(); event.stopPropagation();" aria-label="AirPlay">
         <i class="fas fa-tv"></i>
+      </button>
+      <button class="songs-player-route-btn songs-mini-close-btn" type="button" onclick="closeSongsMiniPlayer_(); event.stopPropagation();" aria-label="Mini-Player schliessen" title="Mini-Player schliessen">
+        <i class="fas fa-xmark"></i>
       </button>
       <div class="songs-mini-progress"><span id="songs-mini-progress-fill" class="songs-mini-progress-fill"></span></div>
     </div>
@@ -9947,6 +9957,26 @@
         const meta = document.getElementById('songs-mini-meta');
         if (title && it) title.textContent = it.songTitle || it.name || 'Titel';
         if (meta && it) meta.textContent = songsPlayerMetaText_(it);
+        updateSongsPlayerButtons_();
+        updateSongsPlayerProgress_();
+      }
+      function closeSongsMiniPlayer_() {
+        const audio = document.getElementById('songs-player-audio');
+        if (audio) {
+          try {
+            audio.pause();
+            audio.removeAttribute('src');
+            audio.load();
+          } catch (e) {}
+        }
+        stopSongsYoutubeVideo_();
+        songsPlayerState.currentIndex = -1;
+        songsPlayerState.currentUrl = '';
+        songsPlayerState.currentItem = null;
+        const overlay = document.getElementById('songs-player-overlay');
+        if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('songs-player-open');
+        updateSongsMiniPlayer_();
         updateSongsPlayerButtons_();
         updateSongsPlayerProgress_();
       }
@@ -14485,7 +14515,9 @@ function updateBottomNavHighlight_() {
 
       function buildContactFamiliesFromSeed_(seedRows, contextRows) {
         const seeds = Array.isArray(seedRows) ? seedRows : [];
-        const context = Array.isArray(contextRows) && contextRows.length ? contextRows : seeds;
+        const context = Array.isArray(contactsLite) && contactsLite.length
+          ? contactsLite
+          : (Array.isArray(contextRows) && contextRows.length ? contextRows : seeds);
         const byFamily = {};
         context.forEach(item => {
           const fid = String(item?.familyId || '').trim();
