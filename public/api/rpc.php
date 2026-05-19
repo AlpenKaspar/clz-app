@@ -204,13 +204,13 @@ function rpc_contact_for_role(array $contact, array $user): array
         return $contact;
     }
 
-    foreach (['email', 'phone', 'mobile', 'birthday', 'dateAdded', 'gender', 'familyId', 'address', 'age'] as $key) {
+    foreach (['email', 'phone', 'mobile', 'birthday', 'dateAdded', 'gender', 'genderKind', 'familyId', 'address', 'age'] as $key) {
         $contact[$key] = $key === 'age' ? null : '';
     }
     foreach (['departmentsValues', 'kgGroupValues', 'kgLeadGroupValues', 'kgAssistantGroupValues', 'leaderships', 'nextStepValues', 'kidsChurchValues', 'youthYpgValues'] as $key) {
         $contact[$key] = [];
     }
-    foreach (['hasKg', 'leadsKg', 'hasMitarbeit', 'new12', 'new6', 'new3', 'new14', 'birthdayToday', 'birthdayWeek', 'birthdayMonthFlag'] as $key) {
+    foreach (['hasKg', 'leadsKg', 'hasMitarbeit', 'new12', 'new6', 'new3', 'new14', 'lastYear12Cmp', 'lastYear6Cmp', 'lastYear3Cmp', 'lastYear14Cmp', 'birthdayToday', 'birthdayWeek', 'birthdayMonthFlag'] as $key) {
         $contact[$key] = false;
     }
     $contact['isFamilyMain'] = false;
@@ -281,6 +281,7 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'category' => $category,
         'familyId' => $familyId,
         'gender' => $gender,
+        'genderKind' => rpc_gender_kind($gender),
         'birthday' => $birthday,
         'dateAdded' => $dateAdded,
         'age' => $age,
@@ -312,6 +313,10 @@ function rpc_contact_row(array $row, array $custom = [], array $groups = [], arr
         'new6' => rpc_date_within_months($dateAdded, 6),
         'new3' => rpc_date_within_months($dateAdded, 3),
         'new14' => rpc_date_within_days($dateAdded, 14),
+        'lastYear12Cmp' => rpc_date_between_relative($dateAdded, '-2 years', '-1 year'),
+        'lastYear6Cmp' => rpc_date_between_relative($dateAdded, '-1 year -6 months', '-1 year'),
+        'lastYear3Cmp' => rpc_date_between_relative($dateAdded, '-1 year -3 months', '-1 year'),
+        'lastYear14Cmp' => rpc_date_between_relative($dateAdded, '-1 year -14 days', '-1 year'),
         'birthdayDay' => $birthdayParts['day'] ?? '',
         'birthdayMonth' => $birthdayParts['month'] ?? '',
         'birthdayToday' => rpc_birthday_today($birthdayParts),
@@ -538,6 +543,9 @@ function rpc_prayer_member_payload(array $contact): array
         'picture' => rpc_str($contact['pictureUrl'] ?? ''),
         'age' => $contact['age'] ?? null,
         'isChild' => (bool) ($contact['isChild'] ?? false),
+        'new12' => (bool) ($contact['new12'] ?? false),
+        'new6' => (bool) ($contact['new6'] ?? false),
+        'new3' => (bool) ($contact['new3'] ?? false),
     ];
 }
 
@@ -2638,8 +2646,14 @@ function rpc_dashboard(array $user = []): array
             'ministryTeamBuckets' => $ministryBuckets,
         ],
         'childrenYouth' => [
-            'kidsChurch' => ['total' => array_sum($kidsCounts), 'items' => rpc_counts_to_items($kidsCounts)],
-            'youthYpg' => ['total' => array_sum($ypgCounts), 'items' => rpc_counts_to_items($ypgCounts)],
+            'kidsChurch' => [
+                'total' => rpc_count_contacts($gemeinde, static fn(array $c): bool => count(is_array($c['kidsChurchValues'] ?? null) ? $c['kidsChurchValues'] : []) > 0),
+                'items' => rpc_counts_to_items($kidsCounts),
+            ],
+            'youthYpg' => [
+                'total' => rpc_count_contacts($gemeinde, static fn(array $c): bool => count(is_array($c['youthYpgValues'] ?? null) ? $c['youthYpgValues'] : []) > 0),
+                'items' => rpc_counts_to_items($ypgCounts),
+            ],
         ],
     ];
 }
@@ -3671,6 +3685,10 @@ function rpc_split_multi_value(string $value): array
     $out = [];
     foreach ($parts as $part) {
         $item = trim($part);
+        $normalized = strtolower(trim($item, " \t\n\r\0\x0B-–—"));
+        if (in_array($normalized, ['keine', 'kein', 'none', 'null', 'n/a'], true)) {
+            continue;
+        }
         if ($item !== '' && !in_array($item, $out, true)) {
             $out[] = $item;
         }
@@ -3861,6 +3879,21 @@ function rpc_date_within_days(string $date, int $days): bool
     try {
         $day = new DateTimeImmutable($date);
         return $day >= (new DateTimeImmutable('today'))->modify("-{$days} days");
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function rpc_date_between_relative(string $date, string $startModifier, string $endModifier): bool
+{
+    if ($date === '') {
+        return false;
+    }
+    try {
+        $day = new DateTimeImmutable($date);
+        $start = (new DateTimeImmutable('today'))->modify($startModifier)->setTime(0, 0, 0);
+        $end = (new DateTimeImmutable('today'))->modify($endModifier)->setTime(23, 59, 59);
+        return $day >= $start && $day <= $end;
     } catch (Throwable) {
         return false;
     }

@@ -562,12 +562,13 @@
     body.dark-mode .song-transpose-stepper button,
     body.dark-mode .song-transpose-reset,
     body.dark-mode .song-export-btn,
-    body.dark-mode .song-key-select {
+    body.dark-mode .song-key-select,
+    body.dark-mode .song-sequence-export-toggle {
       background:rgba(15,23,42,.70);
       border-color:rgba(148,163,184,.18);
       color:#e2e8f0;
     }
-    body.dark-mode .song-text-viewer-body { background:rgba(2,6,23,.30); }
+    body.dark-mode .song-text-viewer-body { background:rgba(2,6,23,.30); color:#e2e8f0; }
     body.dark-mode .song-chart-meta { background:rgba(96,165,250,.14); color:#93c5fd; }
     body.dark-mode .song-gender-key-box { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); }
     body.dark-mode .song-gender-key-value { color:#e2e8f0; }
@@ -3066,6 +3067,28 @@
       animation: prayerEarlyPulse 1.9s ease-in-out infinite;
     }
 
+    .prayer-card-new-badge {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 3;
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: #1d4ed8;
+      background: rgba(219,234,254,0.92);
+      border: 1px solid rgba(37,99,235,0.22);
+      box-shadow: 0 8px 18px rgba(37,99,235,0.12);
+      pointer-events: none;
+    }
+
     .prayer-card-title {
       font-size: 20px;
       font-weight: 900;
@@ -3514,6 +3537,13 @@
       color: #bfdbfe;
     }
 
+    body.dark .prayer-card-new-badge {
+      color: #bfdbfe;
+      background: rgba(30,64,175,0.42);
+      border-color: rgba(96,165,250,0.36);
+      box-shadow: 0 8px 18px rgba(2,6,23,0.28);
+    }
+
     body.dark .prayer-member-row {
       border-top-color: rgba(148,163,184,0.26);
       color: #e2e8f0;
@@ -3888,6 +3918,10 @@
       background: rgba(238,242,255,0.8);
       border-left: 4px solid var(--primary);
       padding-left: 12px;
+    }
+
+    #cal-results .result-item.active {
+      padding-left: 14px;
     }
 
     body.dark .result-item.active {
@@ -8209,10 +8243,10 @@
       let printTitleOverrides = { contacts: "", calendar: "" };
 
       const CACHE_KEYS = {
-        bootstrap: "clz_bootstrap_v192",
+        bootstrap: "clz_bootstrap_v194",
         filterDefs: "clz_filter_defs_v192",
-        dashboardStats: "clz_dashboard_stats_v192",
-        contactsLite: "clz_contacts_lite_v192",
+        dashboardStats: "clz_dashboard_stats_v194",
+        contactsLite: "clz_contacts_lite_v194",
         personMainPrefix: "clz_person_main_v192_",
         personExtraPrefix: "clz_person_extra_v193_",
         groupSectionPrefix: "clz_group_section_v192_",
@@ -9477,13 +9511,15 @@
           return;
         }
         box.innerHTML = filteredSongs.map(item => {
+          const songId = String(item.songId || item.id || '');
+          const isActive = songId && songId === String(currentSongData?.songId || currentSongData?.id || '');
           const meta = [item.artist, item.album].map(v => String(v || '').trim()).filter(Boolean);
           const info = [item.keyName, item.bpm ? `${item.bpm} BPM` : '', item.arrangementsCount > 1 ? `${item.arrangementsCount} Arrangements` : '']
             .map(v => String(v || '').trim())
             .filter(Boolean)
             .join(' · ');
           return `
-            <div class="result-item" onclick="openSongDetail_('${escapeAttr(String(item.songId || ''))}')">
+            <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(songId)}" onclick="openSongDetail_('${escapeAttr(songId)}')">
               <div style="flex:1;min-width:0;">
                 <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(String(item.songTitle || item.arrangementName || 'Song'))}</div>
                 ${meta.length ? `<div class="result-sub">${escapeHtml(meta.join(' · '))}</div>` : ``}
@@ -10220,6 +10256,7 @@
         currentSongNotesExpanded = false;
         currentSongFilesExpanded = false;
         renderSongDetail_(song);
+        setActiveListItem_('#songs-results', wanted);
         showDetailView_('song-detail-view');
         openDetailOverlay();
       }
@@ -10636,11 +10673,7 @@
 
       function downloadSongTextAsOnSong_() {
         if (!currentSongTextState) return;
-        let chordPro = transposeChordProText_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
-        if (currentSongTextState.includeSequence) {
-          const sequenceText = songSequenceExportText_();
-          if (sequenceText) chordPro = `${chordPro}\n\n{start_of_comment: Ablauf}\n${sequenceText}\n{end_of_comment}`;
-        }
+        const chordPro = transposeChordProText_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
         const key = normalizeSongKeyName_(currentSongTextState.baseKey || '') ? '-' + shiftedSongKey_(currentSongTextState.baseKey, currentSongTextState.transpose || 0) : '';
         downloadTextFile_(songSafeFileName_(`${songSheetTitle_()}${key}`, 'chopro'), chordPro);
       }
@@ -11019,6 +11052,9 @@ function updateBottomNavHighlight_() {
         if (!canUseTab_(tab)) {
           toast("Für diese Rolle nicht freigeschaltet", 1500);
           return;
+        }
+        if (currentDetailOverlayView) {
+          closeDetailOverlay();
         }
         currentTab = tab;
         if (tab !== 'contacts') {
@@ -12417,6 +12453,8 @@ function updateBottomNavHighlight_() {
           const earlyBadge = (showEarlyMessage && index === 0)
             ? `<div class="prayer-card-topline"><div class="prayer-card-early-badge"><i class="fas fa-mug-hot"></i><span>Woow du bist heute aber schon frueh dran am beten.</span></div></div>`
             : ``;
+          const newestMonths = members.some(m => !!m?.new3) ? 3 : (members.some(m => !!m?.new6) ? 6 : (members.some(m => !!m?.new12) ? 12 : 0));
+          const newBadge = newestMonths ? `<div class="prayer-card-new-badge">Neu<br>${newestMonths}</div>` : ``;
           const subtitle = item?.type === 'single' ? 'Einzelperson' : 'Familie';
           const safeTitle = String(item?.title || (item?.type === 'single' ? 'Einzelperson' : 'Familie'));
           const renderMemberRow_ = (m) => `
@@ -12436,6 +12474,7 @@ function updateBottomNavHighlight_() {
           return `
             <section class="prayer-card-slot" data-card-id="${escapeAttr(String(item?.id || ('card_' + index)))}" data-person-count="${Number(members.length || 1)}" data-card-index="${index}">
               <article class="prayer-card">
+                ${newBadge}
                 ${earlyBadge}
                 <div class="prayer-card-subtitle">${escapeHtml(subtitle)}</div>
                 <div class="prayer-card-title">${escapeHtml(safeTitle)}</div>
@@ -14411,9 +14450,20 @@ function updateBottomNavHighlight_() {
         runLocalContactSearch(true);
       }
 
+      function contactGenderKind_(c) {
+        const explicit = String(c?.genderKind || '').trim().toLowerCase();
+        if (explicit === 'male' || explicit === 'female') return explicit;
+        const raw = String(c?.gender || '').trim().toLowerCase();
+        if (!raw) return '';
+        if (raw === 'm' || raw.indexOf('mann') > -1 || raw.indexOf('männ') > -1 || raw.indexOf('male') > -1) return 'male';
+        if (raw === 'w' || raw === 'f' || raw.indexOf('frau') > -1 || raw.indexOf('weib') > -1 || raw.indexOf('female') > -1) return 'female';
+        return '';
+      }
+
       function matchesDashboardFilterLocal_(c, key) {
         const age = Number(c.age);
         const hasAge = Number.isFinite(age);
+        const genderKind = contactGenderKind_(c);
 
         switch (String(key || "")) {
           case "active": return String(c.category || "").trim().toLowerCase() === "gemeinde";
@@ -14421,6 +14471,7 @@ function updateBottomNavHighlight_() {
           case "active_contacts": return String(c.category || "").trim().toLowerCase() === "kontakte";
 
           case "new14": return !!c.new14;
+          case "new14_lastyear": return !!c.lastYear14Cmp;
           case "new12": return !!c.new12;
           case "new12_prev": return !!c.prev12Cmp;
           case "new12_lastyear": return !!c.lastYear12Cmp;
@@ -14433,8 +14484,8 @@ function updateBottomNavHighlight_() {
           case "new3_prev": return !!c.prev3Cmp;
           case "new3_lastyear": return !!c.lastYear3Cmp;
 
-          case "male": return c.gender === "male" || c.gender === "männlich";
-          case "female": return c.gender === "female" || c.gender === "weiblich";
+          case "male": return genderKind === "male";
+          case "female": return genderKind === "female";
           case "families": return !!c.isFamilyMain;
           case "singles": return !!c.isSingle;
           case "households": return !!c.isFamilyMain || !!c.isSingle;
@@ -14795,8 +14846,8 @@ function updateBottomNavHighlight_() {
         }
 
         if (type === "gender") {
-          if (value === "male") return c?.gender === "male" || c?.gender === "männlich";
-          if (value === "female") return c?.gender === "female" || c?.gender === "weiblich";
+          if (value === "male") return contactGenderKind_(c) === "male";
+          if (value === "female") return contactGenderKind_(c) === "female";
           return true;
         }
 
@@ -15730,7 +15781,9 @@ function updateBottomNavHighlight_() {
 
       function setActiveListItem_(containerSel, id) {
         document.querySelectorAll(containerSel + " .result-item").forEach(el => el.classList.remove("active"));
-        const el = document.querySelector(containerSel + ` .result-item[data-id="${CSS.escape(String(id))}"]`);
+        const safeId = CSS.escape(String(id));
+        let el = document.querySelector(containerSel + ` .result-item[data-id="${safeId}"]`);
+        if (!el) el = document.querySelector(containerSel + ` .result-item[data-related-ids~="${safeId}"]`);
         if (el) el.classList.add("active");
       }
 
@@ -17287,6 +17340,8 @@ function updateBottomNavHighlight_() {
         if (key === "new6") return "Filter zeigt aktive Gemeinde-Personen mit Erfassungsdatum in den letzten 6 Monaten. Ältere Einträge sind nicht dabei.";
         if (key === "new12") return "Filter zeigt aktive Gemeinde-Personen mit Erfassungsdatum in den letzten 12 Monaten. Ältere Einträge sind nicht dabei.";
 
+        if (/^new(14|3|6|12)_lastyear$/.test(key)) return "Filter zeigt aktive Gemeinde-Personen im entsprechenden Vergleichszeitraum vor einem Jahr.";
+
         if (/^age_/.test(key)) {
           return "Filter zeigt aktive Gemeinde-Personen innerhalb genau dieser Altersklasse. Personen ausserhalb des Bereichs sind nicht dabei.";
         }
@@ -17818,19 +17873,19 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 [
                   dashOverviewSectionTitle_("2 Wochen", s.trend14VsLastYear || s.trend14, s.new14VsLastYearPct || 0),
                   dashOverviewCompareRow_("Aktuell", nCurrent14, "new14", "Neue Personen 2 Wochen"),
-                  dashOverviewCompareRow_("Vorjahr", nCompare14LastYear, "new14", "Neue Personen 2 Wochen"),
+                  dashOverviewCompareRow_("Vorjahr", nCompare14LastYear, "new14_lastyear", "Neue Personen 2 Wochen Vorjahr"),
 
                   dashOverviewSectionTitle_("3 Monate", s.trend3VsLastYear || s.trend3, s.new3VsLastYearPct || 0),
                   dashOverviewCompareRow_("Aktuell", n.current3, "new3", "Neue Personen 3 Monate"),
-                  dashOverviewCompareRow_("Vorjahr", n.compare3LastYear, "new3", "Neue Personen 3 Monate"),
+                  dashOverviewCompareRow_("Vorjahr", n.compare3LastYear, "new3_lastyear", "Neue Personen 3 Monate Vorjahr"),
 
                   dashOverviewSectionTitle_("6 Monate", s.trend6VsLastYear || s.trend6, s.new6VsLastYearPct || 0),
                   dashOverviewCompareRow_("Aktuell", n.current6, "new6", "Neue Personen 6 Monate"),
-                  dashOverviewCompareRow_("Vorjahr", n.compare6LastYear, "new6", "Neue Personen 6 Monate"),
+                  dashOverviewCompareRow_("Vorjahr", n.compare6LastYear, "new6_lastyear", "Neue Personen 6 Monate Vorjahr"),
 
                   dashOverviewSectionTitle_("12 Monate", s.trend12VsLastYear || s.trend12, s.new12VsLastYearPct || s.new12Pct || 0),
                   dashOverviewCompareRow_("Aktuell", n.current12, "new12", "Neue Personen 12 Monate"),
-                  dashOverviewCompareRow_("Vorjahr", n.compare12LastYear, "new12", "Neue Personen 12 Monate")
+                  dashOverviewCompareRow_("Vorjahr", n.compare12LastYear, "new12_lastyear", "Neue Personen 12 Monate Vorjahr")
                 ],
                 s.trend12VsLastYear || s.trend12,
                 s.new12VsLastYearPct || s.new12Pct || 0
@@ -18961,10 +19016,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
         box.innerHTML = buildCalendarResultItems_(filtered).map(e => {
           if (e && e.kind === 'service-group') {
             const first = e.items[e.activeIndex || 0] || e.items[0];
+            const isActive = e.items.some(item => String(item?.id || '') === String(currentEventId || ''));
             const dateCore = `${getWeekdayShort_(first.StartDatum || '')}, ${formatCalendarDateLabel_(first.StartDatum || '')}`;
             const durationLabel = getDurationLabel_(first.StartDatum, first.EndDatum);
+            const relatedIds = e.items.map(item => String(item?.id || '').trim()).filter(Boolean).join(' ');
             return `
-              <div class="result-item" data-id="${escapeAttr(first.id)}" onclick="showGroupedServiceDetails('${escapeAttr(e.groupKey)}')">
+              <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(first.id)}" data-related-ids="${escapeAttr(relatedIds)}" onclick="showGroupedServiceDetails('${escapeAttr(e.groupKey)}')">
                 <div style="display:flex; align-items:center; min-width:0; flex:1;">
                   <div class="event-dot" style="background:${escapeAttr(first.displayColorSolid || first.displayColor || '#94a3b8')}"></div>
                   <div style="min-width:0; width:100%;">
@@ -18987,9 +19044,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           const dateCore = formatCalendarEventMetaLine_(e);
           const durationLabel = getDurationLabel_(e.StartDatum, e.EndDatum);
+          const isActive = String(e.id || '') === String(currentEventId || '');
 
           return `
-            <div class="result-item" data-id="${escapeAttr(e.id)}" onclick="showEventDetails('${escapeAttr(e.id)}')">
+            <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(e.id)}" onclick="showEventDetails('${escapeAttr(e.id)}')">
               <div style="display:flex; align-items:center; min-width:0; flex:1;">
                 <div class="event-dot" style="background:${escapeAttr(e.displayColorSolid || e.displayColor || '#94a3b8')}"></div>
                 <div style="min-width:0; width:100%;">
@@ -19171,8 +19229,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         currentEventId = id;
         currentPersonId = null;
-        setActiveListItem_("#cal-results", id);
         if (currentTab === 'calendar') filterCalendar();
+        setActiveListItem_("#cal-results", id);
 
         const zeitAnzeige = formatCalendarEventMetaLine_(ev);
 
@@ -20088,7 +20146,25 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const raw = String(value == null ? '' : value).trim();
         if (!raw) return '';
         if (looksLikeHtml_(raw)) return sanitizeRichHtml_(raw);
-        return escapeHtml(raw).replace(/\n/g, '<br>');
+        const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/^\s*-\s+/, '');
+        const parts = normalized
+          .split(/\n+\s*-\s+|\s+-\s+/)
+          .map(part => String(part || '').trim())
+          .filter(Boolean);
+        if (parts.length > 1) {
+          return parts.map(part => `<p>${escapeHtml(part).replace(/\n/g, '<br>')}</p>`).join('');
+        }
+        return escapeHtml(normalized).replace(/\n/g, '<br>');
+      }
+
+      function normalizeFlowDuplicateText_(value) {
+        return String(value || '')
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/(^|\s)-\s+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
       }
 
       function normalizeServiceFlowSongLookup_(value) {
@@ -20206,7 +20282,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 const metaBadgesHtml = metaBadges.join('');
                 const descriptionHtml = formatFlowRichText_(item?.description || '');
                 const planDescription = String(item?.planDescription || '').trim();
-                const planDescriptionHtml = formatFlowRichText_(planDescription);
+                const planDescriptionHtml = normalizeFlowDuplicateText_(planDescription) === normalizeFlowDuplicateText_(item?.description || '') ? '' : formatFlowRichText_(planDescription);
                 const statusClass = isHeading ? 'upcoming' : (enhanced ? getFlowRowStatus_(item, index, list) : 'upcoming');
                 const isCountdownTarget = !!countdown && Number(countdown.targetIndex) === index;
                 const rowLabel = countdown?.mode === 'upcoming' ? 'Start in' : 'Restzeit';
