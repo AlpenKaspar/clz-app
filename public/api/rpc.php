@@ -1395,7 +1395,7 @@ function rpc_calendar_event(array $row): array
         'Ressourcen' => rpc_str($row['resources'] ?? ''),
         'displayColor' => rpc_str($row['category_color'] ?? '') ?: '#cbd5e1',
         '_elvantoId' => $id,
-        '_elvantoUrl' => $serviceId !== '' ? 'https://app.elvanto.com/services/' . $serviceId : '',
+        '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : '',
         'hasServiceFlow' => $serviceId !== '',
         '_serviceLeadInMin' => 0,
     ];
@@ -3529,7 +3529,7 @@ function rpc_group_payload(array $group): array
         'meetingFrequency' => rpc_str($group['meeting_frequency'] ?? ''),
         'meetingTime' => rpc_str($group['meeting_time'] ?? ''),
         'mapHref' => '',
-        'elvantoUrl' => $groupId !== '' ? 'https://app.elvanto.com/groups/' . rawurlencode($groupId) : '',
+        'elvantoUrl' => $groupId !== '' ? rpc_elvanto_app_url('groups/' . rawurlencode($groupId)) : '',
         'leaderPersons' => [],
         'assistantPersons' => [],
         'memberPersons' => [],
@@ -3660,7 +3660,13 @@ function rpc_whatsapp_href(string $phone): string
 
 function rpc_elvanto_person_url(string $personId): string
 {
-    return $personId !== '' ? 'https://app.elvanto.com/people/person/' . rawurlencode($personId) : '';
+    return $personId !== '' ? rpc_elvanto_app_url('people/person/' . rawurlencode($personId)) : '';
+}
+
+function rpc_elvanto_app_url(string $path): string
+{
+    $path = trim($path);
+    return $path !== '' ? 'https://app.elvanto.com/' . ltrim($path, '/') : 'https://app.elvanto.com/';
 }
 
 function rpc_add_unique(array &$items, string $value): void

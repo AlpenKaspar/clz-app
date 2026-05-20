@@ -325,6 +325,11 @@
       height: 30px;
       border-radius: 10px;
     }
+    .song-text-tool-btn.is-active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
     .song-text-viewer-controls {
       display:flex;
       flex-direction:column;
@@ -450,6 +455,10 @@
       color: var(--primary);
       font-weight: 900;
     }
+    .song-text-viewer.hide-chords .song-sheet-rendered .chord,
+    .song-text-viewer.hide-chords .song-chart-chord {
+      display:none !important;
+    }
     .song-chart-meta {
       display: inline-flex;
       margin: 0 6px 8px 0;
@@ -535,43 +544,186 @@
       color:var(--primary);
     }
     .song-file-video-wrap { margin-top:12px; }
-    body.dark-mode .song-detail-chip { background:color-mix(in srgb, var(--primary) 22%, #0f172a); color:#dbeafe; }
-    body.dark-mode .song-arrangement-switch-btn { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); color:#e5e7eb; }
-    body.dark-mode .song-arrangement-switch-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
-    body.dark-mode .song-arrangement-switch-segment { background:rgba(15,23,42,.42); border-color:rgba(148,163,184,.14); }
-    body.dark-mode .song-arrangement-card { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); box-shadow:none; }
-    body.dark-mode .song-detail-card { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); box-shadow:none; }
-    body.dark-mode .song-sequence-compact { background:rgba(15,23,42,.42); border-color:rgba(148,163,184,.18); }
-    body.dark-mode .song-sequence-bubble { background:rgba(15,23,42,.72); border-color:rgba(148,163,184,.18); color:#e2e8f0; }
-    body.dark-mode .song-section-head-right { color:#93c5fd; }
-    body.dark-mode .song-sequence-item { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-sequence-index { background:color-mix(in srgb, var(--primary) 20%, #0f172a); color:#dbeafe; }
-    body.dark-mode .song-note-chip {
+    .song-metronome-overlay {
+      position:fixed;
+      inset:0;
+      z-index:920;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      background:rgba(15,23,42,.28);
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .18s ease;
+    }
+    .song-metronome-overlay[aria-hidden="false"] {
+      opacity:1;
+      pointer-events:auto;
+    }
+    .song-metronome-modal {
+      width:min(100%, 380px);
+      border-radius:18px;
+      overflow:hidden;
+      background:var(--card-bg);
+      border:1px solid var(--border-color);
+      box-shadow:0 24px 70px rgba(15,23,42,.24);
+      color:var(--text-main);
+    }
+    .song-metronome-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 14px;
+      border-bottom:1px solid var(--border-color);
+      font-size:14px;
+      font-weight:900;
+    }
+    .song-metronome-body {
+      display:grid;
+      gap:16px;
+      padding:16px;
+    }
+    .song-metronome-play-row {
+      display:grid;
+      grid-template-columns:56px 1fr;
+      gap:14px;
+      align-items:center;
+    }
+    .song-metronome-indicator {
+      width:52px;
+      height:52px;
+      border-radius:999px;
+      border:2px solid color-mix(in srgb, var(--primary) 42%, white);
+      background:color-mix(in srgb, var(--primary) 8%, white);
+      transition:transform .08s ease, background .08s ease, box-shadow .08s ease;
+    }
+    .song-metronome-indicator.is-pulsing {
+      transform:scale(1.08);
+      background:color-mix(in srgb, var(--primary) 22%, white);
+      box-shadow:0 0 0 8px color-mix(in srgb, var(--primary) 12%, transparent);
+    }
+    .song-metronome-play {
+      min-height:54px;
+      border:1px solid color-mix(in srgb, var(--primary) 28%, white);
+      border-radius:10px;
+      background:color-mix(in srgb, var(--primary) 20%, white);
+      color:var(--primary);
+      font-size:18px;
+      font-weight:900;
+      cursor:pointer;
+    }
+    .song-metronome-bpm {
+      display:grid;
+      grid-template-columns:1fr 42px 42px;
+      border:1px solid var(--border-color);
+      border-radius:10px;
+      overflow:hidden;
+      background:var(--card-bg);
+    }
+    .song-metronome-bpm input,
+    .song-metronome-bpm button,
+    .song-metronome-sound {
+      min-height:42px;
+      border:0;
+      background:transparent;
+      color:var(--text-main);
+      font:inherit;
+    }
+    .song-metronome-bpm input {
+      padding:0 12px;
+      font-weight:850;
+      outline:0;
+    }
+    .song-metronome-bpm button {
+      border-left:1px solid var(--border-color);
+      cursor:pointer;
+      font-weight:900;
+    }
+    .song-metronome-mode {
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      border:1px solid var(--border-color);
+      border-radius:10px;
+      overflow:hidden;
+    }
+    .song-metronome-mode button {
+      min-height:38px;
+      border:0;
+      border-right:1px solid var(--border-color);
+      background:var(--card-bg);
+      color:var(--text-main);
+      font-size:12px;
+      font-weight:850;
+      cursor:pointer;
+    }
+    .song-metronome-mode button:last-child { border-right:0; }
+    .song-metronome-mode button.is-active {
+      background:color-mix(in srgb, var(--primary) 18%, white);
+      color:var(--primary);
+    }
+    .song-metronome-sound {
+      width:100%;
+      border:1px solid var(--border-color);
+      border-radius:10px;
+      padding:0 12px;
+      font-size:13px;
+      font-weight:850;
+    }
+    body.dark .song-detail-chip { background:color-mix(in srgb, var(--primary) 22%, #0f172a); color:#dbeafe; }
+    body.dark .song-arrangement-switch-btn { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); color:#e5e7eb; }
+    body.dark .song-arrangement-switch-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+    body.dark .song-arrangement-switch-segment { background:rgba(15,23,42,.42); border-color:rgba(148,163,184,.14); }
+    body.dark .song-arrangement-card { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); box-shadow:none; }
+    body.dark .song-detail-card { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); box-shadow:none; }
+    body.dark .song-sequence-compact { background:rgba(15,23,42,.42); border-color:rgba(148,163,184,.18); }
+    body.dark .song-sequence-bubble { background:rgba(15,23,42,.72); border-color:rgba(148,163,184,.18); color:#e2e8f0; }
+    body.dark .song-section-head-right { color:#93c5fd; }
+    body.dark .song-sequence-item { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); }
+    body.dark .song-sequence-index { background:color-mix(in srgb, var(--primary) 20%, #0f172a); color:#dbeafe; }
+    body.dark .song-note-chip {
       background:color-mix(in srgb, var(--primary) 16%, #0f172a);
       border-color:color-mix(in srgb, var(--primary) 30%, #1e293b);
       color:#dbeafe;
     }
-    body.dark-mode .song-key-table { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-key-head { background:#334155; }
-    body.dark-mode .song-key-row { border-top-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-key-label { color:#e2e8f0; }
-    body.dark-mode .song-text-viewer { background:rgba(15,23,42,.58); border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-text-viewer-head { border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-text-viewer-controls { background:rgba(15,23,42,.36); border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-transpose-stepper,
-    body.dark-mode .song-transpose-stepper button,
-    body.dark-mode .song-transpose-reset,
-    body.dark-mode .song-export-btn,
-    body.dark-mode .song-key-select,
-    body.dark-mode .song-sequence-export-toggle {
+    body.dark .song-key-table { background:rgba(15,23,42,.62); border-color:rgba(148,163,184,.16); }
+    body.dark .song-key-head { background:#334155; }
+    body.dark .song-key-row { border-top-color:rgba(148,163,184,.16); }
+    body.dark .song-key-label { color:#e2e8f0; }
+    body.dark .song-text-viewer { background:rgba(15,23,42,.58); border-color:rgba(148,163,184,.16); }
+    body.dark .song-text-viewer-head { border-color:rgba(148,163,184,.16); }
+    body.dark .song-text-viewer-controls { background:rgba(15,23,42,.36); border-color:rgba(148,163,184,.16); }
+    body.dark .song-transpose-stepper,
+    body.dark .song-transpose-stepper button,
+    body.dark .song-transpose-reset,
+    body.dark .song-export-btn,
+    body.dark .song-key-select,
+    body.dark .song-sequence-export-toggle {
       background:rgba(15,23,42,.70);
       border-color:rgba(148,163,184,.18);
       color:#e2e8f0;
     }
-    body.dark-mode .song-text-viewer-body { background:rgba(2,6,23,.30); color:#e2e8f0; }
-    body.dark-mode .song-chart-meta { background:rgba(96,165,250,.14); color:#93c5fd; }
-    body.dark-mode .song-gender-key-box { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); }
-    body.dark-mode .song-gender-key-value { color:#e2e8f0; }
+    body.dark .song-text-viewer-body { background:rgba(2,6,23,.30); color:#e2e8f0; }
+    body.dark .song-chart-meta { background:rgba(96,165,250,.14); color:#93c5fd; }
+    body.dark .song-gender-key-box { background:rgba(15,23,42,.60); border-color:rgba(148,163,184,.16); }
+    body.dark .song-gender-key-value { color:#e2e8f0; }
+    body.dark .song-metronome-overlay { background:rgba(2,6,23,.58); }
+    body.dark .song-metronome-modal { background:#0f172a; border-color:rgba(148,163,184,.18); box-shadow:0 24px 70px rgba(2,6,23,.50); }
+    body.dark .song-metronome-head { border-color:rgba(148,163,184,.16); }
+    body.dark .song-metronome-indicator { background:rgba(37,99,235,.16); border-color:rgba(147,197,253,.42); }
+    body.dark .song-metronome-indicator.is-pulsing { background:rgba(37,99,235,.32); box-shadow:0 0 0 8px rgba(37,99,235,.16); }
+    body.dark .song-metronome-play { background:rgba(37,99,235,.22); border-color:rgba(147,197,253,.24); color:#dbeafe; }
+    body.dark .song-metronome-bpm,
+    body.dark .song-metronome-mode,
+    body.dark .song-metronome-sound { background:rgba(15,23,42,.70); border-color:rgba(148,163,184,.18); color:#e2e8f0; }
+    body.dark .song-metronome-bpm input,
+    body.dark .song-metronome-bpm button,
+    body.dark .song-metronome-sound,
+    body.dark .song-metronome-mode button { color:#e2e8f0; }
+    body.dark .song-metronome-bpm button,
+    body.dark .song-metronome-mode button { border-color:rgba(148,163,184,.18); background:rgba(15,23,42,.70); }
+    body.dark .song-metronome-mode button.is-active { background:rgba(37,99,235,.28); color:#dbeafe; }
     @media (max-width: 600px) {
       .song-key-head, .song-key-row {
         grid-template-columns: 1fr;
@@ -7763,6 +7915,17 @@
       </button>
       <div class="songs-mini-progress"><span id="songs-mini-progress-fill" class="songs-mini-progress-fill"></span></div>
     </div>
+    <div id="song-metronome-overlay" class="song-metronome-overlay" aria-hidden="true" onclick="if(event.target===this) closeSongMetronome_()">
+      <div class="song-metronome-modal" role="dialog" aria-modal="true" aria-labelledby="song-metronome-title">
+        <div class="song-metronome-head">
+          <span id="song-metronome-title">Metronom</span>
+          <button class="icon-btn" type="button" onclick="closeSongMetronome_()" aria-label="Metronom schliessen" title="Schliessen">
+            <i class="fas fa-xmark"></i>
+          </button>
+        </div>
+        <div id="song-metronome-body" class="song-metronome-body"></div>
+      </div>
+    </div>
 
     <div id="view-dashboard" class="view-hidden">
 
@@ -8183,6 +8346,7 @@
       let currentSongTextState = null;
       let currentSongDetailReturnView = '';
       let currentSongDetailReturnFlowIndex = -1;
+      let songMetronomeState = { bpm: 70, running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0 };
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
       const CONTACT_PAGE_SIZE = 100;
@@ -8728,6 +8892,33 @@
 
       function escapeAttr(s) {
         return escapeHtml(s).replace(/"/g, "&quot;");
+      }
+
+      const ELVANTO_APP_BASE_ = "https://app.elvanto.com";
+
+      function buildElvantoAppUrl_(path, params = {}) {
+        const cleanPath = String(path || "").trim();
+        if (!cleanPath) return ELVANTO_APP_BASE_;
+        const url = new URL(cleanPath.replace(/^\/+/, ""), ELVANTO_APP_BASE_ + "/");
+        Object.entries(params || {}).forEach(([key, value]) => {
+          const raw = String(value || "").trim();
+          if (raw) url.searchParams.set(key, raw);
+        });
+        return url.toString();
+      }
+
+      function normalizeElvantoUrl_(url) {
+        const raw = String(url || "").trim();
+        if (!raw) return "";
+        try {
+          const parsed = new URL(raw, window.location.origin);
+          if (/clz\.elvanto\.eu$/i.test(parsed.hostname) && parsed.pathname.startsWith("/admin/")) {
+            return buildElvantoAppUrl_(parsed.pathname.replace(/^\/+/, ""), Object.fromEntries(parsed.searchParams.entries())) + (parsed.hash || "");
+          }
+          return parsed.toString();
+        } catch (e) {
+          return raw.replace(/^https:\/\/clz\.elvanto\.eu\/admin\//i, ELVANTO_APP_BASE_ + "/admin/");
+        }
       }
 
       function looksLikeHtml_(value) {
@@ -9535,7 +9726,7 @@
         const list = Array.isArray(links) ? links.filter(Boolean) : [];
         if (!list.length) return '';
         return list.map((href, index) => `
-          <a class="btn btn-secondary" href="${escapeAttr(String(href || ''))}" target="_blank" rel="noopener">
+          <a class="btn btn-secondary" href="${escapeAttr(normalizeElvantoUrl_(href))}" target="_blank" rel="noopener">
             <i class="fas ${escapeAttr(icon)}"></i>
             <span>${escapeHtml(label)}${list.length > 1 ? ` ${index + 1}` : ''}</span>
           </a>
@@ -9612,7 +9803,7 @@
             : asset.url.toLowerCase().includes('.pdf') ? 'fa-file-pdf'
             : 'fa-link';
           const label = cleanSongAssetName_(asset, asset.type || asset.mode || `Datei ${index + 1}`);
-          const href = asset.url || asset.embed;
+          const href = normalizeElvantoUrl_(asset.url || asset.embed);
           if (isAudioAssetForPlayer_(asset)) {
             return `<button class="btn btn-secondary" type="button" onclick="openSongsPlayerForUrl_('${escapeAttr(asset.url)}')" title="${escapeAttr(label)}"><i class="fas fa-circle-play"></i><span>${escapeHtml(label)}</span></button>`;
           }
@@ -10399,7 +10590,7 @@
 
       function renderSongKeyResourcesTable_(arrangement, song) {
         const noteChip = (href, label) => {
-          const url = String(href || '');
+          const url = normalizeElvantoUrl_(href);
           const text = String(label || 'Noten');
           if (isSongTextViewerUrl_(url)) {
             return `<button class="song-note-chip" type="button" onclick="openSongTextViewer_('${escapeAttr(url)}','${escapeAttr(text)}','','${escapeAttr(text)}')">${escapeHtml(text)}</button>`;
@@ -10598,6 +10789,180 @@
         setTimeout(() => URL.revokeObjectURL(url), 800);
       }
 
+      function clampSongMetronomeBpm_(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 70;
+        return Math.max(30, Math.min(240, Math.round(n)));
+      }
+
+      function renderSongMetronome_() {
+        const body = document.getElementById('song-metronome-body');
+        if (!body) return;
+        const s = songMetronomeState;
+        body.innerHTML = `
+          <div class="song-metronome-play-row">
+            <div id="song-metronome-indicator" class="song-metronome-indicator" aria-hidden="true"></div>
+            <button class="song-metronome-play" type="button" onclick="toggleSongMetronome_()" aria-label="${s.running ? 'Metronom pausieren' : 'Metronom starten'}">
+              <i class="fas ${s.running ? 'fa-pause' : 'fa-play'}"></i>
+            </button>
+          </div>
+          <div class="song-metronome-bpm">
+            <input id="song-metronome-bpm-input" type="number" min="30" max="240" value="${escapeAttr(String(s.bpm))}" onchange="setSongMetronomeBpm_(this.value)" aria-label="BPM">
+            <button type="button" onclick="changeSongMetronomeBpm_(1)" aria-label="BPM erhoehen">+</button>
+            <button type="button" onclick="changeSongMetronomeBpm_(-1)" aria-label="BPM senken">-</button>
+          </div>
+          <div class="song-metronome-mode" role="group" aria-label="Metronom Modus">
+            <button type="button" class="${s.mode === 'both' ? 'is-active' : ''}" onclick="setSongMetronomeMode_('both')">Ton + Indikator</button>
+            <button type="button" class="${s.mode === 'sound' ? 'is-active' : ''}" onclick="setSongMetronomeMode_('sound')">Ton</button>
+            <button type="button" class="${s.mode === 'visual' ? 'is-active' : ''}" onclick="setSongMetronomeMode_('visual')">Indikator</button>
+          </div>
+          <select class="song-metronome-sound" onchange="setSongMetronomeSound_(this.value)" aria-label="Klang auswaehlen">
+            ${[
+              ['woodblock', 'Woodblock'],
+              ['beep', 'Beep'],
+              ['click', 'Click'],
+              ['kick', 'Kick'],
+              ['snare', 'Snare']
+            ].map(([value, label]) => `<option value="${value}" ${s.sound === value ? 'selected' : ''}>Klang auswaehlen ${label}</option>`).join('')}
+          </select>
+        `;
+      }
+
+      function openSongMetronome_() {
+        const overlay = document.getElementById('song-metronome-overlay');
+        renderSongMetronome_();
+        if (overlay) overlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeSongMetronome_() {
+        stopSongMetronome_();
+        const overlay = document.getElementById('song-metronome-overlay');
+        if (overlay) overlay.setAttribute('aria-hidden', 'true');
+      }
+
+      function ensureSongMetronomeAudio_() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!songMetronomeState.audioCtx) songMetronomeState.audioCtx = new AudioCtx();
+        if (songMetronomeState.audioCtx.state === 'suspended') {
+          songMetronomeState.audioCtx.resume().catch(() => {});
+        }
+        return songMetronomeState.audioCtx;
+      }
+
+      function pulseSongMetronomeIndicator_() {
+        const indicator = document.getElementById('song-metronome-indicator');
+        if (!indicator) return;
+        indicator.classList.remove('is-pulsing');
+        void indicator.offsetWidth;
+        indicator.classList.add('is-pulsing');
+        setTimeout(() => indicator.classList.remove('is-pulsing'), 110);
+      }
+
+      function playSongMetronomeSound_() {
+        const ctx = ensureSongMetronomeAudio_();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const sound = String(songMetronomeState.sound || 'woodblock');
+        const gain = ctx.createGain();
+        const osc = ctx.createOscillator();
+        const noiseGain = ctx.createGain();
+        gain.connect(ctx.destination);
+
+        if (sound === 'kick') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+          osc.connect(gain);
+          osc.start(now);
+          osc.stop(now + 0.14);
+          return;
+        }
+
+        if (sound === 'snare') {
+          const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.06), ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+          const src = ctx.createBufferSource();
+          src.buffer = buffer;
+          noiseGain.gain.setValueAtTime(0.14, now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+          src.connect(noiseGain);
+          noiseGain.connect(ctx.destination);
+          src.start(now);
+          src.stop(now + 0.08);
+          return;
+        }
+
+        const cfg = sound === 'beep'
+          ? { type: 'sine', freq: 980, dur: 0.06, level: 0.13 }
+          : sound === 'click'
+            ? { type: 'triangle', freq: 1320, dur: 0.045, level: 0.11 }
+            : { type: 'square', freq: songMetronomeState.beat % 4 === 0 ? 920 : 760, dur: 0.05, level: 0.10 };
+        osc.type = cfg.type;
+        osc.frequency.setValueAtTime(cfg.freq, now);
+        gain.gain.setValueAtTime(cfg.level, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + cfg.dur);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + cfg.dur + 0.02);
+      }
+
+      function tickSongMetronome_() {
+        songMetronomeState.beat += 1;
+        if (songMetronomeState.mode !== 'sound') pulseSongMetronomeIndicator_();
+        if (songMetronomeState.mode !== 'visual') playSongMetronomeSound_();
+      }
+
+      function startSongMetronome_() {
+        stopSongMetronome_(false);
+        songMetronomeState.running = true;
+        songMetronomeState.beat = 0;
+        tickSongMetronome_();
+        songMetronomeState.timer = setInterval(tickSongMetronome_, 60000 / clampSongMetronomeBpm_(songMetronomeState.bpm));
+        renderSongMetronome_();
+      }
+
+      function stopSongMetronome_(render = true) {
+        if (songMetronomeState.timer) clearInterval(songMetronomeState.timer);
+        songMetronomeState.timer = null;
+        songMetronomeState.running = false;
+        if (render) renderSongMetronome_();
+      }
+
+      function toggleSongMetronome_() {
+        if (songMetronomeState.running) stopSongMetronome_();
+        else startSongMetronome_();
+      }
+
+      function setSongMetronomeBpm_(value) {
+        songMetronomeState.bpm = clampSongMetronomeBpm_(value);
+        if (songMetronomeState.running) startSongMetronome_();
+        else renderSongMetronome_();
+      }
+
+      function changeSongMetronomeBpm_(delta) {
+        setSongMetronomeBpm_(clampSongMetronomeBpm_(songMetronomeState.bpm) + Number(delta || 0));
+      }
+
+      function setSongMetronomeMode_(mode) {
+        songMetronomeState.mode = ['both', 'sound', 'visual'].includes(mode) ? mode : 'both';
+        renderSongMetronome_();
+      }
+
+      function setSongMetronomeSound_(sound) {
+        songMetronomeState.sound = String(sound || 'woodblock');
+        renderSongMetronome_();
+      }
+
+      function toggleSongChordsVisible_() {
+        if (!currentSongTextState) return;
+        currentSongTextState.showChords = currentSongTextState.showChords === false;
+        refreshSongTextViewer_();
+      }
+
       function renderSongTextViewerControls_() {
         const state = currentSongTextState || {};
         const baseKey = normalizeSongKeyName_(state.baseKey || '') || '';
@@ -10629,13 +10994,16 @@
         if (!slot || !currentSongTextState) return;
         const state = currentSongTextState;
         const title = String(state.label || 'Songtext').trim() || 'Songtext';
+        const chordsVisible = state.showChords !== false;
         slot.innerHTML = `
-          <div class="song-text-viewer">
+          <div class="song-text-viewer ${chordsVisible ? '' : 'hide-chords'}">
             <div class="song-text-viewer-head">
               <span class="song-text-viewer-title"><i class="fas fa-align-left"></i> ${escapeHtml(title)}</span>
               <span class="song-text-viewer-actions">
+                <button class="song-export-btn song-export-icon-btn song-text-tool-btn ${chordsVisible ? 'is-active' : ''}" type="button" onclick="toggleSongChordsVisible_()" title="${chordsVisible ? 'Akkorde ausblenden' : 'Akkorde einblenden'}" aria-label="${chordsVisible ? 'Akkorde ausblenden' : 'Akkorde einblenden'}"><i class="fas fa-guitar"></i></button>
                 <button class="song-export-btn song-export-icon-btn" type="button" onclick="downloadSongTextAsOnSong_()" title="OnSong herunterladen" aria-label="OnSong herunterladen"><i class="fas fa-file-arrow-down"></i></button>
                 <button class="song-export-btn song-export-icon-btn" type="button" onclick="printSongTextAsPdf_()" title="PDF erstellen" aria-label="PDF erstellen"><i class="fas fa-file-pdf"></i></button>
+                <button class="song-export-btn song-export-icon-btn song-text-tool-btn" type="button" onclick="openSongMetronome_()" title="Metronom" aria-label="Metronom"><i class="fas fa-drum"></i></button>
                 ${state.url ? `<a class="icon-btn" href="${escapeAttr(state.url)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ``}
                 <button class="icon-btn" type="button" onclick="closeSongTextViewer_()" title="Schliessen" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
               </span>
@@ -10726,7 +11094,8 @@
         const html = renderChordSheetHtml_(currentSongTextState.rawText || '', currentSongTextState.transpose || 0);
         const sequenceHtml = currentSongTextState.includeSequence ? songSequenceExportHtml_() : '';
         const keyHtml = keyLabel ? `<div class="song-print-key">Tonart: ${escapeHtml(keyLabel)}</div>` : '';
-        const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-print-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 14px}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 4px}.song-print-key{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em}.song-print-sequence{flex:0 0 auto;max-width:48%;margin:0;padding:7px 9px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc;text-align:right}.song-print-sequence-title{font-size:9px;font-weight:900;color:#2563eb;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}.song-print-sequence-steps{display:flex;flex-wrap:wrap;gap:3px 6px;justify-content:flex-end;font-size:9px;line-height:1.25;color:#334155}.song-print-sequence-step{white-space:nowrap}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}@media print{body{margin:14mm}.song-print-sequence{max-width:50%}}</style></head><body><div class="song-print-head"><div><div class="song-sheet-print-title">${escapeHtml(title)}</div>${keyHtml}</div>${sequenceHtml}</div>${html}</body></html>`;
+        const bodyClass = currentSongTextState.showChords === false ? ' class="hide-chords"' : '';
+        const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:28px;color:#0f172a}.song-print-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 14px}.song-sheet-print-title{font-size:22px;font-weight:800;margin:0 0 4px}.song-print-key{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em}.song-print-sequence{flex:0 0 auto;max-width:48%;margin:0;padding:7px 9px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc;text-align:right}.song-print-sequence-title{font-size:9px;font-weight:900;color:#2563eb;text-transform:uppercase;letter-spacing:.06em;margin:0 0 4px}.song-print-sequence-steps{display:flex;flex-wrap:wrap;gap:3px 6px;justify-content:flex-end;font-size:9px;line-height:1.25;color:#334155}.song-print-sequence-step{white-space:nowrap}.song-sheet-rendered{font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.45}.song-sheet-rendered .title{display:none}.row{display:flex;align-items:flex-end;flex-wrap:wrap;min-height:20px}.column{display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:1px}.chord{min-height:17px;color:#2563eb;font-weight:800;line-height:1.1}.lyrics{white-space:pre;min-height:18px}.label{margin:14px 0 5px;color:#2563eb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}.hide-chords .chord,.hide-chords .song-chart-chord{display:none!important}@media print{body{margin:14mm}.song-print-sequence{max-width:50%}}</style></head><body${bodyClass}><div class="song-print-head"><div><div class="song-sheet-print-title">${escapeHtml(title)}</div>${keyHtml}</div>${sequenceHtml}</div>${html}</body></html>`;
         printSongHtmlDocument_(documentHtml, title);
       }
 
@@ -10756,8 +11125,9 @@
 
       async function openSongTextViewer_(url, label, inlineText = '', baseKey = '') {
         const slot = document.getElementById('song-text-viewer-slot');
+        const normalizedUrl = normalizeElvantoUrl_(url);
         if (!slot) {
-          if (url) window.open(url, '_blank', 'noopener');
+          if (normalizedUrl) window.open(normalizedUrl, '_blank', 'noopener');
           return;
         }
         const title = String(label || 'Songtext').trim() || 'Songtext';
@@ -10766,7 +11136,7 @@
             <div class="song-text-viewer-head">
               <span><i class="fas fa-align-left"></i> ${escapeHtml(title)}</span>
               <span class="song-text-viewer-actions">
-                <a class="icon-btn" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                <a class="icon-btn" href="${escapeAttr(normalizedUrl)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>
                 <button class="icon-btn" type="button" onclick="closeSongTextViewer_()" title="Schliessen" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
               </span>
             </div>
@@ -10774,12 +11144,12 @@
           </div>
         `;
         if (inlineText) {
-          currentSongTextState = { url: '', label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0, includeSequence: false };
+          currentSongTextState = { url: '', label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0, includeSequence: false, showChords: true };
           refreshSongTextViewer_();
           return;
         }
         try {
-          const response = await fetch('/api/song-text.php?url=' + encodeURIComponent(url), {
+          const response = await fetch('/api/song-text.php?url=' + encodeURIComponent(normalizedUrl), {
             method: 'GET',
             credentials: 'include',
             headers: { 'Accept': 'application/json' },
@@ -10788,13 +11158,13 @@
           if (!response.ok || data?.ok === false) {
             throw new Error(data?.detail || data?.error || ('HTTP ' + response.status));
           }
-          currentSongTextState = { url, label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0, includeSequence: false };
+          currentSongTextState = { url: normalizedUrl, label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0, includeSequence: false, showChords: true };
           refreshSongTextViewer_();
         } catch (err) {
           currentSongTextState = null;
           const body = slot.querySelector('.song-text-viewer-body');
           if (body) {
-            body.innerHTML = `<div class="song-chart-error">Konnte nicht direkt angezeigt werden.<br>${escapeHtml(normalizeErrMsg_(err))}</div><div style="margin-top:10px;"><a class="song-note-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener">Original öffnen</a></div>`;
+            body.innerHTML = `<div class="song-chart-error">Konnte nicht direkt angezeigt werden.<br>${escapeHtml(normalizeErrMsg_(err))}</div><div style="margin-top:10px;"><a class="song-note-chip" href="${escapeAttr(normalizedUrl)}" target="_blank" rel="noopener">Original öffnen</a></div>`;
           }
         }
       }
@@ -11116,7 +11486,7 @@ function updateBottomNavHighlight_() {
       }
 
       function openElvantoNewEvent_() {
-        const url = "https://clz.elvanto.eu/admin/events/event/";
+        const url = buildElvantoAppUrl_("admin/events/event/");
         try {
           window.open(url, "_blank", "noopener");
         } catch (e) {
@@ -16697,7 +17067,7 @@ function updateBottomNavHighlight_() {
         const meetingDayRaw = String(group.meetingDay || "");
         const meetingFrequencyRaw = String(group.meetingFrequency || "");
         const mapHref = group.mapHref ? escapeAttr(group.mapHref) : "";
-        const elvantoUrl = group.elvantoUrl ? escapeAttr(group.elvantoUrl) : "";
+        const elvantoUrl = group.elvantoUrl ? escapeAttr(normalizeElvantoUrl_(group.elvantoUrl)) : "";
         const leaders = Array.isArray(group.leaderPersons) ? group.leaderPersons : [];
         const assistants = Array.isArray(group.assistantPersons) ? group.assistantPersons : [];
         const members = assistants.concat(Array.isArray(group.memberPersons) ? group.memberPersons : []);
@@ -17172,7 +17542,7 @@ function updateBottomNavHighlight_() {
         const canPrintEvent = canPrintEventDetail_();
 
         if (data?.type === "person") {
-          const elvantoUrl = data?.meta?.elvantoUrl || "";
+          const elvantoUrl = normalizeElvantoUrl_(data?.meta?.elvantoUrl || "");
           const personId = String(data?.meta?.personId || "").trim();
           const showPoolLink = !!(lastContactPoolAddHint && String(lastContactPoolAddHint.personId || "") === personId);
           const poolLinkHtml = showPoolLink
@@ -17190,7 +17560,7 @@ function updateBottomNavHighlight_() {
         }
 
         if (data?.type === "event") {
-          const elvantoUrl = data?.meta?.elvantoUrl || "";
+          const elvantoUrl = normalizeElvantoUrl_(data?.meta?.elvantoUrl || "");
           const googleUrl = buildGoogleCalendarUrl_(data);
           area.innerHTML = `
             ${elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
@@ -19307,6 +19677,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const categoryLabel = String(data?.meta?.category || '').trim();
         const liveUrl = String(data?.meta?.liveUrl || '').trim();
         const liveEmbedUrl = buildYoutubeEmbedUrl_(liveUrl);
+        const elvantoUrl = normalizeElvantoUrl_(data?.meta?.elvantoUrl || '');
 
         hideAllDetailViews_();
 
@@ -19333,7 +19704,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             </div>
           ` : ``}
           <div class="action-grid">
-            ${data?.meta?.elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(data.meta.elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
+            ${elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
             ${liveUrl ? `<a class="btn btn-secondary" href="${escapeAttr(liveUrl)}" target="_blank" rel="noopener"><i class="fab fa-youtube"></i><span>Livestream</span></a>` : ``}
             <a class="btn btn-secondary" href="${escapeAttr(buildGoogleCalendarUrl_(data))}" target="_blank" rel="noopener"><i class="fas fa-calendar-plus"></i><span>Google Kalender</span></a>
             <button class="btn btn-secondary" onclick="downloadCurrentEventIcs()"><i class="fas fa-download"></i><span>iCal</span></button>
@@ -20475,8 +20846,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return;
         }
 
-        const flowUrl = `https://clz.elvanto.eu/admin/services/service_plan/?id=${encodeURIComponent(serviceId)}`;
-        const staffUrl = `https://clz.elvanto.eu/admin/services/service_volunteers/?id=${encodeURIComponent(serviceId)}`;
+        const flowUrl = buildElvantoAppUrl_("admin/services/service_plan/", { id: serviceId });
+        const staffUrl = buildElvantoAppUrl_("admin/services/service_volunteers/", { id: serviceId });
 
         if (staffLink) {
           staffLink.href = staffUrl;
