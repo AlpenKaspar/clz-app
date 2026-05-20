@@ -14460,6 +14460,26 @@ function updateBottomNavHighlight_() {
         return '';
       }
 
+      function normalizeMultiValueFilter_(value) {
+        const cleaned = String(value || "").trim().replace(/^-+|-+$/g, "").trim();
+        return normalizeSearchText_(cleaned);
+      }
+
+      function isEmptyMultiValueFilter_(value) {
+        const normalized = normalizeMultiValueFilter_(value);
+        return !normalized || ["keine", "kein", "none", "null", "n a"].includes(normalized);
+      }
+
+      function hasAnyMultiValueFilter_(values) {
+        return Array.isArray(values) && values.some(value => !isEmptyMultiValueFilter_(value));
+      }
+
+      function matchesMultiValueFilter_(values, wanted) {
+        const normalizedWanted = normalizeMultiValueFilter_(wanted);
+        if (!normalizedWanted || isEmptyMultiValueFilter_(wanted)) return false;
+        return Array.isArray(values) && values.some(value => !isEmptyMultiValueFilter_(value) && normalizeMultiValueFilter_(value) === normalizedWanted);
+      }
+
       function matchesDashboardFilterLocal_(c, key) {
         const age = Number(c.age);
         const hasAge = Number.isFinite(age);
@@ -14526,8 +14546,8 @@ function updateBottomNavHighlight_() {
               const matchesCount = rawWanted === "3plus" ? teamCount >= 3 : teamCount === Number(rawWanted || "0");
               return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && matchesCount;
             }
-            if (key === "kidschurch_any") return Array.isArray(c.kidsChurchValues) && c.kidsChurchValues.length > 0;
-            if (key === "ypg_any") return Array.isArray(c.youthYpgValues) && c.youthYpgValues.length > 0;
+            if (key === "kidschurch_any") return hasAnyMultiValueFilter_(c.kidsChurchValues);
+            if (key === "ypg_any") return hasAnyMultiValueFilter_(c.youthYpgValues);
 
             if (/^nextstep_missing:/.test(String(key || ""))) {
               const wanted = String(key || "").split(":").slice(1).join(":");
@@ -14539,11 +14559,11 @@ function updateBottomNavHighlight_() {
             }
             if (/^kidschurch:/.test(String(key || ""))) {
               const wanted = String(key || "").split(":").slice(1).join(":");
-              return !!wanted && Array.isArray(c.kidsChurchValues) && c.kidsChurchValues.includes(wanted);
+              return matchesMultiValueFilter_(c.kidsChurchValues, wanted);
             }
             if (/^ypg:/.test(String(key || ""))) {
               const wanted = String(key || "").split(":").slice(1).join(":");
-              return !!wanted && Array.isArray(c.youthYpgValues) && c.youthYpgValues.includes(wanted);
+              return matchesMultiValueFilter_(c.youthYpgValues, wanted);
             }
             if (/^household_type_/.test(String(key || ""))) {
               const typeKey = String(key || "").replace(/^household_type_/, "");
@@ -14862,17 +14882,17 @@ function updateBottomNavHighlight_() {
         }
 
         if (type === "kids") {
-          if (value === "kidschurch") return Array.isArray(c?.kidsChurchValues) && c.kidsChurchValues.length > 0;
-          if (value === "ypg") return Array.isArray(c?.youthYpgValues) && c.youthYpgValues.length > 0;
+          if (value === "kidschurch") return hasAnyMultiValueFilter_(c?.kidsChurchValues);
+          if (value === "ypg") return hasAnyMultiValueFilter_(c?.youthYpgValues);
           return true;
         }
 
         if (type === "kids_value") {
-          return Array.isArray(c?.kidsChurchValues) && c.kidsChurchValues.includes(String(rule.value || ""));
+          return matchesMultiValueFilter_(c?.kidsChurchValues, rule.value || "");
         }
 
         if (type === "ypg_value") {
-          return Array.isArray(c?.youthYpgValues) && c.youthYpgValues.includes(String(rule.value || ""));
+          return matchesMultiValueFilter_(c?.youthYpgValues, rule.value || "");
         }
 
         if (type === "birthday") {
@@ -18340,13 +18360,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return;
         }
         if (type === "kids_value") {
-          const vals = Array.from(new Set((contactsLite || []).flatMap(c => Array.isArray(c?.kidsChurchValues) ? c.kidsChurchValues : []).map(v => String(v || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"de"));
+          const vals = Array.from(new Set((contactsLite || []).flatMap(c => Array.isArray(c?.kidsChurchValues) ? c.kidsChurchValues : []).map(v => String(v || "").trim()).filter(v => !isEmptyMultiValueFilter_(v)))).sort((a,b)=>a.localeCompare(b,"de"));
           slot.innerHTML = smartWrapWithPersonScope_(`<div class="smart-value-stage">${smartFieldShell_("Kids & Promiseland", "fa-star", smartSelectControl_("smart-rule-value", vals.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join("")), "Nimmt vorhandene Werte aus Kids & Promiseland.")}</div>`);
           updateSmartAddButtonState_();
           return;
         }
         if (type === "ypg_value") {
-          const vals = Array.from(new Set((contactsLite || []).flatMap(c => Array.isArray(c?.youthYpgValues) ? c.youthYpgValues : []).map(v => String(v || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"de"));
+          const vals = Array.from(new Set((contactsLite || []).flatMap(c => Array.isArray(c?.youthYpgValues) ? c.youthYpgValues : []).map(v => String(v || "").trim()).filter(v => !isEmptyMultiValueFilter_(v)))).sort((a,b)=>a.localeCompare(b,"de"));
           slot.innerHTML = smartWrapWithPersonScope_(`<div class="smart-value-stage">${smartFieldShell_("Junge Erwachsene", "fa-bolt", smartSelectControl_("smart-rule-value", vals.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join("")), "Nimmt vorhandene Werte aus Junge Erwachsene.")}</div>`);
           updateSmartAddButtonState_();
           return;
