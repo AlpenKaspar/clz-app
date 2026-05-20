@@ -459,6 +459,106 @@
     .song-text-viewer.hide-chords .song-chart-chord {
       display:none !important;
     }
+    .song-fullscreen-overlay {
+      position:fixed;
+      inset:0;
+      z-index:950;
+      display:none;
+      background:#fff;
+      color:#0f172a;
+    }
+    .song-fullscreen-overlay[aria-hidden="false"] {
+      display:block;
+    }
+    .song-fullscreen-scroll {
+      position:absolute;
+      inset:0;
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      padding:18px 74px 24px 22px;
+      background:#fff;
+    }
+    .song-fullscreen-title {
+      margin:0 0 4px;
+      font-size:20px;
+      font-weight:900;
+      letter-spacing:0;
+    }
+    .song-fullscreen-meta {
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin:0 0 18px;
+      font-size:12px;
+      font-weight:850;
+      color:#64748b;
+    }
+    .song-fullscreen-content {
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+      font-size:16px;
+      line-height:1.62;
+      padding-bottom:12px;
+    }
+    .song-fullscreen-content .song-sheet-rendered { font-size:16px; line-height:1.62; }
+    .song-fullscreen-content .song-sheet-rendered .chord { color:#2563eb; }
+    .song-fullscreen-content.hide-chords .song-sheet-rendered .chord,
+    .song-fullscreen-content.hide-chords .song-chart-chord {
+      display:none !important;
+    }
+    .song-fullscreen-controls {
+      position:fixed;
+      right:0;
+      top:50%;
+      transform:translateY(-50%);
+      display:grid;
+      gap:6px;
+      padding:0 6px 0 0;
+      z-index:951;
+      justify-items:end;
+    }
+    .song-fullscreen-close {
+      justify-self:end;
+      width:22px;
+      height:22px;
+      border:0;
+      background:transparent;
+      color:#c02672;
+      font-size:18px;
+      line-height:1;
+      cursor:pointer;
+    }
+    .song-fullscreen-control-btn,
+    .song-fullscreen-speed {
+      width:42px;
+      min-height:38px;
+      border:1px solid #d8dce7;
+      border-radius:5px;
+      background:#c04d91;
+      color:#fff;
+      font-size:18px;
+      font-weight:900;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(15,23,42,.10);
+    }
+    .song-fullscreen-speed {
+      background:#fff;
+      color:#334155;
+      font-size:14px;
+      font-weight:850;
+    }
+    .song-fullscreen-stop {
+      border:0;
+      background:transparent;
+      color:#c04d91;
+      font-size:13px;
+      font-weight:850;
+      cursor:pointer;
+      padding:3px 0;
+    }
+    .song-fullscreen-stop.is-running {
+      color:#be123c;
+      font-weight:950;
+    }
     .song-chart-meta {
       display: inline-flex;
       margin: 0 6px 8px 0;
@@ -724,6 +824,12 @@
     body.dark .song-metronome-bpm button,
     body.dark .song-metronome-mode button { border-color:rgba(148,163,184,.18); background:rgba(15,23,42,.70); }
     body.dark .song-metronome-mode button.is-active { background:rgba(37,99,235,.28); color:#dbeafe; }
+    body.dark .song-fullscreen-overlay,
+    body.dark .song-fullscreen-scroll {
+      background:#fff;
+      color:#0f172a;
+    }
+    body.dark .song-fullscreen-meta { color:#64748b; }
     @media (max-width: 600px) {
       .song-key-head, .song-key-row {
         grid-template-columns: 1fr;
@@ -7926,6 +8032,16 @@
         <div id="song-metronome-body" class="song-metronome-body"></div>
       </div>
     </div>
+    <div id="song-fullscreen-overlay" class="song-fullscreen-overlay" aria-hidden="true">
+      <div id="song-fullscreen-scroll" class="song-fullscreen-scroll"></div>
+      <div class="song-fullscreen-controls" aria-label="Song Scroll-Steuerung">
+        <button class="song-fullscreen-close" type="button" onclick="closeSongFullscreen_()" aria-label="Fullscreen schliessen" title="Schliessen">×</button>
+        <button class="song-fullscreen-control-btn" type="button" onclick="startSongFullscreenScroll_(-1)" aria-label="Nach oben scrollen"><i class="fas fa-chevron-up"></i></button>
+        <button id="song-fullscreen-speed" class="song-fullscreen-speed" type="button" onclick="cycleSongFullscreenSpeed_()" aria-label="Scroll-Geschwindigkeit">1</button>
+        <button class="song-fullscreen-control-btn" type="button" onclick="startSongFullscreenScroll_(1)" aria-label="Nach unten scrollen"><i class="fas fa-chevron-down"></i></button>
+        <button id="song-fullscreen-stop" class="song-fullscreen-stop" type="button" onclick="stopSongFullscreenScroll_()">Stopp</button>
+      </div>
+    </div>
 
     <div id="view-dashboard" class="view-hidden">
 
@@ -8347,6 +8463,7 @@
       let currentSongDetailReturnView = '';
       let currentSongDetailReturnFlowIndex = -1;
       let songMetronomeState = { bpm: 70, running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0 };
+      let songFullscreenState = { open: false, speed: 1, direction: 0, raf: 0, lastTs: 0 };
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
       const CONTACT_PAGE_SIZE = 100;
@@ -10961,6 +11078,121 @@
         if (!currentSongTextState) return;
         currentSongTextState.showChords = currentSongTextState.showChords === false;
         refreshSongTextViewer_();
+        if (songFullscreenState.open) renderSongFullscreenContent_();
+      }
+
+      function songFullscreenScrollElement_() {
+        return document.getElementById('song-fullscreen-scroll');
+      }
+
+      function songFullscreenSpeedPx_() {
+        const speeds = [0, 14, 24, 38, 56, 78, 106];
+        return speeds[Math.max(1, Math.min(6, Number(songFullscreenState.speed || 1)))] || speeds[1];
+      }
+
+      function updateSongFullscreenControls_() {
+        const speed = document.getElementById('song-fullscreen-speed');
+        const stop = document.getElementById('song-fullscreen-stop');
+        if (speed) speed.textContent = String(Math.max(1, Math.min(6, Number(songFullscreenState.speed || 1))));
+        if (stop) stop.classList.toggle('is-running', !!songFullscreenState.direction);
+      }
+
+      function renderSongFullscreenContent_() {
+        const scroll = songFullscreenScrollElement_();
+        if (!scroll || !currentSongTextState) return;
+        const state = currentSongTextState;
+        const keyLabel = currentSongPrintKeyLabel_();
+        const title = songSheetTitle_();
+        const meta = [
+          keyLabel ? `Tonart: ${keyLabel}` : '',
+          state.transpose ? `Transpose: ${Number(state.transpose || 0) > 0 ? '+' : ''}${state.transpose}` : '',
+          state.showChords === false ? 'Akkorde ausgeblendet' : 'Akkorde sichtbar'
+        ].filter(Boolean);
+        scroll.innerHTML = `
+          <div class="song-fullscreen-title">${escapeHtml(title)}</div>
+          ${meta.length ? `<div class="song-fullscreen-meta">${meta.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : ``}
+          <div id="song-fullscreen-content" class="song-fullscreen-content ${state.showChords === false ? 'hide-chords' : ''}">
+            ${renderChordSheetHtml_(state.rawText || '', state.transpose || 0)}
+          </div>
+        `;
+      }
+
+      function openSongFullscreen_() {
+        if (!currentSongTextState) return;
+        const overlay = document.getElementById('song-fullscreen-overlay');
+        if (!overlay) return;
+        songFullscreenState.open = true;
+        songFullscreenState.direction = 0;
+        renderSongFullscreenContent_();
+        overlay.setAttribute('aria-hidden', 'false');
+        updateSongFullscreenControls_();
+        enableWakeLockIfNeeded_();
+        if (overlay.requestFullscreen && !document.fullscreenElement) {
+          try { overlay.requestFullscreen().catch(() => {}); } catch (e) {}
+        }
+        setTimeout(() => {
+          const scroll = songFullscreenScrollElement_();
+          if (scroll) scroll.scrollTop = 0;
+        }, 0);
+      }
+
+      function closeSongFullscreen_() {
+        stopSongFullscreenScroll_();
+        const overlay = document.getElementById('song-fullscreen-overlay');
+        if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        if (document.fullscreenElement === overlay && document.exitFullscreen) {
+          try { document.exitFullscreen().catch(() => {}); } catch (e) {}
+        }
+        songFullscreenState.open = false;
+        if (currentDetailOverlayView !== "calendar-flow-view") releaseWakeLock_();
+      }
+
+      function stopSongFullscreenScroll_() {
+        if (songFullscreenState.raf) cancelAnimationFrame(songFullscreenState.raf);
+        songFullscreenState.raf = 0;
+        songFullscreenState.direction = 0;
+        songFullscreenState.lastTs = 0;
+        updateSongFullscreenControls_();
+      }
+
+      function startSongFullscreenScroll_(direction) {
+        const scroll = songFullscreenScrollElement_();
+        if (!scroll) return;
+        songFullscreenState.direction = Number(direction || 1) < 0 ? -1 : 1;
+        songFullscreenState.lastTs = 0;
+        updateSongFullscreenControls_();
+        if (songFullscreenState.raf) cancelAnimationFrame(songFullscreenState.raf);
+        songFullscreenState.raf = requestAnimationFrame(stepSongFullscreenScroll_);
+      }
+
+      function stepSongFullscreenScroll_(ts) {
+        const scroll = songFullscreenScrollElement_();
+        if (!scroll || !songFullscreenState.direction) {
+          stopSongFullscreenScroll_();
+          return;
+        }
+        const last = Number(songFullscreenState.lastTs || ts);
+        const deltaMs = Math.max(0, Math.min(80, ts - last));
+        songFullscreenState.lastTs = ts;
+        const maxScroll = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+        const next = scroll.scrollTop + (songFullscreenState.direction * songFullscreenSpeedPx_() * deltaMs / 1000);
+        if (songFullscreenState.direction > 0 && next >= maxScroll - 1) {
+          scroll.scrollTop = maxScroll;
+          stopSongFullscreenScroll_();
+          return;
+        }
+        if (songFullscreenState.direction < 0 && next <= 0) {
+          scroll.scrollTop = 0;
+          stopSongFullscreenScroll_();
+          return;
+        }
+        scroll.scrollTop = Math.max(0, Math.min(maxScroll, next));
+        songFullscreenState.raf = requestAnimationFrame(stepSongFullscreenScroll_);
+      }
+
+      function cycleSongFullscreenSpeed_() {
+        songFullscreenState.speed = (Math.max(1, Math.min(6, Number(songFullscreenState.speed || 1))) % 6) + 1;
+        updateSongFullscreenControls_();
       }
 
       function renderSongTextViewerControls_() {
@@ -11004,6 +11236,7 @@
                 <button class="song-export-btn song-export-icon-btn" type="button" onclick="downloadSongTextAsOnSong_()" title="OnSong herunterladen" aria-label="OnSong herunterladen"><i class="fas fa-file-arrow-down"></i></button>
                 <button class="song-export-btn song-export-icon-btn" type="button" onclick="printSongTextAsPdf_()" title="PDF erstellen" aria-label="PDF erstellen"><i class="fas fa-file-pdf"></i></button>
                 <button class="song-export-btn song-export-icon-btn song-text-tool-btn" type="button" onclick="openSongMetronome_()" title="Metronom" aria-label="Metronom"><i class="fas fa-drum"></i></button>
+                <button class="song-export-btn song-export-icon-btn song-text-tool-btn" type="button" onclick="openSongFullscreen_()" title="Fullscreen mit Autoscroll" aria-label="Fullscreen mit Autoscroll"><i class="fas fa-up-down"></i></button>
                 ${state.url ? `<a class="icon-btn" href="${escapeAttr(state.url)}" target="_blank" rel="noopener" title="Original öffnen" aria-label="Original öffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>` : ``}
                 <button class="icon-btn" type="button" onclick="closeSongTextViewer_()" title="Schliessen" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
               </span>
@@ -11170,6 +11403,7 @@
       }
 
       function closeSongTextViewer_() {
+        closeSongFullscreen_();
         currentSongTextState = null;
         const slot = document.getElementById('song-text-viewer-slot');
         if (slot) slot.innerHTML = '';
@@ -16243,6 +16477,7 @@ function updateBottomNavHighlight_() {
       }
 
       function closeDetailOverlay() {
+        closeSongFullscreen_();
         const backdrop = document.getElementById("detail-backdrop");
         const overlay = document.getElementById("detail-overlay");
         if (backdrop) backdrop.classList.remove("open");
@@ -21897,6 +22132,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
           if (!inside) closeShareMenus_();
           const insidePrayer = ev.target && ev.target.closest && ev.target.closest('.prayer-head-menu-wrap');
           if (!insidePrayer) closePrayerHeadMenu_();
+        });
+        document.addEventListener('fullscreenchange', () => {
+          const overlay = document.getElementById('song-fullscreen-overlay');
+          if (songFullscreenState.open && overlay && document.fullscreenElement !== overlay) closeSongFullscreen_();
         });
         window.addEventListener("resize", updateBottomNavHighlight_);
         window.addEventListener("resize", scheduleContactsViewThumbSync_);
