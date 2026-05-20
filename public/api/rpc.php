@@ -1395,7 +1395,7 @@ function rpc_calendar_event(array $row): array
         'Ressourcen' => rpc_str($row['resources'] ?? ''),
         'displayColor' => rpc_str($row['category_color'] ?? '') ?: '#cbd5e1',
         '_elvantoId' => $id,
-        '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : '',
+        '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : rpc_elvanto_calendar_url($id),
         'hasServiceFlow' => $serviceId !== '',
         '_serviceLeadInMin' => 0,
     ];
@@ -3668,10 +3668,41 @@ function rpc_elvanto_person_url(string $personId): string
     return $personId !== '' ? rpc_elvanto_app_url('people/person/' . rawurlencode($personId)) : '';
 }
 
+function rpc_elvanto_calendar_url(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return '';
+    }
+    if (rpc_starts_with(strtoupper($raw), 'EVENT-')) {
+        return rpc_elvanto_app_url('events/event/' . rawurlencode(substr($raw, 6)));
+    }
+    if (rpc_starts_with(strtoupper($raw), 'SERVICE-')) {
+        return rpc_elvanto_app_url('services/' . rawurlencode(substr($raw, 8)));
+    }
+    return '';
+}
+
 function rpc_elvanto_app_url(string $path): string
 {
     $path = trim($path);
-    return $path !== '' ? 'https://app.elvanto.com/' . ltrim($path, '/') : 'https://app.elvanto.com/';
+    if ($path === '') {
+        return 'https://clz.elvanto.eu/admin/';
+    }
+    $path = trim($path, '/');
+    if (preg_match('~^people/person/([^/]+)$~i', $path, $m)) {
+        return 'https://clz.elvanto.eu/admin/people/person/?id=' . rawurlencode(rawurldecode($m[1]));
+    }
+    if (preg_match('~^groups/([^/]+)$~i', $path, $m)) {
+        return 'https://clz.elvanto.eu/admin/groups/group/?id=' . rawurlencode(rawurldecode($m[1]));
+    }
+    if (preg_match('~^services/([^/]+)$~i', $path, $m)) {
+        return 'https://clz.elvanto.eu/admin/services/service/?id=' . rawurlencode(rawurldecode($m[1]));
+    }
+    if (preg_match('~^events/event/([^/]+)$~i', $path, $m)) {
+        return 'https://clz.elvanto.eu/admin/events/event/?id=' . rawurlencode(rawurldecode($m[1]));
+    }
+    return 'https://clz.elvanto.eu/admin/' . ltrim($path, '/');
 }
 
 function rpc_add_unique(array &$items, string $value): void

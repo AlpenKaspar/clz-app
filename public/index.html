@@ -9036,12 +9036,13 @@
         return escapeHtml(s).replace(/"/g, "&quot;");
       }
 
-      const ELVANTO_APP_BASE_ = "https://app.elvanto.com";
+      const ELVANTO_APP_BASE_ = "https://clz.elvanto.eu";
 
       function buildElvantoAppUrl_(path, params = {}) {
         const cleanPath = String(path || "").trim();
-        if (!cleanPath) return ELVANTO_APP_BASE_;
-        const url = new URL(cleanPath.replace(/^\/+/, ""), ELVANTO_APP_BASE_ + "/");
+        if (!cleanPath) return ELVANTO_APP_BASE_ + "/admin/";
+        const normalizedPath = cleanPath.replace(/^\/+/, "").replace(/^admin\//i, "");
+        const url = new URL("admin/" + normalizedPath, ELVANTO_APP_BASE_ + "/");
         Object.entries(params || {}).forEach(([key, value]) => {
           const raw = String(value || "").trim();
           if (raw) url.searchParams.set(key, raw);
@@ -9054,12 +9055,27 @@
         if (!raw) return "";
         try {
           const parsed = new URL(raw, window.location.origin);
+          if (/app\.elvanto\.com$/i.test(parsed.hostname)) {
+            const path = parsed.pathname.replace(/^\/+/, "");
+            const matchers = [
+              { re: /^people\/person\/([^/]+)$/i, path: "admin/people/person/" },
+              { re: /^groups\/([^/]+)$/i, path: "admin/groups/group/" },
+              { re: /^services\/([^/]+)$/i, path: "admin/services/service/" }
+            ];
+            for (const item of matchers) {
+              const match = path.match(item.re);
+              if (match) {
+                return buildElvantoAppUrl_(item.path, { id: decodeURIComponent(match[1]) }) + (parsed.hash || "");
+              }
+            }
+            return buildElvantoAppUrl_(path, Object.fromEntries(parsed.searchParams.entries())) + (parsed.hash || "");
+          }
           if (/clz\.elvanto\.eu$/i.test(parsed.hostname) && parsed.pathname.startsWith("/admin/")) {
-            return buildElvantoAppUrl_(parsed.pathname.replace(/^\/+/, ""), Object.fromEntries(parsed.searchParams.entries())) + (parsed.hash || "");
+            return parsed.toString();
           }
           return parsed.toString();
         } catch (e) {
-          return raw.replace(/^https:\/\/clz\.elvanto\.eu\/admin\//i, ELVANTO_APP_BASE_ + "/admin/");
+          return raw.replace(/^https:\/\/app\.elvanto\.com\//i, ELVANTO_APP_BASE_ + "/admin/");
         }
       }
 
