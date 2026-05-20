@@ -647,7 +647,7 @@
     .song-metronome-overlay {
       position:fixed;
       inset:0;
-      z-index:920;
+      z-index:12020;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -741,6 +741,27 @@
       cursor:pointer;
       font-weight:900;
     }
+    .song-metronome-meter {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+    .song-metronome-meter select,
+    .song-metronome-tap {
+      min-height:38px;
+      border:1px solid var(--border-color);
+      border-radius:10px;
+      background:var(--card-bg);
+      color:var(--text-main);
+      font-size:13px;
+      font-weight:850;
+      text-align:center;
+      padding:0 10px;
+    }
+    .song-metronome-tap {
+      cursor:pointer;
+      color:var(--primary);
+    }
     .song-metronome-mode {
       display:grid;
       grid-template-columns:repeat(3, 1fr);
@@ -815,10 +836,14 @@
     body.dark .song-metronome-indicator.is-pulsing { background:rgba(37,99,235,.32); box-shadow:0 0 0 8px rgba(37,99,235,.16); }
     body.dark .song-metronome-play { background:rgba(37,99,235,.22); border-color:rgba(147,197,253,.24); color:#dbeafe; }
     body.dark .song-metronome-bpm,
+    body.dark .song-metronome-meter select,
+    body.dark .song-metronome-tap,
     body.dark .song-metronome-mode,
     body.dark .song-metronome-sound { background:rgba(15,23,42,.70); border-color:rgba(148,163,184,.18); color:#e2e8f0; }
     body.dark .song-metronome-bpm input,
     body.dark .song-metronome-bpm button,
+    body.dark .song-metronome-meter select,
+    body.dark .song-metronome-tap,
     body.dark .song-metronome-sound,
     body.dark .song-metronome-mode button { color:#e2e8f0; }
     body.dark .song-metronome-bpm button,
@@ -8462,7 +8487,7 @@
       let currentSongTextState = null;
       let currentSongDetailReturnView = '';
       let currentSongDetailReturnFlowIndex = -1;
-      let songMetronomeState = { bpm: 70, running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0 };
+      let songMetronomeState = { bpm: 70, meter: '4/4', running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0, tapTimes: [] };
       let songFullscreenState = { open: false, speed: 1, direction: 0, raf: 0, lastTs: 0 };
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
@@ -10912,10 +10937,34 @@
         return Math.max(30, Math.min(240, Math.round(n)));
       }
 
+      function normalizeSongMetronomeMeter_(value) {
+        const raw = String(value || '').trim();
+        const match = raw.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+        if (!match) return '4/4';
+        const meter = `${Math.max(1, Math.min(12, Number(match[1])))}/${Math.max(1, Math.min(16, Number(match[2])))}`;
+        return ['2/4', '3/4', '4/4', '5/4', '6/8', '12/8'].includes(meter) ? meter : '4/4';
+      }
+
+      function songMetronomeBeatsPerBar_() {
+        const meter = normalizeSongMetronomeMeter_(songMetronomeState.meter || '4/4');
+        const top = Number((meter.split('/')[0] || 4));
+        return Math.max(1, Math.min(12, top || 4));
+      }
+
+      function applyCurrentSongMetronomeDefaults_() {
+        const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
+        const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
+        const bpm = clampSongMetronomeBpm_(arrangement?.bpm || currentSongData?.bpm || songMetronomeState.bpm || 70);
+        const meter = normalizeSongMetronomeMeter_(arrangement?.timeSignature || currentSongData?.timeSignature || songMetronomeState.meter || '4/4');
+        songMetronomeState.bpm = bpm;
+        songMetronomeState.meter = meter;
+      }
+
       function renderSongMetronome_() {
         const body = document.getElementById('song-metronome-body');
         if (!body) return;
         const s = songMetronomeState;
+        const meter = normalizeSongMetronomeMeter_(s.meter);
         body.innerHTML = `
           <div class="song-metronome-play-row">
             <div id="song-metronome-indicator" class="song-metronome-indicator" aria-hidden="true"></div>
@@ -10927,6 +10976,12 @@
             <input id="song-metronome-bpm-input" type="number" min="30" max="240" value="${escapeAttr(String(s.bpm))}" onchange="setSongMetronomeBpm_(this.value)" aria-label="BPM">
             <button type="button" onclick="changeSongMetronomeBpm_(1)" aria-label="BPM erhoehen">+</button>
             <button type="button" onclick="changeSongMetronomeBpm_(-1)" aria-label="BPM senken">-</button>
+          </div>
+          <div class="song-metronome-meter">
+            <select onchange="setSongMetronomeMeter_(this.value)" aria-label="Taktart">
+              ${['2/4', '3/4', '4/4', '5/4', '6/8', '12/8'].map(value => `<option value="${value}" ${meter === value ? 'selected' : ''}>Takt ${value}</option>`).join('')}
+            </select>
+            <button class="song-metronome-tap" type="button" onclick="tapSongMetronomeTempo_()" aria-label="Tempo tappen">Tap</button>
           </div>
           <div class="song-metronome-mode" role="group" aria-label="Metronom Modus">
             <button type="button" class="${s.mode === 'both' ? 'is-active' : ''}" onclick="setSongMetronomeMode_('both')">Ton + Indikator</button>
@@ -10947,6 +11002,7 @@
 
       function openSongMetronome_() {
         const overlay = document.getElementById('song-metronome-overlay');
+        applyCurrentSongMetronomeDefaults_();
         renderSongMetronome_();
         if (overlay) overlay.setAttribute('aria-hidden', 'false');
       }
@@ -10957,12 +11013,12 @@
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
       }
 
-      function ensureSongMetronomeAudio_() {
+      async function ensureSongMetronomeAudio_() {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return null;
         if (!songMetronomeState.audioCtx) songMetronomeState.audioCtx = new AudioCtx();
         if (songMetronomeState.audioCtx.state === 'suspended') {
-          songMetronomeState.audioCtx.resume().catch(() => {});
+          try { await songMetronomeState.audioCtx.resume(); } catch (e) {}
         }
         return songMetronomeState.audioCtx;
       }
@@ -10976,11 +11032,13 @@
         setTimeout(() => indicator.classList.remove('is-pulsing'), 110);
       }
 
-      function playSongMetronomeSound_() {
-        const ctx = ensureSongMetronomeAudio_();
+      async function playSongMetronomeSound_() {
+        const ctx = await ensureSongMetronomeAudio_();
         if (!ctx) return;
+        if (ctx.state === 'suspended') return;
         const now = ctx.currentTime;
         const sound = String(songMetronomeState.sound || 'woodblock');
+        const isAccent = (Math.max(1, Number(songMetronomeState.beat || 1)) - 1) % songMetronomeBeatsPerBar_() === 0;
         const gain = ctx.createGain();
         const osc = ctx.createOscillator();
         const noiseGain = ctx.createGain();
@@ -10988,9 +11046,9 @@
 
         if (sound === 'kick') {
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.setValueAtTime(isAccent ? 180 : 135, now);
           osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
-          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.setValueAtTime(isAccent ? 0.30 : 0.22, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
           osc.connect(gain);
           osc.start(now);
@@ -11004,7 +11062,7 @@
           for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
           const src = ctx.createBufferSource();
           src.buffer = buffer;
-          noiseGain.gain.setValueAtTime(0.14, now);
+          noiseGain.gain.setValueAtTime(isAccent ? 0.20 : 0.14, now);
           noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
           src.connect(noiseGain);
           noiseGain.connect(ctx.destination);
@@ -11014,10 +11072,10 @@
         }
 
         const cfg = sound === 'beep'
-          ? { type: 'sine', freq: 980, dur: 0.06, level: 0.13 }
+          ? { type: 'sine', freq: isAccent ? 1180 : 980, dur: 0.06, level: isAccent ? 0.18 : 0.13 }
           : sound === 'click'
-            ? { type: 'triangle', freq: 1320, dur: 0.045, level: 0.11 }
-            : { type: 'square', freq: songMetronomeState.beat % 4 === 0 ? 920 : 760, dur: 0.05, level: 0.10 };
+            ? { type: 'triangle', freq: isAccent ? 1480 : 1320, dur: 0.045, level: isAccent ? 0.16 : 0.11 }
+            : { type: 'square', freq: isAccent ? 920 : 760, dur: 0.05, level: isAccent ? 0.16 : 0.10 };
         osc.type = cfg.type;
         osc.frequency.setValueAtTime(cfg.freq, now);
         gain.gain.setValueAtTime(cfg.level, now);
@@ -11027,17 +11085,18 @@
         osc.stop(now + cfg.dur + 0.02);
       }
 
-      function tickSongMetronome_() {
+      async function tickSongMetronome_() {
         songMetronomeState.beat += 1;
         if (songMetronomeState.mode !== 'sound') pulseSongMetronomeIndicator_();
-        if (songMetronomeState.mode !== 'visual') playSongMetronomeSound_();
+        if (songMetronomeState.mode !== 'visual') await playSongMetronomeSound_();
       }
 
-      function startSongMetronome_() {
+      async function startSongMetronome_() {
         stopSongMetronome_(false);
         songMetronomeState.running = true;
         songMetronomeState.beat = 0;
-        tickSongMetronome_();
+        await ensureSongMetronomeAudio_();
+        await tickSongMetronome_();
         songMetronomeState.timer = setInterval(tickSongMetronome_, 60000 / clampSongMetronomeBpm_(songMetronomeState.bpm));
         renderSongMetronome_();
       }
@@ -11049,9 +11108,9 @@
         if (render) renderSongMetronome_();
       }
 
-      function toggleSongMetronome_() {
+      async function toggleSongMetronome_() {
         if (songMetronomeState.running) stopSongMetronome_();
-        else startSongMetronome_();
+        else await startSongMetronome_();
       }
 
       function setSongMetronomeBpm_(value) {
@@ -11062,6 +11121,28 @@
 
       function changeSongMetronomeBpm_(delta) {
         setSongMetronomeBpm_(clampSongMetronomeBpm_(songMetronomeState.bpm) + Number(delta || 0));
+      }
+
+      function setSongMetronomeMeter_(meter) {
+        songMetronomeState.meter = normalizeSongMetronomeMeter_(meter);
+        songMetronomeState.beat = 0;
+        renderSongMetronome_();
+      }
+
+      function tapSongMetronomeTempo_() {
+        const now = Date.now();
+        const taps = Array.isArray(songMetronomeState.tapTimes) ? songMetronomeState.tapTimes : [];
+        const recent = taps.filter(ts => now - ts < 2200).concat(now).slice(-5);
+        songMetronomeState.tapTimes = recent;
+        if (recent.length >= 2) {
+          const diffs = recent.slice(1).map((ts, index) => ts - recent[index]).filter(ms => ms >= 250 && ms <= 2000);
+          if (diffs.length) {
+            const avg = diffs.reduce((sum, ms) => sum + ms, 0) / diffs.length;
+            setSongMetronomeBpm_(60000 / avg);
+            return;
+          }
+        }
+        renderSongMetronome_();
       }
 
       function setSongMetronomeMode_(mode) {

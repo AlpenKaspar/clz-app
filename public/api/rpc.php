@@ -1926,10 +1926,11 @@ function rpc_songs_lite(): array
             $keyName = rpc_str($row['default_key_name'] ?? '');
             $bpm = rpc_str($row['bpm'] ?? '');
             $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+            $timeSignature = rpc_song_first_field($raw, ['time_signature', 'timeSignature', 'meter', 'Meter', 'takt', 'Takt', 'taktart', 'Taktart', 'Arrangement_Time_Signature', 'Arrangement_Taktart']);
             if ($category === '') {
                 $category = rpc_song_category_payload($raw);
             }
-            $arrangements = rpc_song_arrangements_payload($raw, $title, $keyName, $bpm);
+            $arrangements = rpc_song_arrangements_payload($raw, $title, $keyName, $bpm, $timeSignature);
             $songAssets = rpc_song_assets_payload($raw);
             $pdfLinks = rpc_song_links_payload($raw, ['pdf']);
             $fileLinks = rpc_song_links_payload($raw, ['file', 'link']);
@@ -1948,6 +1949,7 @@ function rpc_songs_lite(): array
                 'keyName' => $keyNames[0] ?? $keyName,
                 'keyNames' => $keyNames,
                 'bpm' => $bpm,
+                'timeSignature' => $timeSignature,
                 'ccliNumber' => rpc_song_first_field($raw, ['ccli_number', 'ccli', 'CCLI_Number']),
                 'songStatus' => rpc_song_first_field($raw, ['status', 'song_status', 'Song_Status']),
                 'youtubeUrl' => $youtubeUrls[0] ?? '',
@@ -1982,7 +1984,7 @@ function rpc_decode_json_array(mixed $json): array
     return is_array($decoded) ? $decoded : [];
 }
 
-function rpc_song_arrangements_payload(array $song, string $fallbackTitle, string $fallbackKey, string $fallbackBpm): array
+function rpc_song_arrangements_payload(array $song, string $fallbackTitle, string $fallbackKey, string $fallbackBpm, string $fallbackTimeSignature = ''): array
 {
     $rawArrangements = [];
     foreach ([['arrangements', 'arrangement'], ['arrangements'], ['song_arrangements', 'arrangement'], ['song_arrangements']] as $path) {
@@ -1997,11 +1999,13 @@ function rpc_song_arrangements_payload(array $song, string $fallbackTitle, strin
         $flatArrangementId = rpc_song_first_field($song, ['Arrangement_ID', 'arrangement_id']);
         $flatKey = rpc_song_first_field($song, ['Key_Name', 'Arrangement_Key_Name', 'key_name', 'key']);
         $flatBpm = rpc_song_first_field($song, ['Arrangement_BPM', 'bpm', 'tempo']);
+        $flatTimeSignature = rpc_song_first_field($song, ['Arrangement_Time_Signature', 'time_signature', 'timeSignature', 'meter', 'Meter', 'takt', 'Takt', 'taktart', 'Taktart']);
         $rawArrangements = [[
             'id' => $flatArrangementId,
             'name' => $flatArrangementName !== '' ? $flatArrangementName : $fallbackTitle,
             'key_name' => $flatKey !== '' ? $flatKey : $fallbackKey,
             'bpm' => $flatBpm !== '' ? $flatBpm : $fallbackBpm,
+            'time_signature' => $flatTimeSignature !== '' ? $flatTimeSignature : $fallbackTimeSignature,
             '__flat_song' => $song,
         ]];
     }
@@ -2028,6 +2032,7 @@ function rpc_song_arrangements_payload(array $song, string $fallbackTitle, strin
             'keyName' => $keyNames[0] ?? $fallbackKey,
             'keyNames' => $keyNames,
             'bpm' => rpc_song_first_field($source, ['bpm', 'tempo', 'Arrangement_BPM']) ?: $fallbackBpm,
+            'timeSignature' => rpc_song_first_field($source, ['time_signature', 'timeSignature', 'meter', 'Meter', 'takt', 'Takt', 'taktart', 'Taktart', 'Arrangement_Time_Signature', 'Arrangement_Taktart']) ?: $fallbackTimeSignature,
             'minutes' => rpc_song_first_field($source, ['minutes', 'Arrangement_Minutes']),
             'seconds' => rpc_song_first_field($source, ['seconds', 'Arrangement_Seconds']),
             'keyMale' => rpc_song_first_field($source, ['key_male', 'Arrangement_Key_Male']),
