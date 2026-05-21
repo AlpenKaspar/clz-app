@@ -94,13 +94,66 @@ try {
 
 function youtube_playlist_extract_initial_data(string $html): ?array
 {
-    if (preg_match('/var ytInitialData\s*=\s*(\{.*?\});\s*<\/script>/s', $html, $m)
-        || preg_match('/ytInitialData\s*=\s*(\{.*?\});/s', $html, $m)
-    ) {
-        $data = json_decode($m[1], true);
-        return is_array($data) ? $data : null;
+    foreach (['var ytInitialData = ', 'window["ytInitialData"] = ', 'ytInitialData = '] as $marker) {
+        $pos = strpos($html, $marker);
+        if ($pos === false) {
+            continue;
+        }
+        $start = strpos($html, '{', $pos);
+        if ($start === false) {
+            continue;
+        }
+        $json = youtube_playlist_extract_json_object($html, $start);
+        if ($json === '') {
+            continue;
+        }
+        $data = json_decode($json, true);
+        if (is_array($data)) {
+            return $data;
+        }
     }
     return null;
+}
+
+function youtube_playlist_extract_json_object(string $html, int $start): string
+{
+    $len = strlen($html);
+    $depth = 0;
+    $inString = false;
+    $escaped = false;
+
+    for ($i = $start; $i < $len; $i++) {
+        $char = $html[$i];
+        if ($inString) {
+            if ($escaped) {
+                $escaped = false;
+                continue;
+            }
+            if ($char === '\\') {
+                $escaped = true;
+                continue;
+            }
+            if ($char === '"') {
+                $inString = false;
+            }
+            continue;
+        }
+        if ($char === '"') {
+            $inString = true;
+            continue;
+        }
+        if ($char === '{') {
+            $depth++;
+            continue;
+        }
+        if ($char === '}') {
+            $depth--;
+            if ($depth === 0) {
+                return substr($html, $start, $i - $start + 1);
+            }
+        }
+    }
+    return '';
 }
 
 function youtube_playlist_text(mixed $value): string
