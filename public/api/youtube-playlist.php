@@ -5,8 +5,6 @@ declare(strict_types=1);
 require __DIR__ . '/../../src/bootstrap.php';
 
 try {
-    require_user();
-
     $playlistId = trim((string) ($_GET['list'] ?? ''));
     $videoId = trim((string) ($_GET['v'] ?? ''));
     if ($playlistId === '' || !preg_match('/^[A-Za-z0-9_-]{6,}$/', $playlistId)) {
