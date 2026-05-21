@@ -8100,6 +8100,7 @@
           <div class="songs-player-mode" role="tablist" aria-label="Player-Modus">
             <button id="songs-player-mode-audio" class="active" type="button" onclick="setSongsPlayerFilter_('audio-all')">Audio</button>
             <button id="songs-player-mode-video" type="button" onclick="setSongsPlayerFilter_('video')">Video</button>
+            <button id="songs-player-mode-livestream" type="button" onclick="setSongsPlayerFilter_('livestream')">Livestream</button>
           </div>
           <div id="songs-player-now-title" class="songs-player-now-title">Kein Titel ausgewählt</div>
           <div id="songs-player-now-meta" class="songs-player-now-meta"></div>
@@ -8139,6 +8140,7 @@
           <button class="songs-player-tab" data-filter="audio" type="button" onclick="setSongsPlayerFilter_('audio')">Audio</button>
           <button class="songs-player-tab" data-filter="playback" type="button" onclick="setSongsPlayerFilter_('playback')">Playbacks</button>
           <button class="songs-player-tab" data-filter="tracks" type="button" onclick="setSongsPlayerFilter_('tracks')">Spuren</button>
+          <button class="songs-player-tab" data-filter="livestream" type="button" onclick="setSongsPlayerFilter_('livestream')">Livestream</button>
         </div>
 
         <div id="songs-player-list" class="songs-player-list"></div>
@@ -10168,6 +10170,9 @@
       //  - song.arrangements[*].assets
       //  - song.arrangements[*].keyResources[*].assets
       // ===========================
+      const SONGS_LIVESTREAM_PLAYLIST_ID_ = 'PLbfDEVQdI8NkUaik7_m-qEQOPClLrotqS';
+      const SONGS_LIVESTREAM_VIDEO_ID_ = 'AG6LD8bXVFs';
+      const SONGS_LIVESTREAM_URL_ = `https://www.youtube.com/watch?v=${SONGS_LIVESTREAM_VIDEO_ID_}&list=${SONGS_LIVESTREAM_PLAYLIST_ID_}`;
       const songsPlayerState = {
         items: [],
         filtered: [],
@@ -10263,7 +10268,7 @@
 
       function renderSongsYoutubeFallbackIframe_(item) {
         const wrap = document.getElementById('songs-player-video-wrap');
-        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', true);
+        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', true, item?.playlistId || '');
         if (!wrap || !src) return;
         songsYoutubePlayer_ = null;
         wrap.innerHTML = `<iframe id="songs-player-video-target" title="YouTube Video" src="${escapeAttr(src)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
@@ -10271,24 +10276,37 @@
 
       function playSongsYoutubeVideo_(item) {
         const videoId = youtubeVideoIdFromUrl_(item?.url || item?.watchUrl || '');
+        const playlistId = item?.playlistId || youtubePlaylistIdFromUrl_(item?.url || item?.watchUrl || '');
         const target = ensureSongsYoutubeTarget_();
-        if (!videoId || !target) return;
+        if ((!videoId && !playlistId) || !target) return;
         loadSongsYoutubeApi_().then((YT) => {
           if (!YT || !YT.Player) throw new Error('YouTube API nicht bereit.');
           if (!songsYoutubePlayer_ || typeof songsYoutubePlayer_.loadVideoById !== 'function') {
             songsYoutubePlayer_ = new YT.Player('songs-player-video-target', {
-              videoId,
-              playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+              videoId: videoId || undefined,
+              playerVars: playlistId
+                ? { autoplay: 1, rel: 0, playsinline: 1, listType: 'playlist', list: playlistId }
+                : { autoplay: 1, rel: 0, playsinline: 1 },
               events: {
                 onReady: (ev) => {
-                  try { ev.target.playVideo(); } catch (e) {}
+                  try {
+                    if (playlistId && typeof ev.target.loadPlaylist === 'function') {
+                      ev.target.loadPlaylist({ listType: 'playlist', list: playlistId, index: 0 });
+                    } else {
+                      ev.target.playVideo();
+                    }
+                  } catch (e) {}
                 },
                 onStateChange: onSongsYoutubePlayerStateChange_
               }
             });
             return;
           }
-          songsYoutubePlayer_.loadVideoById(videoId);
+          if (playlistId && typeof songsYoutubePlayer_.loadPlaylist === 'function') {
+            songsYoutubePlayer_.loadPlaylist({ listType: 'playlist', list: playlistId, index: 0 });
+          } else if (videoId) {
+            songsYoutubePlayer_.loadVideoById(videoId);
+          }
         }).catch(() => {
           renderSongsYoutubeFallbackIframe_(item);
         });
@@ -10309,6 +10327,25 @@
       function buildSongsPlayerItems_() {
         const out = [];
         const seenUrls = new Set();
+        const livestreamEmbed = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`;
+        out.push({
+          url: livestreamEmbed || SONGS_LIVESTREAM_URL_,
+          watchUrl: SONGS_LIVESTREAM_URL_,
+          playlistId: SONGS_LIVESTREAM_PLAYLIST_ID_,
+          name: 'CLZ Livestream Playlist',
+          songTitle: 'Livestream',
+          artist: 'YouTube',
+          album: '',
+          arrangementName: '',
+          keyName: '',
+          bpm: '',
+          songId: '',
+          fileType: 'Livestream',
+          fileMode: 'YouTube Playlist',
+          extension: '',
+          kind: 'livestream'
+        });
+        if (livestreamEmbed) seenUrls.add(livestreamEmbed);
         const addVideo = (embedUrl, song, arrangement, label) => {
           const embed = buildYoutubeEmbedUrl_(embedUrl);
           if (!embed || seenUrls.has(embed)) return;
@@ -10391,6 +10428,7 @@
         const filter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
         const q = String(songsPlayerState.currentSearch || '').trim().toLowerCase();
         songsPlayerState.filtered = (songsPlayerState.items || []).filter((it) => {
+          if (filter !== 'livestream' && it.kind === 'livestream') return false;
           if (filter === 'audio-all' && it.kind === 'video') return false;
           if (filter !== 'all' && filter !== 'audio-all' && it.kind !== filter) return false;
           if (!q) return true;
@@ -10423,6 +10461,7 @@
           const isActive = it.url === songsPlayerState.currentUrl;
           const kindLabel = it.kind === 'playback' ? 'Playback' :
                             it.kind === 'tracks' ? 'Spur' :
+                            it.kind === 'livestream' ? 'Live' :
                             it.kind === 'video' ? 'Video' : 'Audio';
           const title = escapeHtml(it.songTitle || it.name);
           const subParts = [];
@@ -10434,7 +10473,7 @@
           const sub = escapeHtml(subParts.join(' · '));
           return `
             <div class="songs-player-item${isActive ? ' active' : ''}" data-idx="${idx}" onclick="playSongsPlayerItem_(${idx})">
-              <span class="songs-player-item-icon${it.kind === 'video' ? ' video' : ''}"><i class="${it.kind === 'video' ? 'fab fa-youtube' : 'fas fa-music'}"></i></span>
+              <span class="songs-player-item-icon${(it.kind === 'video' || it.kind === 'livestream') ? ' video' : ''}"><i class="${(it.kind === 'video' || it.kind === 'livestream') ? 'fab fa-youtube' : 'fas fa-music'}"></i></span>
               <div class="songs-player-item-body">
                 <div class="songs-player-item-title">${title}</div>
                 <div class="songs-player-item-sub">${sub}</div>
@@ -10448,13 +10487,15 @@
       function setSongsPlayerFilter_(filter) {
         songsPlayerState.currentFilter = String(filter || 'audio-all');
         const activeFilter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
-        const videoMode = songsPlayerState.currentFilter === 'video';
+        const videoMode = songsPlayerState.currentFilter === 'video' || songsPlayerState.currentFilter === 'livestream';
+        const livestreamMode = songsPlayerState.currentFilter === 'livestream';
         const tabs = document.getElementById('songs-player-tabs');
         if (tabs) tabs.hidden = videoMode;
         document.querySelectorAll('#songs-player-tabs .songs-player-tab').forEach((btn) => {
           btn.classList.toggle('active', btn.getAttribute('data-filter') === activeFilter);
         });
-        document.getElementById('songs-player-mode-video')?.classList.toggle('active', videoMode);
+        document.getElementById('songs-player-mode-video')?.classList.toggle('active', songsPlayerState.currentFilter === 'video');
+        document.getElementById('songs-player-mode-livestream')?.classList.toggle('active', livestreamMode);
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !videoMode);
         renderSongsPlayerList_();
       }
@@ -10475,13 +10516,13 @@
         if (it.artist) parts.push(it.artist);
         if (it.keyName) parts.push(it.keyName);
         if (it.bpm) parts.push(it.bpm + ' BPM');
-        const kindLabel = it.kind === 'playback' ? 'Playback' : it.kind === 'tracks' ? 'Spur' : it.kind === 'video' ? 'Video' : 'Audio';
+        const kindLabel = it.kind === 'playback' ? 'Playback' : it.kind === 'tracks' ? 'Spur' : it.kind === 'livestream' ? 'Livestream' : it.kind === 'video' ? 'Video' : 'Audio';
         parts.push(it.extension ? `${kindLabel} ${it.extension}` : kindLabel);
         return parts.join(' · ');
       }
       function updateSongsPlayerButtons_() {
         const audio = document.getElementById('songs-player-audio');
-        const isVideo = songsPlayerState.currentItem?.kind === 'video';
+        const isVideo = songsPlayerState.currentItem?.kind === 'video' || songsPlayerState.currentItem?.kind === 'livestream';
         const isPlaying = !isVideo && !!audio && !!audio.src && !audio.paused;
         ['songs-player-play', 'songs-mini-play'].forEach((id) => {
           const btn = document.getElementById(id);
@@ -10540,7 +10581,7 @@
         updateSongsPlayerProgress_();
       }
       function toggleSongsPlayerPlayback_() {
-        if (songsPlayerState.currentItem?.kind === 'video') {
+        if (songsPlayerState.currentItem?.kind === 'video' || songsPlayerState.currentItem?.kind === 'livestream') {
           openSongsPlayer_();
           return;
         }
@@ -10567,7 +10608,7 @@
         updateSongsPlayerProgress_();
       }
       function showSongsPlayerRoutePicker_() {
-        if (songsPlayerState.currentItem?.kind === 'video') {
+        if (songsPlayerState.currentItem?.kind === 'video' || songsPlayerState.currentItem?.kind === 'livestream') {
           toast('AirPlay ist für YouTube im eingebetteten Player nicht verfügbar', 1800);
           return;
         }
@@ -10588,7 +10629,7 @@
         const now = document.getElementById('songs-player-now');
         const title = document.getElementById('songs-player-now-title');
         const meta = document.getElementById('songs-player-now-meta');
-        const isVideo = it.kind === 'video';
+        const isVideo = it.kind === 'video' || it.kind === 'livestream';
         if (now) now.classList.toggle('is-video', isVideo);
         if (title) title.textContent = it.songTitle || it.name || 'Titel';
         if (meta) {
@@ -10599,6 +10640,7 @@
           if (it.bpm) parts.push(it.bpm + ' BPM');
           const kindLabel = it.kind === 'playback' ? 'Playback' :
                             it.kind === 'tracks' ? 'Spur' :
+                            it.kind === 'livestream' ? 'Livestream' :
                             it.kind === 'video' ? 'Video' : 'Audio';
           parts.push(it.extension ? `${kindLabel} ${it.extension}` : kindLabel);
           meta.textContent = parts.join(' · ');
@@ -10629,12 +10671,15 @@
         const wanted = String(url || '').trim();
         if (!wanted) return;
         const wantedEmbed = buildYoutubeEmbedUrl_(wanted);
-        const target = wantedEmbed || wanted;
+        const wantedPlaylistId = youtubePlaylistIdFromUrl_(wanted);
+        const target = wantedPlaylistId === SONGS_LIVESTREAM_PLAYLIST_ID_
+          ? `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`
+          : (wantedEmbed || wanted);
         const closeSongDetail = currentDetailOverlayView === 'song-detail-view';
         openSongsPlayer_();
         let idx = songsPlayerState.filtered.findIndex(it => it.url === target || it.watchUrl === wanted);
         if (idx < 0) {
-          setSongsPlayerFilter_(wantedEmbed ? 'video' : 'audio-all');
+          setSongsPlayerFilter_(wantedPlaylistId ? 'livestream' : (wantedEmbed ? 'video' : 'audio-all'));
           idx = songsPlayerState.filtered.findIndex(it => it.url === target || it.watchUrl === wanted);
         }
         if (idx >= 0) {
@@ -10649,14 +10694,16 @@
         songsPlayerState.items = buildSongsPlayerItems_();
         const inp = document.getElementById('songs-player-search');
         if (inp) inp.value = songsPlayerState.currentSearch || '';
-        const openVideoMode = songsPlayerState.currentFilter === 'video';
+        const openVideoMode = songsPlayerState.currentFilter === 'video' || songsPlayerState.currentFilter === 'livestream';
+        const openLivestreamMode = songsPlayerState.currentFilter === 'livestream';
         const tabs = document.getElementById('songs-player-tabs');
         if (tabs) tabs.hidden = openVideoMode;
         document.querySelectorAll('#songs-player-tabs .songs-player-tab').forEach((btn) => {
           const activeFilter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
           btn.classList.toggle('active', btn.getAttribute('data-filter') === activeFilter);
         });
-        document.getElementById('songs-player-mode-video')?.classList.toggle('active', openVideoMode);
+        document.getElementById('songs-player-mode-video')?.classList.toggle('active', songsPlayerState.currentFilter === 'video');
+        document.getElementById('songs-player-mode-livestream')?.classList.toggle('active', openLivestreamMode);
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !openVideoMode);
         renderSongsPlayerList_();
         const overlay = document.getElementById('songs-player-overlay');
@@ -21813,21 +21860,42 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const watchId = parsed.searchParams.get('v');
           if ((host === 'youtube.com' || host === 'music.youtube.com' || host === 'm.youtube.com') && watchId) return watchId.trim();
           if (host === 'youtu.be' && parts[0]) return parts[0];
-          if ((host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'm.youtube.com') && ['embed', 'shorts', 'live'].includes(parts[0]) && parts[1]) return parts[1];
+          if ((host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'm.youtube.com') && ['embed', 'shorts', 'live'].includes(parts[0]) && parts[1] && parts[1] !== 'videoseries') return parts[1];
         } catch (e) {}
         const watchMatch = raw.match(/[?&]v=([A-Za-z0-9_-]{6,})/i);
         const shortMatch = raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i);
         const embedMatch = raw.match(/youtube(?:-nocookie)?\.com\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{6,})/i);
-        return (watchMatch?.[1] || shortMatch?.[1] || embedMatch?.[1] || '').replace(/[^A-Za-z0-9_-].*$/, '');
+        const id = (watchMatch?.[1] || shortMatch?.[1] || embedMatch?.[1] || '').replace(/[^A-Za-z0-9_-].*$/, '');
+        return id === 'videoseries' ? '' : id;
+      }
+
+      function youtubePlaylistIdFromUrl_(url) {
+        const raw = String(url || '').trim();
+        if (!raw) return '';
+        try {
+          const parsed = new URL(raw, window.location.origin);
+          const listId = parsed.searchParams.get('list');
+          if (listId) return listId.trim();
+          const parts = parsed.pathname.split('/').map(v => v.trim()).filter(Boolean);
+          if (parts[0] === 'playlist' && parsed.searchParams.get('list')) return parsed.searchParams.get('list').trim();
+          if (parts[0] === 'embed' && parts[1] === 'videoseries' && parsed.searchParams.get('list')) return parsed.searchParams.get('list').trim();
+        } catch (e) {}
+        const listMatch = raw.match(/[?&]list=([A-Za-z0-9_-]{6,})/i);
+        return (listMatch?.[1] || '').replace(/[^A-Za-z0-9_-].*$/, '');
       }
 
       function buildYoutubeEmbedUrl_(url) {
         const videoId = youtubeVideoIdFromUrl_(url);
-        return videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : '';
+        if (videoId) return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
+        const playlistId = youtubePlaylistIdFromUrl_(url);
+        return playlistId ? `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(playlistId)}` : '';
       }
 
-      function buildYoutubeEmbedPlaybackUrl_(url, autoplay = false) {
-        const embed = buildYoutubeEmbedUrl_(url);
+      function buildYoutubeEmbedPlaybackUrl_(url, autoplay = false, playlistIdOverride = '') {
+        const playlistId = String(playlistIdOverride || youtubePlaylistIdFromUrl_(url) || '').trim();
+        const embed = playlistId
+          ? `https://www.youtube.com/embed/videoseries`
+          : buildYoutubeEmbedUrl_(url);
         if (!embed) return '';
         const params = new URLSearchParams({
           rel: '0',
@@ -21835,6 +21903,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           enablejsapi: '1',
           origin: window.location.origin
         });
+        if (playlistId) params.set('list', playlistId);
         if (autoplay) params.set('autoplay', '1');
         return `${embed}?${params.toString()}`;
       }
