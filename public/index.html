@@ -10367,9 +10367,9 @@
         return target;
       }
 
-      function renderSongsYoutubeFallbackIframe_(item) {
+      function renderSongsYoutubeFallbackIframe_(item, autoplay = true) {
         const wrap = document.getElementById('songs-player-video-wrap');
-        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', true, item?.playlistId || '', item?.playlistIndex || 0);
+        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', autoplay, item?.playlistId || '', item?.playlistIndex || 0);
         if (!wrap || !src) return;
         songsYoutubePlayer_ = null;
         wrap.innerHTML = `<iframe id="songs-player-video-target" title="YouTube Video" src="${escapeAttr(src)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
@@ -10410,7 +10410,7 @@
             songsYoutubePlayer_.loadVideoById(videoId);
           }
         }).catch(() => {
-          renderSongsYoutubeFallbackIframe_(item);
+          renderSongsYoutubeFallbackIframe_(item, true);
         });
       }
 
@@ -10585,12 +10585,18 @@
           `;
         }).join('');
         host.innerHTML = html;
-        if (songsPlayerState.currentFilter === 'livestream'
-          && items.length
-          && (songsPlayerState.currentItem?.kind !== 'livestream' || songsPlayerState.currentItem?.isPlaylistFallback)
-        ) {
+        if (items.length && !songsPlayerCurrentMatchesFilter_()) {
           previewSongsPlayerItem_(0);
         }
+      }
+
+      function songsPlayerCurrentMatchesFilter_() {
+        const filter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
+        const item = songsPlayerState.currentItem;
+        if (!item) return false;
+        if (item.isPlaylistFallback) return false;
+        if (filter === 'audio-all') return item.kind !== 'video' && item.kind !== 'livestream';
+        return item.kind === filter;
       }
 
       function previewSongsPlayerItem_(idx) {
@@ -10602,9 +10608,23 @@
         const now = document.getElementById('songs-player-now');
         const title = document.getElementById('songs-player-now-title');
         const meta = document.getElementById('songs-player-now-meta');
-        if (now) now.classList.toggle('is-video', it.kind === 'video' || it.kind === 'livestream');
+        const isVideo = it.kind === 'video' || it.kind === 'livestream';
+        if (now) now.classList.toggle('is-video', isVideo);
         if (title) title.textContent = it.songTitle || it.name || 'Titel';
         if (meta) meta.textContent = songsPlayerMetaText_(it);
+        const audio = document.getElementById('songs-player-audio');
+        if (isVideo) {
+          if (audio) {
+            try {
+              audio.pause();
+              audio.removeAttribute('src');
+              audio.load();
+            } catch (e) {}
+          }
+          renderSongsYoutubeFallbackIframe_(it, false);
+        } else {
+          stopSongsYoutubeVideo_();
+        }
         document.querySelectorAll('#songs-player-list .songs-player-item').forEach((el) => {
           el.classList.toggle('active', Number(el.getAttribute('data-idx')) === idx);
         });
@@ -10613,6 +10633,9 @@
 
       function setSongsPlayerFilter_(filter) {
         songsPlayerState.currentFilter = String(filter || 'audio-all');
+        songsPlayerState.currentIndex = -1;
+        songsPlayerState.currentUrl = '';
+        songsPlayerState.currentItem = null;
         const activeFilter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
         const videoMode = songsPlayerState.currentFilter === 'video' || songsPlayerState.currentFilter === 'livestream';
         const livestreamMode = songsPlayerState.currentFilter === 'livestream';
