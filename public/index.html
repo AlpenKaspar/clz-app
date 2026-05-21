@@ -10177,6 +10177,8 @@
       const SONGS_LIVESTREAM_PLAYLIST_ID_ = 'PLbfDEVQdI8NkUaik7_m-qEQOPClLrotqS';
       const SONGS_LIVESTREAM_VIDEO_ID_ = 'AG6LD8bXVFs';
       const SONGS_LIVESTREAM_URL_ = `https://www.youtube.com/watch?v=${SONGS_LIVESTREAM_VIDEO_ID_}&list=${SONGS_LIVESTREAM_PLAYLIST_ID_}`;
+      let songsLivestreamItemsCache_ = null;
+      let songsLivestreamItemsPromise_ = null;
       const songsPlayerState = {
         items: [],
         filtered: [],
@@ -10215,6 +10217,90 @@
         if (text.includes('playback') || text.includes('demo')) return 'playback';
         if (text.includes('spur') || text.includes('track') || text.includes('drum') || text.includes('click')) return 'tracks';
         return 'audio';
+      }
+
+      function buildSongsLivestreamFallbackItem_() {
+        const livestreamEmbed = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`;
+        return {
+          url: livestreamEmbed,
+          watchUrl: SONGS_LIVESTREAM_URL_,
+          playlistId: SONGS_LIVESTREAM_PLAYLIST_ID_,
+          playlistIndex: 0,
+          name: 'Playlist wird geladen...',
+          songTitle: 'Livestream',
+          artist: 'YouTube',
+          album: '',
+          arrangementName: '',
+          keyName: '',
+          bpm: '',
+          songId: '',
+          fileType: 'Livestream',
+          fileMode: 'YouTube Playlist',
+          extension: '',
+          kind: 'livestream',
+          isPlaylistFallback: true
+        };
+      }
+
+      function normalizeSongsLivestreamItems_(data) {
+        const playlistTitle = String(data?.title || 'Livestream').trim() || 'Livestream';
+        const rows = Array.isArray(data?.items) ? data.items : [];
+        const items = [];
+        const seen = new Set();
+        rows.forEach((row, idx) => {
+          const videoId = String(row?.videoId || '').trim();
+          if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId) || seen.has(videoId)) return;
+          seen.add(videoId);
+          const playlistIndex = Math.max(0, Number.isFinite(Number(row?.index)) ? Number(row.index) : idx);
+          const title = String(row?.title || '').trim() || playlistTitle;
+          const watchUrl = String(row?.url || '').trim() || `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}&index=${playlistIndex + 1}`;
+          items.push({
+            url: `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`,
+            watchUrl,
+            videoId,
+            playlistId: SONGS_LIVESTREAM_PLAYLIST_ID_,
+            playlistIndex,
+            name: playlistTitle,
+            songTitle: title,
+            artist: String(row?.channel || 'CLZ Spiez').trim(),
+            album: playlistTitle,
+            arrangementName: '',
+            durationLabel: String(row?.duration || '').trim(),
+            keyName: '',
+            bpm: '',
+            songId: '',
+            fileType: 'Livestream',
+            fileMode: 'YouTube',
+            extension: '',
+            kind: 'livestream'
+          });
+        });
+        return items;
+      }
+
+      function loadSongsLivestreamItems_() {
+        if (Array.isArray(songsLivestreamItemsCache_)) return Promise.resolve(songsLivestreamItemsCache_);
+        if (songsLivestreamItemsPromise_) return songsLivestreamItemsPromise_;
+        const url = `/api/youtube-playlist.php?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}&v=${encodeURIComponent(SONGS_LIVESTREAM_VIDEO_ID_)}`;
+        songsLivestreamItemsPromise_ = fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+          .then((response) => response.ok ? response.json() : Promise.reject(new Error('Playlist konnte nicht geladen werden.')))
+          .then((data) => {
+            const items = normalizeSongsLivestreamItems_(data);
+            songsLivestreamItemsCache_ = items.length ? items : [buildSongsLivestreamFallbackItem_()];
+            return songsLivestreamItemsCache_;
+          })
+          .catch(() => {
+            songsLivestreamItemsCache_ = [buildSongsLivestreamFallbackItem_()];
+            return songsLivestreamItemsCache_;
+          })
+          .finally(() => {
+            songsLivestreamItemsPromise_ = null;
+            if (songsPlayerState.currentFilter === 'livestream') {
+              songsPlayerState.items = buildSongsPlayerItems_();
+              renderSongsPlayerList_();
+            }
+          });
+        return songsLivestreamItemsPromise_;
       }
 
       function loadSongsYoutubeApi_() {
@@ -10272,15 +10358,16 @@
 
       function renderSongsYoutubeFallbackIframe_(item) {
         const wrap = document.getElementById('songs-player-video-wrap');
-        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', true, item?.playlistId || '');
+        const src = buildYoutubeEmbedPlaybackUrl_(item?.url || item?.watchUrl || '', true, item?.playlistId || '', item?.playlistIndex || 0);
         if (!wrap || !src) return;
         songsYoutubePlayer_ = null;
         wrap.innerHTML = `<iframe id="songs-player-video-target" title="YouTube Video" src="${escapeAttr(src)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
       }
 
       function playSongsYoutubeVideo_(item) {
-        const videoId = youtubeVideoIdFromUrl_(item?.url || item?.watchUrl || '');
+        const videoId = item?.videoId || youtubeVideoIdFromUrl_(item?.url || item?.watchUrl || '');
         const playlistId = item?.playlistId || youtubePlaylistIdFromUrl_(item?.url || item?.watchUrl || '');
+        const playlistIndex = Math.max(0, Number.isFinite(Number(item?.playlistIndex)) ? Number(item.playlistIndex) : 0);
         const target = ensureSongsYoutubeTarget_();
         if ((!videoId && !playlistId) || !target) return;
         loadSongsYoutubeApi_().then((YT) => {
@@ -10295,7 +10382,7 @@
                 onReady: (ev) => {
                   try {
                     if (playlistId && typeof ev.target.loadPlaylist === 'function') {
-                      ev.target.loadPlaylist({ listType: 'playlist', list: playlistId, index: 0 });
+                      ev.target.loadPlaylist({ listType: 'playlist', list: playlistId, index: playlistIndex });
                     } else {
                       ev.target.playVideo();
                     }
@@ -10307,7 +10394,7 @@
             return;
           }
           if (playlistId && typeof songsYoutubePlayer_.loadPlaylist === 'function') {
-            songsYoutubePlayer_.loadPlaylist({ listType: 'playlist', list: playlistId, index: 0 });
+            songsYoutubePlayer_.loadPlaylist({ listType: 'playlist', list: playlistId, index: playlistIndex });
           } else if (videoId) {
             songsYoutubePlayer_.loadVideoById(videoId);
           }
@@ -10331,25 +10418,15 @@
       function buildSongsPlayerItems_() {
         const out = [];
         const seenUrls = new Set();
-        const livestreamEmbed = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`;
-        out.push({
-          url: livestreamEmbed || SONGS_LIVESTREAM_URL_,
-          watchUrl: SONGS_LIVESTREAM_URL_,
-          playlistId: SONGS_LIVESTREAM_PLAYLIST_ID_,
-          name: 'CLZ Livestream Playlist',
-          songTitle: 'Livestream',
-          artist: 'YouTube',
-          album: '',
-          arrangementName: '',
-          keyName: '',
-          bpm: '',
-          songId: '',
-          fileType: 'Livestream',
-          fileMode: 'YouTube Playlist',
-          extension: '',
-          kind: 'livestream'
+        const livestreamItems = Array.isArray(songsLivestreamItemsCache_) && songsLivestreamItemsCache_.length
+          ? songsLivestreamItemsCache_
+          : [buildSongsLivestreamFallbackItem_()];
+        livestreamItems.forEach((item) => {
+          const url = String(item?.url || '').trim();
+          if (!url || seenUrls.has(url)) return;
+          seenUrls.add(url);
+          out.push(item);
         });
-        if (livestreamEmbed) seenUrls.add(livestreamEmbed);
         const addVideo = (embedUrl, song, arrangement, label) => {
           const embed = buildYoutubeEmbedUrl_(embedUrl);
           if (!embed || seenUrls.has(embed)) return;
@@ -10472,6 +10549,7 @@
           if (it.name && (!it.songTitle || it.name !== it.songTitle) && !['audio', 'mp3'].includes(String(it.name || '').toLowerCase())) subParts.push(it.name);
           if (it.artist) subParts.push(it.artist);
           if (it.arrangementName && it.arrangementName !== it.songTitle) subParts.push(it.arrangementName);
+          if (it.durationLabel) subParts.push(it.durationLabel);
           if (it.keyName) subParts.push(it.keyName);
           if (it.bpm) subParts.push(`${it.bpm} BPM`);
           const sub = escapeHtml(subParts.join(' · '));
@@ -10501,6 +10579,7 @@
         document.getElementById('songs-player-mode-video')?.classList.toggle('active', songsPlayerState.currentFilter === 'video');
         document.getElementById('songs-player-mode-livestream')?.classList.toggle('active', livestreamMode);
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !videoMode);
+        if (livestreamMode) loadSongsLivestreamItems_();
         renderSongsPlayerList_();
       }
       function clearSongsPlayerSearch_() {
@@ -10518,6 +10597,7 @@
         const parts = [];
         if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
         if (it.artist) parts.push(it.artist);
+        if (it.durationLabel) parts.push(it.durationLabel);
         if (it.keyName) parts.push(it.keyName);
         if (it.bpm) parts.push(it.bpm + ' BPM');
         const kindLabel = it.kind === 'playback' ? 'Playback' : it.kind === 'tracks' ? 'Spur' : it.kind === 'livestream' ? 'Livestream' : it.kind === 'video' ? 'Video' : 'Audio';
@@ -10640,6 +10720,7 @@
           const parts = [];
           if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
           if (it.artist) parts.push(it.artist);
+          if (it.durationLabel) parts.push(it.durationLabel);
           if (it.keyName) parts.push(it.keyName);
           if (it.bpm) parts.push(it.bpm + ' BPM');
           const kindLabel = it.kind === 'playback' ? 'Playback' :
@@ -10709,6 +10790,7 @@
         document.getElementById('songs-player-mode-video')?.classList.toggle('active', songsPlayerState.currentFilter === 'video');
         document.getElementById('songs-player-mode-livestream')?.classList.toggle('active', openLivestreamMode);
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !openVideoMode);
+        if (openLivestreamMode) loadSongsLivestreamItems_();
         renderSongsPlayerList_();
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'false');
@@ -21911,11 +21993,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return playlistId ? `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(playlistId)}` : '';
       }
 
-      function buildYoutubeEmbedPlaybackUrl_(url, autoplay = false, playlistIdOverride = '') {
+      function buildYoutubeEmbedPlaybackUrl_(url, autoplay = false, playlistIdOverride = '', playlistIndexOverride = 0) {
         const playlistId = String(playlistIdOverride || youtubePlaylistIdFromUrl_(url) || '').trim();
-        const embed = playlistId
-          ? `https://www.youtube.com/embed/videoseries`
-          : buildYoutubeEmbedUrl_(url);
+        const videoId = youtubeVideoIdFromUrl_(url);
+        const embed = videoId
+          ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`
+          : (playlistId ? `https://www.youtube.com/embed/videoseries` : buildYoutubeEmbedUrl_(url));
         if (!embed) return '';
         const params = new URLSearchParams({
           rel: '0',
@@ -21924,6 +22007,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           origin: window.location.origin
         });
         if (playlistId) params.set('list', playlistId);
+        if (playlistId && Number.isFinite(Number(playlistIndexOverride))) params.set('index', String(Math.max(1, Number(playlistIndexOverride) + 1)));
         if (autoplay) params.set('autoplay', '1');
         return `${embed}?${params.toString()}`;
       }
