@@ -10219,6 +10219,14 @@
         return 'audio';
       }
 
+      function splitSongsLivestreamTitle_(title) {
+        const parts = String(title || '').split('|').map(v => v.trim()).filter(Boolean);
+        return {
+          main: parts[0] || String(title || '').trim() || 'Livestream',
+          sub: parts.slice(1).join(' · ')
+        };
+      }
+
       function buildSongsLivestreamFallbackItem_() {
         const livestreamEmbed = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`;
         return {
@@ -10253,6 +10261,7 @@
           seen.add(videoId);
           const playlistIndex = Math.max(0, Number.isFinite(Number(row?.index)) ? Number(row.index) : idx);
           const title = String(row?.title || '').trim() || playlistTitle;
+          const titleParts = splitSongsLivestreamTitle_(title);
           const watchUrl = String(row?.url || '').trim() || `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}&index=${playlistIndex + 1}`;
           items.push({
             url: `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}`,
@@ -10261,7 +10270,9 @@
             playlistId: SONGS_LIVESTREAM_PLAYLIST_ID_,
             playlistIndex,
             name: playlistTitle,
-            songTitle: title,
+            songTitle: titleParts.main,
+            fullTitle: title,
+            livestreamSubtitle: titleParts.sub,
             artist: String(row?.channel || 'CLZ Spiez').trim(),
             album: playlistTitle,
             arrangementName: '',
@@ -10417,6 +10428,7 @@
 
       function buildSongsPlayerItems_() {
         const out = [];
+        const livestreamOut = [];
         const seenUrls = new Set();
         const livestreamItems = Array.isArray(songsLivestreamItemsCache_) && songsLivestreamItemsCache_.length
           ? songsLivestreamItemsCache_
@@ -10425,7 +10437,7 @@
           const url = String(item?.url || '').trim();
           if (!url || seenUrls.has(url)) return;
           seenUrls.add(url);
-          out.push(item);
+          livestreamOut.push(item);
         });
         const addVideo = (embedUrl, song, arrangement, label) => {
           const embed = buildYoutubeEmbedUrl_(embedUrl);
@@ -10502,7 +10514,7 @@
           if (arr !== 0) return arr;
           return (a.name || '').localeCompare(b.name || '', 'de');
         });
-        return out;
+        return livestreamOut.concat(out);
       }
 
       function applySongsPlayerFilter_() {
@@ -10515,6 +10527,8 @@
           if (!q) return true;
           return (it.name && it.name.toLowerCase().includes(q))
               || (it.songTitle && it.songTitle.toLowerCase().includes(q))
+              || (it.fullTitle && it.fullTitle.toLowerCase().includes(q))
+              || (it.livestreamSubtitle && it.livestreamSubtitle.toLowerCase().includes(q))
               || (it.artist && it.artist.toLowerCase().includes(q))
               || (it.arrangementName && it.arrangementName.toLowerCase().includes(q))
               || (it.album && it.album.toLowerCase().includes(q));
@@ -10546,12 +10560,18 @@
                             it.kind === 'video' ? 'Video' : 'Audio';
           const title = escapeHtml(it.songTitle || it.name);
           const subParts = [];
-          if (it.name && (!it.songTitle || it.name !== it.songTitle) && !['audio', 'mp3'].includes(String(it.name || '').toLowerCase())) subParts.push(it.name);
-          if (it.artist) subParts.push(it.artist);
-          if (it.arrangementName && it.arrangementName !== it.songTitle) subParts.push(it.arrangementName);
-          if (it.durationLabel) subParts.push(it.durationLabel);
-          if (it.keyName) subParts.push(it.keyName);
-          if (it.bpm) subParts.push(`${it.bpm} BPM`);
+          if (it.kind === 'livestream') {
+            if (it.livestreamSubtitle) subParts.push(it.livestreamSubtitle);
+            else if (it.artist) subParts.push(it.artist);
+            if (it.durationLabel) subParts.push(it.durationLabel);
+          } else {
+            if (it.name && (!it.songTitle || it.name !== it.songTitle) && !['audio', 'mp3'].includes(String(it.name || '').toLowerCase())) subParts.push(it.name);
+            if (it.artist) subParts.push(it.artist);
+            if (it.arrangementName && it.arrangementName !== it.songTitle) subParts.push(it.arrangementName);
+            if (it.durationLabel) subParts.push(it.durationLabel);
+            if (it.keyName) subParts.push(it.keyName);
+            if (it.bpm) subParts.push(`${it.bpm} BPM`);
+          }
           const sub = escapeHtml(subParts.join(' · '));
           return `
             <div class="songs-player-item${isActive ? ' active' : ''}" data-idx="${idx}" onclick="playSongsPlayerItem_(${idx})">
@@ -10565,7 +10585,32 @@
           `;
         }).join('');
         host.innerHTML = html;
+        if (songsPlayerState.currentFilter === 'livestream'
+          && items.length
+          && (songsPlayerState.currentItem?.kind !== 'livestream' || songsPlayerState.currentItem?.isPlaylistFallback)
+        ) {
+          previewSongsPlayerItem_(0);
+        }
       }
+
+      function previewSongsPlayerItem_(idx) {
+        const it = songsPlayerState.filtered[idx];
+        if (!it) return;
+        songsPlayerState.currentIndex = idx;
+        songsPlayerState.currentUrl = it.url;
+        songsPlayerState.currentItem = it;
+        const now = document.getElementById('songs-player-now');
+        const title = document.getElementById('songs-player-now-title');
+        const meta = document.getElementById('songs-player-now-meta');
+        if (now) now.classList.toggle('is-video', it.kind === 'video' || it.kind === 'livestream');
+        if (title) title.textContent = it.songTitle || it.name || 'Titel';
+        if (meta) meta.textContent = songsPlayerMetaText_(it);
+        document.querySelectorAll('#songs-player-list .songs-player-item').forEach((el) => {
+          el.classList.toggle('active', Number(el.getAttribute('data-idx')) === idx);
+        });
+        updateSongsPlayerButtons_();
+      }
+
       function setSongsPlayerFilter_(filter) {
         songsPlayerState.currentFilter = String(filter || 'audio-all');
         const activeFilter = songsPlayerState.currentFilter === 'all' ? 'audio-all' : songsPlayerState.currentFilter;
@@ -10595,11 +10640,17 @@
       function songsPlayerMetaText_(it) {
         if (!it) return '';
         const parts = [];
-        if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
-        if (it.artist) parts.push(it.artist);
-        if (it.durationLabel) parts.push(it.durationLabel);
-        if (it.keyName) parts.push(it.keyName);
-        if (it.bpm) parts.push(it.bpm + ' BPM');
+        if (it.kind === 'livestream') {
+          if (it.livestreamSubtitle) parts.push(it.livestreamSubtitle);
+          else if (it.artist) parts.push(it.artist);
+          if (it.durationLabel) parts.push(it.durationLabel);
+        } else {
+          if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
+          if (it.artist) parts.push(it.artist);
+          if (it.durationLabel) parts.push(it.durationLabel);
+          if (it.keyName) parts.push(it.keyName);
+          if (it.bpm) parts.push(it.bpm + ' BPM');
+        }
         const kindLabel = it.kind === 'playback' ? 'Playback' : it.kind === 'tracks' ? 'Spur' : it.kind === 'livestream' ? 'Livestream' : it.kind === 'video' ? 'Video' : 'Audio';
         parts.push(it.extension ? `${kindLabel} ${it.extension}` : kindLabel);
         return parts.join(' · ');
@@ -10718,11 +10769,17 @@
         if (title) title.textContent = it.songTitle || it.name || 'Titel';
         if (meta) {
           const parts = [];
-          if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
-          if (it.artist) parts.push(it.artist);
-          if (it.durationLabel) parts.push(it.durationLabel);
-          if (it.keyName) parts.push(it.keyName);
-          if (it.bpm) parts.push(it.bpm + ' BPM');
+          if (it.kind === 'livestream') {
+            if (it.livestreamSubtitle) parts.push(it.livestreamSubtitle);
+            else if (it.artist) parts.push(it.artist);
+            if (it.durationLabel) parts.push(it.durationLabel);
+          } else {
+            if (it.name && it.songTitle && it.name !== it.songTitle) parts.push(it.name);
+            if (it.artist) parts.push(it.artist);
+            if (it.durationLabel) parts.push(it.durationLabel);
+            if (it.keyName) parts.push(it.keyName);
+            if (it.bpm) parts.push(it.bpm + ' BPM');
+          }
           const kindLabel = it.kind === 'playback' ? 'Playback' :
                             it.kind === 'tracks' ? 'Spur' :
                             it.kind === 'livestream' ? 'Livestream' :
