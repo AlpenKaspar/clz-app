@@ -635,6 +635,8 @@
     .song-fullscreen-speed {
       width:46px;
       min-height:42px;
+      display:grid;
+      place-items:center;
       border:1px solid rgba(37,99,235,.18);
       border-radius:12px;
       background:var(--primary);
@@ -642,6 +644,7 @@
       font-size:18px;
       font-weight:900;
       cursor:pointer;
+      line-height:1;
       box-shadow:0 10px 24px rgba(37,99,235,.22);
     }
     .song-fullscreen-speed {
@@ -663,6 +666,7 @@
       font-weight:900;
       cursor:pointer;
       padding:4px 2px;
+      line-height:1;
       box-shadow:0 8px 18px rgba(15,23,42,.08);
     }
     .song-fullscreen-stop.is-running {
@@ -8610,7 +8614,7 @@
       let currentSongDetailReturnView = '';
       let currentSongDetailReturnFlowIndex = -1;
       let songMetronomeState = { bpm: 70, meter: '4/4', running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0, tapTimes: [], mediaUrls: {}, mediaWarm: false };
-      let songFullscreenState = { open: false, speed: 0, direction: 0, raf: 0, lastTs: 0 };
+      let songFullscreenState = { open: false, speed: 0, direction: 0, raf: 0, lastTs: 0, scrollTop: 0 };
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
       const CONTACT_PAGE_SIZE = 100;
@@ -11432,7 +11436,7 @@
       }
 
       function songFullscreenSpeedPx_() {
-        const speeds = [0, 14, 24, 38, 56, 78, 106];
+        const speeds = [0, 28, 44, 64, 88, 116, 150];
         return speeds[Math.max(0, Math.min(6, Number(songFullscreenState.speed || 0)))] || 0;
       }
 
@@ -11440,7 +11444,11 @@
         const speed = document.getElementById('song-fullscreen-speed');
         const stop = document.getElementById('song-fullscreen-stop');
         if (speed) speed.textContent = String(Math.max(0, Math.min(6, Number(songFullscreenState.speed || 0))));
-        if (stop) stop.classList.toggle('is-running', !!songFullscreenState.direction);
+        if (stop) {
+          const running = !!songFullscreenState.direction;
+          stop.classList.toggle('is-running', running);
+          stop.textContent = running ? 'Stopp' : 'Start';
+        }
       }
 
       function setSongFullscreenScrollTop_(scroll, top) {
@@ -11451,6 +11459,7 @@
           scroll.scrollTop = nextTop;
         }
         scroll.scrollTop = nextTop;
+        songFullscreenState.scrollTop = nextTop;
       }
 
       function renderSongFullscreenContent_() {
@@ -11495,7 +11504,7 @@
       }
 
       function closeSongFullscreen_() {
-        stopSongFullscreenScroll_();
+        pauseSongFullscreenScroll_(true);
         const overlay = document.getElementById('song-fullscreen-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
         updateSongTopLayerLock_();
@@ -11506,24 +11515,34 @@
         if (currentDetailOverlayView !== "calendar-flow-view") releaseWakeLock_();
       }
 
-      function stopSongFullscreenScroll_() {
+      function pauseSongFullscreenScroll_(resetSpeed = false) {
         if (songFullscreenState.raf) cancelAnimationFrame(songFullscreenState.raf);
         songFullscreenState.raf = 0;
         songFullscreenState.direction = 0;
-        songFullscreenState.speed = 0;
+        if (resetSpeed) songFullscreenState.speed = 0;
         songFullscreenState.lastTs = 0;
         updateSongFullscreenControls_();
+      }
+
+      function stopSongFullscreenScroll_() {
+        if (songFullscreenState.direction) {
+          pauseSongFullscreenScroll_(false);
+          return;
+        }
+        if (songFullscreenState.speed <= 0) songFullscreenState.speed = 1;
+        startSongFullscreenScroll_(1);
       }
 
       function startSongFullscreenScroll_(direction) {
         const scroll = songFullscreenScrollElement_();
         if (!scroll) return;
         if (songFullscreenSpeedPx_() <= 0) {
-          stopSongFullscreenScroll_();
+          pauseSongFullscreenScroll_(false);
           return;
         }
         songFullscreenState.direction = Number(direction || 1) < 0 ? -1 : 1;
         songFullscreenState.lastTs = 0;
+        songFullscreenState.scrollTop = Number(scroll.scrollTop || 0);
         updateSongFullscreenControls_();
         if (songFullscreenState.raf) cancelAnimationFrame(songFullscreenState.raf);
         songFullscreenState.raf = requestAnimationFrame(stepSongFullscreenScroll_);
@@ -11532,22 +11551,23 @@
       function stepSongFullscreenScroll_(ts) {
         const scroll = songFullscreenScrollElement_();
         if (!scroll || !songFullscreenState.direction) {
-          stopSongFullscreenScroll_();
+          pauseSongFullscreenScroll_(false);
           return;
         }
         const last = Number(songFullscreenState.lastTs || ts);
         const deltaMs = Math.max(0, Math.min(80, ts - last));
         songFullscreenState.lastTs = ts;
         const maxScroll = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
-        const next = scroll.scrollTop + (songFullscreenState.direction * songFullscreenSpeedPx_() * deltaMs / 1000);
+        const baseTop = Number.isFinite(Number(songFullscreenState.scrollTop)) ? Number(songFullscreenState.scrollTop) : Number(scroll.scrollTop || 0);
+        const next = baseTop + (songFullscreenState.direction * songFullscreenSpeedPx_() * deltaMs / 1000);
         if (songFullscreenState.direction > 0 && next >= maxScroll - 1) {
           setSongFullscreenScrollTop_(scroll, maxScroll);
-          stopSongFullscreenScroll_();
+          pauseSongFullscreenScroll_(false);
           return;
         }
         if (songFullscreenState.direction < 0 && next <= 0) {
           setSongFullscreenScrollTop_(scroll, 0);
-          stopSongFullscreenScroll_();
+          pauseSongFullscreenScroll_(false);
           return;
         }
         setSongFullscreenScrollTop_(scroll, Math.max(0, Math.min(maxScroll, next)));
@@ -11565,7 +11585,7 @@
         songFullscreenState.speed = Math.max(0, Math.min(6, current + Number(delta || 0)));
         updateSongFullscreenControls_();
         if (songFullscreenState.speed <= 0) {
-          stopSongFullscreenScroll_();
+          pauseSongFullscreenScroll_(false);
           return;
         }
         if (Number(delta || 0) > 0 || songFullscreenState.direction) {
