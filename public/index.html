@@ -96,6 +96,60 @@
     .song-detail-section-title {
       font-size:13px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted); margin-bottom:10px;
     }
+    .song-detail-section-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .song-detail-section-head .song-detail-section-title {
+      margin-bottom:0;
+    }
+    .song-detail-edit-btn {
+      width:36px;
+      height:36px;
+      border-radius:999px;
+      border:1px solid var(--border-color, rgba(148,163,184,.25));
+      background:var(--card-bg, #fff);
+      color:var(--primary);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      text-decoration:none;
+      box-shadow:0 8px 18px rgba(15,23,42,.06);
+      flex:0 0 auto;
+    }
+    .song-info-grid {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:8px;
+      padding:0;
+    }
+    .song-info-grid .info-row {
+      min-width:0;
+      padding:9px 10px;
+      gap:9px;
+      border-radius:12px;
+      align-items:center;
+    }
+    .song-info-grid .info-row i {
+      width:26px;
+      min-width:26px;
+      font-size:17px;
+    }
+    .song-info-grid .info-label {
+      font-size:10px;
+      line-height:1.15;
+    }
+    .song-info-grid .info-value {
+      font-size:13px;
+      font-weight:850;
+      line-height:1.25;
+    }
+    .song-info-grid .song-info-wide {
+      grid-column:1 / -1;
+    }
     .song-section-head-btn {
       width:100%;
       border:0;
@@ -253,6 +307,20 @@
       font-weight:800;
       color:var(--text-main);
       margin-top:2px;
+    }
+    .song-info-grid .song-gender-key-line {
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:6px;
+    }
+    .song-info-grid .song-gender-key-box {
+      padding:7px 8px;
+      border-radius:10px;
+    }
+    .song-info-grid .song-gender-key-title {
+      font-size:9px;
+    }
+    .song-info-grid .song-gender-key-value {
+      font-size:13px;
     }
     .song-note-chip {
       display:inline-flex;
@@ -11597,6 +11665,11 @@
         openSongTextViewer_('', 'Akkorde & Text', text, arrangement?.chordChartKey || arrangement?.keyName || currentSongData?.keyName || '');
       }
 
+      function buildElvantoSongUrl_(song) {
+        const id = String(song?.songId || song?.id || '').trim();
+        return id ? buildElvantoAppUrl_('admin/songs/song/', { id }) : '';
+      }
+
       async function openSongTextViewer_(url, label, inlineText = '', baseKey = '') {
         const slot = document.getElementById('song-text-viewer-slot');
         const normalizedUrl = normalizeElvantoUrl_(url);
@@ -11673,6 +11746,7 @@
         const ytUrl = resolveSongYoutubeUrl_(song, activeArrangement);
         const embedUrls = collectSongVideoEmbeds_(song, activeArrangement);
         const hasArrangementText = !!buildSongArrangementChordProText_(song, activeArrangement);
+        const elvantoSongUrl = buildElvantoSongUrl_(song);
         const heroMeta = [song.artist, song.album, song.ccliNumber ? `CCLI ${song.ccliNumber}` : ''].map(v => String(v || '').trim()).filter(Boolean).join(' · ');
         box.innerHTML = `
           <div class="profile-header song-detail-header song-detail-header-v2">
@@ -11688,8 +11762,11 @@
           </div>
           ${arrangements.length > 1 ? `<div class="song-detail-section song-detail-card"><div class="song-detail-section-title">Arrangement</div><div class="song-arrangement-switch song-arrangement-switch-segment">${arrangements.map((entry, idx) => `<button type="button" class="song-arrangement-switch-btn ${idx === currentSongArrangementIndex ? 'active' : ''}" onclick="setSongArrangementIndex_(${idx})">${escapeHtml(String(entry.arrangementName || 'Arrangement'))}</button>`).join('')}</div></div>` : ``}
           <div class="song-detail-section song-detail-card">
-            <div class="song-detail-section-title">Infos</div>
-            <div class="info-grid" id="song-detail-grid"></div>
+            <div class="song-detail-section-head">
+              <div class="song-detail-section-title">Infos</div>
+              ${elvantoSongUrl ? `<a class="song-detail-edit-btn" href="${escapeAttr(elvantoSongUrl)}" target="_blank" rel="noopener" title="Song in Elvanto bearbeiten" aria-label="Song in Elvanto bearbeiten"><i class="fas fa-pen-to-square"></i></a>` : ``}
+            </div>
+            <div class="info-grid song-info-grid" id="song-detail-grid"></div>
           </div>
           ${activeSequenceSteps.length ? `<div class="song-detail-section song-detail-card"><button type="button" class="song-section-head-btn" aria-expanded="${currentSongSequenceExpanded ? 'true' : 'false'}" onclick="toggleSongSequenceExpanded_()"><span class="song-detail-section-title">Ablauf</span><span class="song-section-head-right"><span>${currentSongSequenceExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongSequenceExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button><div class="song-sequence-compact">${compactSequence.map(step => `<span class="song-sequence-bubble">${escapeHtml(step)}</span>`).join('')}</div>${currentSongSequenceExpanded ? `<div class="song-sequence-list">${activeSequenceSteps.map((step, idx) => `<div class="song-sequence-item"><div class="song-sequence-index">${idx + 1}</div><div class="song-sequence-label">${escapeHtml(step)}</div></div>`).join('')}</div>` : ``}</div>` : ``}
           ${arrangements.length ? `<div class="song-detail-section song-detail-card"><button type="button" class="song-section-head-btn" aria-expanded="${currentSongNotesExpanded ? 'true' : 'false'}" onclick="toggleSongNotesExpanded_()"><span class="song-detail-section-title">Tonarten & Noten</span><span class="song-section-head-right"><span>${currentSongNotesExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongNotesExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button>${currentSongNotesExpanded ? `<div class="song-note-chip-row">${renderSongKeyResourcesTable_(activeArrangement, song)}</div>` : ``}</div>` : ``}
@@ -11715,7 +11792,7 @@
         const maleMode = detectSongKeyMode_(maleKey);
         const femaleMode = detectSongKeyMode_(femaleKey);
         const genderKeyRowHtml = (maleKey || femaleKey) ? `
-          <div class="info-row">
+          <div class="info-row song-info-wide">
             <i class="fas fa-sliders"></i>
             <div style="flex:1;min-width:0;">
               <div class="info-label">Tonlage M/W</div>
