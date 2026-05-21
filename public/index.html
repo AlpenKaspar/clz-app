@@ -462,13 +462,30 @@
     .song-fullscreen-overlay {
       position:fixed;
       inset:0;
-      z-index:950;
+      width:100vw;
+      height:100vh;
+      height:100dvh;
+      z-index:12010;
       display:none;
       background:#fff;
       color:#0f172a;
+      transform:none !important;
     }
     .song-fullscreen-overlay[aria-hidden="false"] {
       display:block;
+    }
+    body.song-top-layer-open {
+      overflow:hidden !important;
+      touch-action:none;
+    }
+    body.song-top-layer-open .song-fullscreen-overlay[aria-hidden="false"],
+    body.song-top-layer-open .song-metronome-overlay[aria-hidden="false"] {
+      position:fixed !important;
+      inset:0 !important;
+      width:100vw !important;
+      height:100vh !important;
+      height:100dvh !important;
+      transform:none !important;
     }
     .song-fullscreen-scroll {
       position:absolute;
@@ -513,7 +530,7 @@
       display:grid;
       gap:6px;
       padding:0 6px 0 0;
-      z-index:951;
+      z-index:12011;
       justify-items:end;
     }
     .song-fullscreen-close {
@@ -647,6 +664,9 @@
     .song-metronome-overlay {
       position:fixed;
       inset:0;
+      width:100vw;
+      height:100vh;
+      height:100dvh;
       z-index:12020;
       display:flex;
       align-items:center;
@@ -656,6 +676,7 @@
       opacity:0;
       pointer-events:none;
       transition:opacity .18s ease;
+      transform:none !important;
     }
     .song-metronome-overlay[aria-hidden="false"] {
       opacity:1;
@@ -8487,7 +8508,7 @@
       let currentSongTextState = null;
       let currentSongDetailReturnView = '';
       let currentSongDetailReturnFlowIndex = -1;
-      let songMetronomeState = { bpm: 70, meter: '4/4', running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0, tapTimes: [] };
+      let songMetronomeState = { bpm: 70, meter: '4/4', running: false, mode: 'both', sound: 'woodblock', timer: null, audioCtx: null, beat: 0, tapTimes: [], mediaUrls: {}, mediaWarm: false };
       let songFullscreenState = { open: false, speed: 1, direction: 0, raf: 0, lastTs: 0 };
       let songsFilterSheetState = { startY: 0, dragY: 0, dragging: false, startFromLowerArea: false };
       let shareMenuOpenFor = '';
@@ -10976,6 +10997,80 @@
         songMetronomeState.meter = meter;
       }
 
+      function isIOSAudioDevice_() {
+        const ua = navigator.userAgent || "";
+        return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      }
+
+      function ensureSongOverlayTopLayer_(id) {
+        const overlay = document.getElementById(id);
+        if (!overlay) return null;
+        if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+        document.body.classList.add('song-top-layer-open');
+        return overlay;
+      }
+
+      function updateSongTopLayerLock_() {
+        const metro = document.getElementById('song-metronome-overlay');
+        const full = document.getElementById('song-fullscreen-overlay');
+        const open = (metro && metro.getAttribute('aria-hidden') === 'false') || (full && full.getAttribute('aria-hidden') === 'false');
+        document.body.classList.toggle('song-top-layer-open', !!open);
+      }
+
+      function songMetronomeMediaUrl_(accent) {
+        const key = accent ? 'accent' : 'normal';
+        if (songMetronomeState.mediaUrls?.[key]) return songMetronomeState.mediaUrls[key];
+        const sampleRate = 44100;
+        const seconds = accent ? 0.07 : 0.055;
+        const freq = accent ? 1180 : 820;
+        const samples = Math.max(1, Math.floor(sampleRate * seconds));
+        const bytesPerSample = 2;
+        const dataSize = samples * bytesPerSample;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        const write = (offset, text) => {
+          for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+        };
+        write(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        write(8, 'WAVE');
+        write(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * bytesPerSample, true);
+        view.setUint16(32, bytesPerSample, true);
+        view.setUint16(34, 16, true);
+        write(36, 'data');
+        view.setUint32(40, dataSize, true);
+        for (let i = 0; i < samples; i++) {
+          const fade = 1 - (i / samples);
+          const value = Math.sin(2 * Math.PI * freq * (i / sampleRate)) * fade * (accent ? 0.42 : 0.30);
+          view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, value)) * 32767, true);
+        }
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const url = 'data:audio/wav;base64,' + btoa(binary);
+        songMetronomeState.mediaUrls[key] = url;
+        return url;
+      }
+
+      async function playSongMetronomeMediaFallback_(accent, volume = 0.9) {
+        if (!isIOSAudioDevice_()) return false;
+        try {
+          const audio = new Audio(songMetronomeMediaUrl_(accent));
+          audio.setAttribute('playsinline', '');
+          audio.preload = 'auto';
+          audio.volume = volume;
+          await audio.play();
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
       function renderSongMetronome_() {
         const body = document.getElementById('song-metronome-body');
         if (!body) return;
@@ -11017,16 +11112,18 @@
       }
 
       function openSongMetronome_() {
-        const overlay = document.getElementById('song-metronome-overlay');
+        const overlay = ensureSongOverlayTopLayer_('song-metronome-overlay');
         applyCurrentSongMetronomeDefaults_();
         renderSongMetronome_();
         if (overlay) overlay.setAttribute('aria-hidden', 'false');
+        updateSongTopLayerLock_();
       }
 
       function closeSongMetronome_() {
         stopSongMetronome_();
         const overlay = document.getElementById('song-metronome-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        updateSongTopLayerLock_();
       }
 
       async function ensureSongMetronomeAudio_() {
@@ -11055,6 +11152,9 @@
         const now = ctx.currentTime;
         const sound = String(songMetronomeState.sound || 'woodblock');
         const isAccent = (Math.max(1, Number(songMetronomeState.beat || 1)) - 1) % songMetronomeBeatsPerBar_() === 0;
+        if (isIOSAudioDevice_()) {
+          playSongMetronomeMediaFallback_(isAccent);
+        }
         const gain = ctx.createGain();
         const osc = ctx.createOscillator();
         const noiseGain = ctx.createGain();
@@ -11112,6 +11212,9 @@
         songMetronomeState.running = true;
         songMetronomeState.beat = 0;
         await ensureSongMetronomeAudio_();
+        if (isIOSAudioDevice_() && !songMetronomeState.mediaWarm) {
+          songMetronomeState.mediaWarm = await playSongMetronomeMediaFallback_(true, 0.01);
+        }
         await tickSongMetronome_();
         songMetronomeState.timer = setInterval(tickSongMetronome_, 60000 / clampSongMetronomeBpm_(songMetronomeState.bpm));
         renderSongMetronome_();
@@ -11216,15 +11319,16 @@
 
       function openSongFullscreen_() {
         if (!currentSongTextState) return;
-        const overlay = document.getElementById('song-fullscreen-overlay');
+        const overlay = ensureSongOverlayTopLayer_('song-fullscreen-overlay');
         if (!overlay) return;
         songFullscreenState.open = true;
         songFullscreenState.direction = 0;
         renderSongFullscreenContent_();
         overlay.setAttribute('aria-hidden', 'false');
+        updateSongTopLayerLock_();
         updateSongFullscreenControls_();
         enableWakeLockIfNeeded_();
-        if (overlay.requestFullscreen && !document.fullscreenElement) {
+        if (!isIOSAudioDevice_() && overlay.requestFullscreen && !document.fullscreenElement) {
           try { overlay.requestFullscreen().catch(() => {}); } catch (e) {}
         }
         setTimeout(() => {
@@ -11237,6 +11341,7 @@
         stopSongFullscreenScroll_();
         const overlay = document.getElementById('song-fullscreen-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        updateSongTopLayerLock_();
         if (document.fullscreenElement === overlay && document.exitFullscreen) {
           try { document.exitFullscreen().catch(() => {}); } catch (e) {}
         }
