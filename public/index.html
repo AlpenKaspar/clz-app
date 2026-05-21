@@ -492,8 +492,34 @@
       inset:0;
       overflow:auto;
       -webkit-overflow-scrolling:touch;
-      padding:18px 74px 24px 22px;
+      padding:72px 76px 24px 22px;
       background:#fff;
+    }
+    .song-fullscreen-topbar {
+      position:fixed;
+      top:max(10px, env(safe-area-inset-top, 0px) + 8px);
+      left:12px;
+      right:72px;
+      z-index:12012;
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      pointer-events:none;
+    }
+    .song-fullscreen-close {
+      pointer-events:auto;
+      min-width:46px;
+      height:46px;
+      border:1px solid rgba(37,99,235,.20);
+      border-radius:14px;
+      background:rgba(255,255,255,.96);
+      color:var(--primary);
+      font-size:20px;
+      line-height:1;
+      cursor:pointer;
+      box-shadow:0 10px 26px rgba(15,23,42,.12);
+      backdrop-filter:blur(16px) saturate(130%);
+      -webkit-backdrop-filter:blur(16px) saturate(130%);
     }
     .song-fullscreen-title {
       margin:0 0 4px;
@@ -533,48 +559,47 @@
       z-index:12011;
       justify-items:end;
     }
-    .song-fullscreen-close {
-      justify-self:end;
-      width:22px;
-      height:22px;
-      border:0;
-      background:transparent;
-      color:#c02672;
-      font-size:18px;
-      line-height:1;
-      cursor:pointer;
+    .song-fullscreen-controls .song-fullscreen-close {
+      display:none;
     }
     .song-fullscreen-control-btn,
     .song-fullscreen-speed {
-      width:42px;
-      min-height:38px;
-      border:1px solid #d8dce7;
-      border-radius:5px;
-      background:#c04d91;
+      width:46px;
+      min-height:42px;
+      border:1px solid rgba(37,99,235,.18);
+      border-radius:12px;
+      background:var(--primary);
       color:#fff;
       font-size:18px;
       font-weight:900;
       cursor:pointer;
-      box-shadow:0 8px 18px rgba(15,23,42,.10);
+      box-shadow:0 10px 24px rgba(37,99,235,.22);
     }
     .song-fullscreen-speed {
       background:#fff;
-      color:#334155;
-      font-size:14px;
-      font-weight:850;
+      color:var(--text-main);
+      font-size:16px;
+      font-weight:950;
+      cursor:default;
+      box-shadow:0 8px 18px rgba(15,23,42,.10);
     }
     .song-fullscreen-stop {
-      border:0;
-      background:transparent;
-      color:#c04d91;
-      font-size:13px;
-      font-weight:850;
+      width:46px;
+      min-height:42px;
+      border:1px solid rgba(226,232,240,.95);
+      border-radius:12px;
+      background:#f8fafc;
+      color:var(--text-muted);
+      font-size:12px;
+      font-weight:900;
       cursor:pointer;
-      padding:3px 0;
+      padding:4px 2px;
+      box-shadow:0 8px 18px rgba(15,23,42,.08);
     }
     .song-fullscreen-stop.is-running {
-      color:#be123c;
-      font-weight:950;
+      color:var(--primary);
+      border-color:rgba(37,99,235,.22);
+      background:#eff6ff;
     }
     .song-chart-meta {
       display: inline-flex;
@@ -8080,11 +8105,16 @@
     </div>
     <div id="song-fullscreen-overlay" class="song-fullscreen-overlay" aria-hidden="true">
       <div id="song-fullscreen-scroll" class="song-fullscreen-scroll"></div>
+      <div class="song-fullscreen-topbar">
+        <button class="song-fullscreen-close" type="button" onclick="closeSongFullscreen_()" aria-label="Fullscreen schliessen" title="Schliessen">
+          <i class="fas fa-xmark"></i>
+        </button>
+      </div>
       <div class="song-fullscreen-controls" aria-label="Song Scroll-Steuerung">
         <button class="song-fullscreen-close" type="button" onclick="closeSongFullscreen_()" aria-label="Fullscreen schliessen" title="Schliessen">×</button>
-        <button class="song-fullscreen-control-btn" type="button" onclick="startSongFullscreenScroll_(-1)" aria-label="Nach oben scrollen"><i class="fas fa-chevron-up"></i></button>
-        <button id="song-fullscreen-speed" class="song-fullscreen-speed" type="button" onclick="cycleSongFullscreenSpeed_()" aria-label="Scroll-Geschwindigkeit">1</button>
-        <button class="song-fullscreen-control-btn" type="button" onclick="startSongFullscreenScroll_(1)" aria-label="Nach unten scrollen"><i class="fas fa-chevron-down"></i></button>
+        <button class="song-fullscreen-control-btn" type="button" onclick="changeSongFullscreenSpeed_(-1)" aria-label="Langsamer scrollen"><i class="fas fa-chevron-up"></i></button>
+        <div id="song-fullscreen-speed" class="song-fullscreen-speed" role="status" aria-label="Scroll-Geschwindigkeit">1</div>
+        <button class="song-fullscreen-control-btn" type="button" onclick="changeSongFullscreenSpeed_(1)" aria-label="Schneller scrollen"><i class="fas fa-chevron-down"></i></button>
         <button id="song-fullscreen-stop" class="song-fullscreen-stop" type="button" onclick="stopSongFullscreenScroll_()">Stopp</button>
       </div>
     </div>
@@ -11106,7 +11136,7 @@
               ['click', 'Click'],
               ['kick', 'Kick'],
               ['snare', 'Snare']
-            ].map(([value, label]) => `<option value="${value}" ${s.sound === value ? 'selected' : ''}>Klang auswaehlen ${label}</option>`).join('')}
+            ].map(([value, label]) => `<option value="${value}" ${s.sound === value ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
         `;
       }
@@ -11395,6 +11425,15 @@
       function cycleSongFullscreenSpeed_() {
         songFullscreenState.speed = (Math.max(1, Math.min(6, Number(songFullscreenState.speed || 1))) % 6) + 1;
         updateSongFullscreenControls_();
+      }
+
+      function changeSongFullscreenSpeed_(delta) {
+        const current = Math.max(1, Math.min(6, Number(songFullscreenState.speed || 1)));
+        songFullscreenState.speed = Math.max(1, Math.min(6, current + Number(delta || 0)));
+        updateSongFullscreenControls_();
+        if (Number(delta || 0) > 0 || songFullscreenState.direction) {
+          startSongFullscreenScroll_(1);
+        }
       }
 
       function renderSongTextViewerControls_() {
