@@ -18714,10 +18714,20 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (dashboardMode === "childrenYouth") {
           const kidsChurch = s.childrenYouth?.kidsChurch || { total: 0, items: [] };
           const youthYpg = s.childrenYouth?.youthYpg || { total: 0, items: [] };
+          const kidsChurchItems = (Array.isArray(kidsChurch.items) ? kidsChurch.items : []).map(item => ({
+            ...item,
+            filterKey: `kidschurch:${String(item?.label || item?.filterKey || "")}`,
+            filterLabel: String(item?.filterLabel || item?.label || "")
+          }));
+          const youthYpgItems = (Array.isArray(youthYpg.items) ? youthYpg.items : []).map(item => ({
+            ...item,
+            filterKey: `ypg:${String(item?.label || item?.filterKey || "")}`,
+            filterLabel: String(item?.filterLabel || item?.label || "")
+          }));
           box.innerHTML = `
             <div class="dash-grid">
-              ${dashDynamicCard_("fa-child-reaching", "Kids & Promiseland", kidsChurch.total || 0, "kidsChurchTotal", "kidschurch", Array.isArray(kidsChurch.items) ? kidsChurch.items : [])}
-              ${dashDynamicCard_("fa-users-between-lines", "Junge Erwachsene", youthYpg.total || 0, "youthYpgTotal", "ypg", Array.isArray(youthYpg.items) ? youthYpg.items : [])}
+              ${dashDynamicCard_("fa-child-reaching", "Kids & Promiseland", kidsChurch.total || 0, "kidsChurchTotal", "kidschurch", kidsChurchItems)}
+              ${dashDynamicCard_("fa-users-between-lines", "Junge Erwachsene", youthYpg.total || 0, "youthYpgTotal", "ypg", youthYpgItems)}
             </div>
           `;
           return;
