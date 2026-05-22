@@ -4103,6 +4103,19 @@
       display: none;
     }
 
+    .calendar-view-switch {
+      max-width: 100%;
+    }
+    .calendar-view-switch .contacts-view-btn[aria-checked="true"] {
+      min-width: 110px;
+    }
+    .calendar-view-switch .calendar-view-mine-btn[aria-checked="true"] {
+      min-width: 132px;
+    }
+    .calendar-view-switch .contacts-view-btn[hidden] {
+      display: none !important;
+    }
+
     .contacts-switch-status {
       margin-left: auto;
       text-align: right;
@@ -8114,13 +8127,18 @@
         </div>
 
         <div class="calendar-inline-filters">
-          <label class="calendar-inline-flow-toggle">
-            <span class="switch">
-              <input id="toggle-calendar-services-flow" type="checkbox" onchange="toggleCalendarServicesWithFlow(this.checked)">
-              <span class="slider"></span>
-            </span>
-            <span class="calendar-inline-flow-label">Gottesdienste</span>
-          </label>
+          <div class="contacts-view-switch calendar-view-switch" role="radiogroup" aria-label="Kalender Ansicht" data-mode="all">
+            <span id="calendar-view-thumb" class="contacts-view-thumb"></span>
+            <button type="button" id="calendar-view-all" class="contacts-view-btn" onclick="setCalendarViewMode_('all')" aria-checked="true" title="Alle">
+              <i class="fas fa-calendar-days"></i><span class="contacts-view-label">Alle</span>
+            </button>
+            <button type="button" id="calendar-view-services" class="contacts-view-btn" onclick="setCalendarViewMode_('services')" aria-checked="false" title="Gottesdienste">
+              <i class="fas fa-church"></i><span class="contacts-view-label">Gottesdienste</span>
+            </button>
+            <button type="button" id="calendar-view-mine" class="contacts-view-btn calendar-view-mine-btn" onclick="setCalendarViewMode_('mine')" aria-checked="false" title="Meine Einsätze" hidden>
+              <i class="fas fa-user-check"></i><span class="contacts-view-label">Meine Einsätze</span>
+            </button>
+          </div>
           <div class="calendar-inline-right">
             <div id="calendar-reset-slot"></div>
             <button type="button" class="btn btn-secondary staff-team-filter-btn" onclick="openCalendarFilterOverlay_()" title="Filtern" aria-label="Filtern">
@@ -8755,8 +8773,12 @@
       const CAL_FILTERS_KEY = "clz_calendar_filters_v1";
       const ON_AIR_BANNER_KEY = "clz_on_air_banner_test_v1";
       const ON_AIR_TEST_VIDEO_ID = "ZmpfGd2BpOk";
+      let calendarViewMode = "all";
+      let calendarViewThumbSyncRaf = null;
+      let calendarViewThumbSyncTimer = null;
+      let calendarMineAssignmentsLoading = false;
       let onlyCalendarServicesWithFlow = false;
-      let calendarAssignedPersonFilter = { personId: "", label: "", serviceIds: [] };
+      let calendarAssignedPersonFilter = { personId: "", label: "", serviceIds: [], rangeKey: "" };
       let currentServerDataVersion = "";
       let versionCheckInFlight = false;
       let lastVersionCheckAt = 0;
@@ -9899,6 +9921,7 @@
             if (Array.isArray(cached) && cachedVersion && cachedVersion === serverVersion) {
               contactsLite = cached;
               contactsReady = true;
+              renderCalendarViewSwitch_();
 
               if (pendingContactSearch || userWaiting) {
                 pendingContactSearch = false;
@@ -9912,6 +9935,7 @@
           cacheSet_(CACHE_KEYS.contactsLite, contactsLite, { dataVersion: serverVersion });
           contactsReady = true;
           perfMeasure_('contacts_ready_ms', 'app_start');
+          renderCalendarViewSwitch_();
 
           if (pendingContactSearch || userWaiting) {
             pendingContactSearch = false;
@@ -12467,6 +12491,7 @@
 
       function renderAllPrimaryViews_() {
         renderContactChips();
+        renderCalendarViewSwitch_();
         renderDashboard();
         maybeRenderIdleContacts_();
       }
@@ -12590,6 +12615,7 @@ function updateBottomNavHighlight_() {
 
         if (tab === 'contacts') maybeRenderIdleContacts_();
         if (tab === 'calendar') {
+          renderCalendarViewSwitch_();
           if (allEvents.length === 0) { showCalendarSkeleton_(); loadCalendar(); }
         }
         if (tab === 'songs') {
@@ -15419,10 +15445,13 @@ function updateBottomNavHighlight_() {
             calendarAssignedPersonFilter = {
               personId: String(state.assignedPersonId || ''),
               label: String(state.assignedPersonLabel || ''),
-              serviceIds: []
+              serviceIds: [],
+              rangeKey: ''
             };
-            const flowToggle = document.getElementById('toggle-calendar-services-flow');
-            if (flowToggle) flowToggle.checked = onlyCalendarServicesWithFlow;
+            calendarViewMode = calendarAssignedPersonFilter.personId
+              ? 'services'
+              : (onlyCalendarServicesWithFlow ? 'services' : 'all');
+            renderCalendarViewSwitch_();
             persistCalendarFilterState_();
             setTimeout(() => loadCalendar(true), 40);
           } else {
@@ -15812,14 +15841,12 @@ function updateBottomNavHighlight_() {
         const q = document.getElementById("cal-q");
         if (q) q.value = "";
         activeCalendarFilters = [];
-        onlyCalendarServicesWithFlow = false;
-        calendarAssignedPersonFilter = { personId: "", label: "", serviceIds: [] };
-        const flowToggle = document.getElementById("toggle-calendar-services-flow");
-        if (flowToggle) flowToggle.checked = false;
+        setCalendarModeState_('all', { clearMine: true });
         persistCalendarFilterState_();
         renderCalendarChips(Array.from(new Set((allEvents || []).map(e => String(e.Kategorie || "").trim()).filter(Boolean))));
         renderCalendarFilterList_();
         updateClearButtons_();
+        renderCalendarViewSwitch_();
         renderCalendarReset_();
         filterCalendar();
       }
@@ -16929,6 +16956,180 @@ function updateBottomNavHighlight_() {
         if (width < 70) {
           setTimeout(() => syncContactsViewThumb_(), 80);
         }
+      }
+
+      function normalizeCalendarViewMode_(mode) {
+        const value = String(mode || '').trim().toLowerCase();
+        if (value === 'services' || value === 'mine') return value;
+        return 'all';
+      }
+
+      function normalizeUserEmail_(value) {
+        return String(value || '').trim().toLowerCase();
+      }
+
+      function getCalendarLoginContact_() {
+        const email = normalizeUserEmail_(currentLoginEmail);
+        if (!email || !Array.isArray(contactsLite)) return null;
+        return contactsLite.find(contact => normalizeUserEmail_(contact?.email) === email) || null;
+      }
+
+      function getCalendarLoginContactLabel_(contact) {
+        return String(contact?.displayName || contact?.listDisplayName || contact?.email || '').trim();
+      }
+
+      async function ensureCalendarContactsReady_() {
+        if (contactsReady) return;
+        await ensureContactsLiteLoaded_(false, false);
+        if (!contactsLoading || contactsReady) return;
+        await new Promise(resolve => {
+          const started = Date.now();
+          const timer = setInterval(() => {
+            if (contactsReady || !contactsLoading || Date.now() - started > 3000) {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 80);
+        });
+      }
+
+      function setCalendarModeState_(mode, options = {}) {
+        const next = normalizeCalendarViewMode_(mode);
+        calendarViewMode = next;
+        onlyCalendarServicesWithFlow = next === 'services' || next === 'mine';
+        if (next !== 'mine' || options.clearMine === true) {
+          calendarAssignedPersonFilter = { personId: "", label: "", serviceIds: [], rangeKey: "" };
+        }
+      }
+
+      function renderCalendarViewSwitch_() {
+        const host = document.querySelector('.calendar-view-switch');
+        if (!host) return;
+        const loginContact = getCalendarLoginContact_();
+        const canShowMine = !!loginContact;
+        let mode = normalizeCalendarViewMode_(calendarViewMode);
+        if (mode === 'mine' && !canShowMine) {
+          if (contactsReady && currentLoginEmail) {
+            mode = 'services';
+            setCalendarModeState_(mode, { clearMine: true });
+          } else {
+            mode = 'services';
+          }
+        }
+        host.setAttribute('data-mode', mode);
+        const allBtn = document.getElementById('calendar-view-all');
+        const servicesBtn = document.getElementById('calendar-view-services');
+        const mineBtn = document.getElementById('calendar-view-mine');
+        if (allBtn) allBtn.setAttribute('aria-checked', mode === 'all' ? 'true' : 'false');
+        if (servicesBtn) servicesBtn.setAttribute('aria-checked', mode === 'services' ? 'true' : 'false');
+        if (mineBtn) {
+          mineBtn.hidden = !canShowMine;
+          mineBtn.setAttribute('aria-checked', mode === 'mine' ? 'true' : 'false');
+          const label = getCalendarLoginContactLabel_(loginContact);
+          mineBtn.title = label ? `Meine Einsätze (${label})` : 'Meine Einsätze';
+        }
+        scheduleCalendarViewThumbSync_();
+      }
+
+      function scheduleCalendarViewThumbSync_() {
+        syncCalendarViewThumb_();
+        if (calendarViewThumbSyncRaf) {
+          try { cancelAnimationFrame(calendarViewThumbSyncRaf); } catch (e) {}
+          calendarViewThumbSyncRaf = null;
+        }
+        if (calendarViewThumbSyncTimer) {
+          clearTimeout(calendarViewThumbSyncTimer);
+          calendarViewThumbSyncTimer = null;
+        }
+        calendarViewThumbSyncRaf = requestAnimationFrame(() => {
+          calendarViewThumbSyncRaf = null;
+          syncCalendarViewThumb_();
+          requestAnimationFrame(() => syncCalendarViewThumb_());
+        });
+        calendarViewThumbSyncTimer = setTimeout(() => {
+          calendarViewThumbSyncTimer = null;
+          syncCalendarViewThumb_();
+        }, 48);
+        setTimeout(() => syncCalendarViewThumb_(), 120);
+      }
+
+      function syncCalendarViewThumb_() {
+        const host = document.querySelector('.calendar-view-switch');
+        const thumb = document.getElementById('calendar-view-thumb');
+        if (!host || !thumb) return;
+        const active = host.querySelector('.contacts-view-btn[aria-checked="true"]:not([hidden])');
+        if (!active) return;
+        void host.offsetWidth;
+        const hostRect = host.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        const left = Math.max(4, Math.round(activeRect.left - hostRect.left));
+        const measuredWidth = Math.max(Number(active.offsetWidth || 0), Math.round(activeRect.width || 0), 40);
+        const width = Math.max(40, measuredWidth);
+        thumb.style.transform = `translateX(${left - 4}px)`;
+        thumb.style.width = `${width}px`;
+        if (width < 70) setTimeout(() => syncCalendarViewThumb_(), 80);
+      }
+
+      async function refreshCalendarMineAssignmentsIfNeeded_(options = {}) {
+        if (normalizeCalendarViewMode_(calendarViewMode) !== 'mine') return true;
+        if (calendarMineAssignmentsLoading) return false;
+        calendarMineAssignmentsLoading = true;
+        try {
+          await ensureCalendarContactsReady_();
+          const contact = getCalendarLoginContact_();
+          if (!contact) {
+            setCalendarModeState_('services', { clearMine: true });
+            renderCalendarViewSwitch_();
+            if (!options.silent) toast('Kein Kontakt mit deiner Login-E-Mail gefunden.', 1800);
+            return false;
+          }
+          setDefaultCalendarRange_();
+          const startIso = String(document.getElementById('cal-start')?.value || '').trim();
+          const endIso = String(document.getElementById('cal-end')?.value || '').trim();
+          const personId = String(contact?.id || '').trim();
+          const rangeKey = `${personId}|${startIso}|${endIso}`;
+          if (!options.force && calendarAssignedPersonFilter.personId === personId && calendarAssignedPersonFilter.rangeKey === rangeKey) {
+            return true;
+          }
+          if (!options.silent) toast('Ich suche deine geplanten Einsätze...', 1600);
+          const res = await withGsRetry('kalenderUi_getPersonServiceAssignments', [personId, startIso, endIso], { retries: 1, retryDelay: 450 });
+          calendarAssignedPersonFilter = {
+            personId: personId,
+            label: getCalendarLoginContactLabel_(contact),
+            serviceIds: Array.isArray(res?.serviceIds) ? res.serviceIds.map(String) : [],
+            rangeKey: rangeKey
+          };
+          if (!options.silent && !calendarAssignedPersonFilter.serviceIds.length) {
+            toast('Keine Einsätze in diesem Zeitraum gefunden.', 1800);
+          }
+          return true;
+        } catch (err) {
+          if (!options.silent) toast(normalizeErrMsg_(err), 1800);
+          return false;
+        } finally {
+          calendarMineAssignmentsLoading = false;
+        }
+      }
+
+      async function setCalendarViewMode_(mode) {
+        const next = normalizeCalendarViewMode_(mode);
+        if (next === 'mine') {
+          setCalendarModeState_('mine');
+          const ok = await refreshCalendarMineAssignmentsIfNeeded_({ silent: false, force: true });
+          if (!ok) {
+            persistCalendarFilterState_();
+            renderCalendarViewSwitch_();
+            renderCalendarReset_();
+            filterCalendar();
+            return;
+          }
+        } else {
+          setCalendarModeState_(next, { clearMine: true });
+        }
+        persistCalendarFilterState_();
+        renderCalendarViewSwitch_();
+        renderCalendarReset_();
+        filterCalendar();
       }
 
       function setContactsViewMode(mode) {
@@ -20382,6 +20583,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           const startIso = document.getElementById("cal-start").value;
           const endIso = document.getElementById("cal-end").value;
+          await refreshCalendarMineAssignmentsIfNeeded_({ silent: true });
 
           const hadEventsBeforeLoad = Array.isArray(allEvents) && allEvents.length > 0;
           if (showLoading && !hadEventsBeforeLoad) {
@@ -20446,9 +20648,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       function persistCalendarFilterState_() {
         try {
+          const persistedMode = calendarViewMode === 'mine' ? 'services' : normalizeCalendarViewMode_(calendarViewMode);
           localStorage.setItem(CAL_FILTERS_KEY, JSON.stringify({
             categories: activeCalendarFilters.slice(),
-            onlyServicesWithFlow: !!onlyCalendarServicesWithFlow
+            onlyServicesWithFlow: !!onlyCalendarServicesWithFlow,
+            mode: persistedMode
           }));
         } catch (e) {}
       }
@@ -20460,17 +20664,19 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const parsed = JSON.parse(raw);
           activeCalendarFilters = Array.isArray(parsed?.categories) ? parsed.categories.map(String) : [];
           onlyCalendarServicesWithFlow = !!parsed?.onlyServicesWithFlow;
+          calendarViewMode = parsed?.mode
+            ? normalizeCalendarViewMode_(parsed.mode)
+            : (onlyCalendarServicesWithFlow ? 'services' : 'all');
+          setCalendarModeState_(calendarViewMode, { clearMine: true });
         } catch (e) {}
 
-        const flowToggle = document.getElementById('toggle-calendar-services-flow');
-        if (flowToggle) flowToggle.checked = onlyCalendarServicesWithFlow;
+        renderCalendarViewSwitch_();
       }
 
       function renderCalendarChips(cats) {
         const allowed = new Set((Array.isArray(cats) ? cats : []).map(c => String(c || '').trim()).filter(Boolean));
         activeCalendarFilters = (activeCalendarFilters || []).filter(cat => allowed.has(String(cat || '').trim()));
-        const flowToggle = document.getElementById('toggle-calendar-services-flow');
-        if (flowToggle) flowToggle.checked = onlyCalendarServicesWithFlow;
+        renderCalendarViewSwitch_();
         persistCalendarFilterState_();
         renderCalendarReset_();
       }
@@ -20487,10 +20693,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function toggleCalendarServicesWithFlow(on) {
-        onlyCalendarServicesWithFlow = !!on;
-        persistCalendarFilterState_();
-        renderCalendarReset_();
-        filterCalendar();
+        setCalendarViewMode_(on ? 'services' : 'all');
       }
 
       function shouldHidePastCalendarEvents_() {
@@ -21973,13 +22176,19 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         try {
           const res = await withGsRetry('kalenderUi_getPersonServiceAssignments', [personId, startIso, endIso], { retries: 1, retryDelay: 450 });
+          const loginContact = getCalendarLoginContact_();
+          const isOwnLoginContact = String(loginContact?.id || '').trim() === personId;
+          calendarViewMode = isOwnLoginContact ? 'mine' : 'services';
+          onlyCalendarServicesWithFlow = true;
           calendarAssignedPersonFilter = {
             personId: personId,
             label: personLabel,
-            serviceIds: Array.isArray(res?.serviceIds) ? res.serviceIds.map(String) : []
+            serviceIds: Array.isArray(res?.serviceIds) ? res.serviceIds.map(String) : [],
+            rangeKey: `${personId}|${startIso}|${endIso}`
           };
           closeDetailOverlay();
           switchTab('calendar');
+          renderCalendarViewSwitch_();
           renderCalendarReset_();
           if (!allEvents.length) await loadCalendar(true);
           else filterCalendar();
@@ -23069,6 +23278,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         initDashboardLongPressSmartFilter_();
         setPrayerDeckMode_('alphabetical');
         renderContactsViewSwitch_();
+        renderCalendarViewSwitch_();
         prefetchPrayerDeckData_().catch(() => {});
         document.addEventListener('click', (ev) => {
           const inside = ev.target && ev.target.closest && ev.target.closest('.share-menu-wrap');
@@ -23082,9 +23292,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
         });
         window.addEventListener("resize", updateBottomNavHighlight_);
         window.addEventListener("resize", scheduleContactsViewThumbSync_);
+        window.addEventListener("resize", scheduleCalendarViewThumbSync_);
         try {
           if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(() => scheduleContactsViewThumbSync_()).catch(() => {});
+            document.fonts.ready.then(() => {
+              scheduleContactsViewThumbSync_();
+              scheduleCalendarViewThumbSync_();
+            }).catch(() => {});
           }
         } catch (e) {}
         renderContactCategoryChips();
