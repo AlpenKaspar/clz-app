@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="https://rollsimply.com/elvanto-icon.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="/vendor/chordsheetjs.bundle.min.js"></script>
+  <script src="/js/songs-audio-pitch.js?v=20260522a"></script>
 
   <style>
     :root {
@@ -6096,6 +6097,69 @@
     body.dark .songs-player-mode {
       background: rgba(148,163,184,0.16);
     }
+    .songs-player-pitch {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 4px 0 2px;
+    }
+    .songs-player-pitch[hidden] {
+      display: none !important;
+    }
+    .songs-player-pitch button,
+    .songs-player-pitch-value {
+      min-height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.26);
+      background: rgba(255,255,255,0.72);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 850;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .songs-player-pitch button {
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    .songs-player-pitch button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .songs-player-pitch-toggle {
+      gap: 6px;
+    }
+    .songs-player-pitch-toggle.is-active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .songs-player-pitch-step,
+    .songs-player-pitch-reset {
+      width: 30px;
+      padding: 0;
+    }
+    .songs-player-pitch-value {
+      min-width: 94px;
+      padding: 0 10px;
+    }
+    .songs-player-pitch.is-loading .songs-player-pitch-value {
+      color: var(--primary);
+    }
+    body.dark .songs-player-pitch button,
+    body.dark .songs-player-pitch-value {
+      background: rgba(15,23,42,0.72);
+      border-color: rgba(148,163,184,0.24);
+      color: var(--text-main);
+    }
+    body.dark .songs-player-pitch-toggle.is-active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
     .songs-player-video-frame {
       display: none;
       width: 100%;
@@ -8341,6 +8405,19 @@
           </div>
           <div id="songs-player-now-title" class="songs-player-now-title">Kein Titel ausgewählt</div>
           <div id="songs-player-now-meta" class="songs-player-now-meta"></div>
+          <div id="songs-player-pitch" class="songs-player-pitch" hidden>
+            <button id="songs-player-pitch-toggle" class="songs-player-pitch-toggle" type="button" onclick="toggleSongsPlayerPitch_()" aria-pressed="false" title="Audio pitchen">
+              <i class="fas fa-wave-square"></i><span>Pitch</span>
+            </button>
+            <button class="songs-player-pitch-step" type="button" onclick="stepSongsPlayerPitch_(-1)" aria-label="Einen Halbton tiefer">
+              <i class="fas fa-minus"></i>
+            </button>
+            <span id="songs-player-pitch-value" class="songs-player-pitch-value">Original</span>
+            <button class="songs-player-pitch-step" type="button" onclick="stepSongsPlayerPitch_(1)" aria-label="Einen Halbton hoeher">
+              <i class="fas fa-plus"></i>
+            </button>
+            <button class="songs-player-pitch-reset" type="button" onclick="resetSongsPlayerPitch_()" aria-label="Pitch zuruecksetzen">0</button>
+          </div>
           <audio id="songs-player-audio" preload="metadata" x-webkit-airplay="allow"></audio>
           <div id="songs-player-video-wrap" class="songs-player-video-frame">
             <div id="songs-player-video-target"></div>
@@ -10464,6 +10541,13 @@
         shuffleAvoidTopKey: '',
         actionMenuIndex: -1
       };
+      const songsPlayerPitchState = {
+        enabled: false,
+        semitones: 0,
+        loading: false
+      };
+      const songsPlayerPitchModule_ = window.SongsAudioPitchModule || null;
+      let songsPlayerPitchToken_ = 0;
       let songsYoutubeApiPromise_ = null;
       let songsYoutubePlayer_ = null;
       let songsPlayerLongPressTimer_ = 0;
@@ -10845,6 +10929,236 @@
         return audio;
       }
 
+      function normalizeSongsPlayerPitchSemitones_(value) {
+        const number = Math.round(Number(value) || 0);
+        return Math.min(6, Math.max(-6, number));
+      }
+
+      function hasSongsPlayerPitchSupport_() {
+        return !!songsPlayerPitchModule_
+          && typeof songsPlayerPitchModule_.play === 'function'
+          && (typeof songsPlayerPitchModule_.isSupported !== 'function' || songsPlayerPitchModule_.isSupported());
+      }
+
+      function shouldUseSongsPlayerPitch_(item = songsPlayerState.currentItem) {
+        return hasSongsPlayerPitchSupport_()
+          && !!item
+          && !isSongsPlayerVideoItem_(item)
+          && !!item.url
+          && songsPlayerPitchState.enabled
+          && songsPlayerPitchState.semitones !== 0;
+      }
+
+      function isSongsPlayerPitchCurrent_() {
+        if (!songsPlayerPitchModule_ || !songsPlayerState.currentUrl) return false;
+        return typeof songsPlayerPitchModule_.currentUrl === 'function'
+          && songsPlayerPitchModule_.currentUrl() === songsPlayerState.currentUrl;
+      }
+
+      function isSongsPlayerPitchPlaying_() {
+        return !!songsPlayerPitchModule_
+          && isSongsPlayerPitchCurrent_()
+          && typeof songsPlayerPitchModule_.isPlaying === 'function'
+          && songsPlayerPitchModule_.isPlaying();
+      }
+
+      function isSongsPlayerAudioPlaying_() {
+        if (isSongsPlayerPitchPlaying_()) return true;
+        const audio = document.getElementById('songs-player-audio');
+        return !!audio && !!audio.src && !audio.paused;
+      }
+
+      function songsPlayerCurrentHasAudioSource_() {
+        const audio = document.getElementById('songs-player-audio');
+        return (!!audio && !!audio.src) || isSongsPlayerPitchCurrent_();
+      }
+
+      function songsPlayerCurrentAudioTime_() {
+        if (isSongsPlayerPitchCurrent_() && typeof songsPlayerPitchModule_?.currentTime === 'function') {
+          return songsPlayerPitchModule_.currentTime();
+        }
+        const audio = document.getElementById('songs-player-audio');
+        return audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      }
+
+      function songsPlayerCurrentAudioDuration_() {
+        if (isSongsPlayerPitchCurrent_() && typeof songsPlayerPitchModule_?.duration === 'function') {
+          const duration = songsPlayerPitchModule_.duration();
+          if (duration > 0) return duration;
+        }
+        const audio = document.getElementById('songs-player-audio');
+        return audio && Number.isFinite(audio.duration) ? audio.duration : 0;
+      }
+
+      function updateSongsPlayerPitchControls_() {
+        const box = document.getElementById('songs-player-pitch');
+        if (!box) return;
+        const item = songsPlayerState.currentItem;
+        const show = !!item && !isSongsPlayerVideoItem_(item) && hasSongsPlayerPitchSupport_();
+        box.hidden = !show;
+        box.classList.toggle('is-loading', !!songsPlayerPitchState.loading);
+        const toggle = document.getElementById('songs-player-pitch-toggle');
+        if (toggle) {
+          toggle.classList.toggle('is-active', !!songsPlayerPitchState.enabled && songsPlayerPitchState.semitones !== 0);
+          toggle.setAttribute('aria-pressed', songsPlayerPitchState.enabled && songsPlayerPitchState.semitones !== 0 ? 'true' : 'false');
+          toggle.disabled = !show || !!songsPlayerPitchState.loading;
+        }
+        box.querySelectorAll('.songs-player-pitch-step, .songs-player-pitch-reset').forEach((btn) => {
+          btn.disabled = !show || !!songsPlayerPitchState.loading;
+        });
+        const label = document.getElementById('songs-player-pitch-value');
+        if (label) {
+          const semitones = normalizeSongsPlayerPitchSemitones_(songsPlayerPitchState.semitones);
+          label.textContent = songsPlayerPitchState.loading
+            ? 'Lade...'
+            : (songsPlayerPitchState.enabled && semitones !== 0 ? `${semitones > 0 ? '+' : ''}${semitones} HT` : 'Original');
+        }
+      }
+
+      function stopSongsPlayerPitch_(resetPosition = true, clearBuffer = false) {
+        songsPlayerPitchToken_ += 1;
+        songsPlayerPitchState.loading = false;
+        if (songsPlayerPitchModule_ && typeof songsPlayerPitchModule_.stop === 'function') {
+          try {
+            songsPlayerPitchModule_.stop({ resetPosition: resetPosition !== false, clearBuffer: !!clearBuffer });
+          } catch (e) {}
+        }
+        updateSongsPlayerPitchControls_();
+      }
+
+      function setNativeAudioPosition_(audio, position) {
+        const wanted = Number(position);
+        if (!audio || !Number.isFinite(wanted) || wanted <= 0) return;
+        const apply = () => {
+          try {
+            const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+            audio.currentTime = duration > 0 ? Math.min(wanted, Math.max(0, duration - 0.05)) : wanted;
+          } catch (e) {}
+        };
+        if (Number.isFinite(audio.duration) && audio.duration > 0) apply();
+        else audio.addEventListener('loadedmetadata', apply, { once: true });
+      }
+
+      function playSongsPlayerNativeAudio_(item, options = {}) {
+        const audio = stopSongsPlayerAudio_(true);
+        stopSongsPlayerPitch_(false, false);
+        if (!audio || !item?.url) return null;
+        const position = Number(options.position);
+        const autoplay = options.autoplay === true;
+        try {
+          audio.src = item.url;
+          setNativeAudioPosition_(audio, position);
+          if (autoplay) {
+            const playPromise = audio.play();
+            if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+          }
+        } catch (e) {}
+        return audio;
+      }
+
+      async function playSongsPlayerPitchAudio_(item, options = {}) {
+        if (!shouldUseSongsPlayerPitch_(item)) return false;
+        const token = ++songsPlayerPitchToken_;
+        songsPlayerPitchState.loading = true;
+        updateSongsPlayerPitchControls_();
+        stopSongsPlayerAudio_(true);
+        const position = Number.isFinite(Number(options.position)) ? Number(options.position) : 0;
+        try {
+          const started = await songsPlayerPitchModule_.play(item.url, {
+            semitones: songsPlayerPitchState.semitones,
+            position,
+            onEnded: () => {
+              if (songsPlayerState.currentUrl === item.url) playNextSongsPlayerItem_();
+            },
+            onTick: () => {
+              updateSongsPlayerButtons_();
+              updateSongsPlayerProgress_();
+              updateSongsMiniPlayer_();
+            }
+          });
+          if (token !== songsPlayerPitchToken_) return false;
+          songsPlayerPitchState.loading = false;
+          updateSongsPlayerPitchControls_();
+          updateSongsPlayerButtons_();
+          updateSongsPlayerProgress_();
+          return !!started;
+        } catch (e) {
+          if (token === songsPlayerPitchToken_ && songsPlayerState.currentUrl === item.url) {
+            songsPlayerPitchState.loading = false;
+            songsPlayerPitchState.enabled = false;
+            updateSongsPlayerPitchControls_();
+            toast('Pitch ist fuer diese Audio-Datei nicht verfuegbar. Original wird abgespielt.', 2400);
+            playSongsPlayerNativeAudio_(item, { autoplay: true, position });
+          }
+          return false;
+        }
+      }
+
+      function restartSongsPlayerAudioEngine_(autoplay, position) {
+        const item = songsPlayerState.currentItem;
+        if (!item || isSongsPlayerVideoItem_(item)) return;
+        const wantedPosition = Number.isFinite(Number(position)) ? Number(position) : songsPlayerCurrentAudioTime_();
+        if (shouldUseSongsPlayerPitch_(item)) {
+          if (autoplay) {
+            playSongsPlayerPitchAudio_(item, { position: wantedPosition });
+          } else {
+            stopSongsPlayerAudio_(true);
+            if (isSongsPlayerPitchCurrent_() && typeof songsPlayerPitchModule_?.seek === 'function') {
+              try { songsPlayerPitchModule_.seek(wantedPosition); } catch (e) {}
+            }
+            stopSongsPlayerPitch_(false, false);
+          }
+        } else {
+          playSongsPlayerNativeAudio_(item, { autoplay: !!autoplay, position: wantedPosition });
+        }
+      }
+
+      function toggleSongsPlayerPitch_() {
+        if (!hasSongsPlayerPitchSupport_()) {
+          toast('Pitch ist auf diesem Browser nicht verfuegbar', 1800);
+          return;
+        }
+        const wasPlaying = isSongsPlayerAudioPlaying_();
+        const hadSource = songsPlayerCurrentHasAudioSource_();
+        const position = songsPlayerCurrentAudioTime_();
+        if (songsPlayerPitchState.enabled && songsPlayerPitchState.semitones !== 0) {
+          songsPlayerPitchState.enabled = false;
+        } else {
+          songsPlayerPitchState.enabled = true;
+          if (songsPlayerPitchState.semitones === 0) songsPlayerPitchState.semitones = 1;
+        }
+        updateSongsPlayerPitchControls_();
+        if (songsPlayerState.currentItem && !isSongsPlayerVideoItem_(songsPlayerState.currentItem) && (wasPlaying || hadSource)) {
+          restartSongsPlayerAudioEngine_(wasPlaying, position);
+        }
+      }
+
+      function stepSongsPlayerPitch_(delta) {
+        if (!hasSongsPlayerPitchSupport_()) return;
+        const wasPlaying = isSongsPlayerAudioPlaying_();
+        const hadSource = songsPlayerCurrentHasAudioSource_();
+        const position = songsPlayerCurrentAudioTime_();
+        const next = normalizeSongsPlayerPitchSemitones_(songsPlayerPitchState.semitones + Number(delta || 0));
+        songsPlayerPitchState.semitones = next;
+        songsPlayerPitchState.enabled = next !== 0;
+        updateSongsPlayerPitchControls_();
+        if (songsPlayerState.currentItem && !isSongsPlayerVideoItem_(songsPlayerState.currentItem) && (wasPlaying || hadSource)) {
+          restartSongsPlayerAudioEngine_(wasPlaying, position);
+        }
+      }
+
+      function resetSongsPlayerPitch_() {
+        const wasPlaying = isSongsPlayerAudioPlaying_();
+        const hadSource = songsPlayerCurrentHasAudioSource_();
+        const position = songsPlayerCurrentAudioTime_();
+        songsPlayerPitchState.enabled = false;
+        songsPlayerPitchState.semitones = 0;
+        updateSongsPlayerPitchControls_();
+        if (songsPlayerState.currentItem && !isSongsPlayerVideoItem_(songsPlayerState.currentItem) && (wasPlaying || hadSource)) {
+          restartSongsPlayerAudioEngine_(wasPlaying, position);
+        }
+      }
+
       function songsPlayerSubtitleParts_(item) {
         if (!item) return [];
         const parts = [];
@@ -10878,6 +11192,7 @@
         if (now) now.classList.toggle('is-video', isSongsPlayerVideoItem_(item));
         if (title) title.textContent = item?.songTitle || item?.name || 'Titel';
         if (meta) meta.textContent = songsPlayerMetaText_(item);
+        updateSongsPlayerPitchControls_();
       }
 
       function syncSongsPlayerListSelection_() {
@@ -11209,20 +11524,19 @@
         renderSongsPlayerNow_(it);
         const isVideo = isSongsPlayerVideoItem_(it);
         if (isVideo) {
+          stopSongsPlayerPitch_(true, true);
           stopSongsPlayerAudio_(true);
           if (autoplay) playSongsYoutubeVideo_(it);
           else renderSongsYoutubeFallbackIframe_(it, false);
         } else {
           stopSongsYoutubeVideo_();
-          const audio = stopSongsPlayerAudio_(true);
-          if (audio && autoplay) {
-            try {
-              audio.src = it.url;
-              const playPromise = audio.play();
-              if (playPromise && typeof playPromise.catch === 'function') {
-                playPromise.catch(() => {});
-              }
-            } catch (e) {}
+          if (autoplay && shouldUseSongsPlayerPitch_(it)) {
+            playSongsPlayerPitchAudio_(it, { position: 0 });
+          } else if (autoplay) {
+            playSongsPlayerNativeAudio_(it, { autoplay: true, position: 0 });
+          } else {
+            stopSongsPlayerPitch_(true, true);
+            stopSongsPlayerAudio_(true);
           }
         }
         syncSongsPlayerListSelection_();
@@ -11261,9 +11575,8 @@
         return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
       }
       function updateSongsPlayerButtons_() {
-        const audio = document.getElementById('songs-player-audio');
         const isVideo = isSongsPlayerVideoItem_(songsPlayerState.currentItem);
-        const isPlaying = !isVideo && !!audio && !!audio.src && !audio.paused;
+        const isPlaying = !isVideo && isSongsPlayerAudioPlaying_();
         ['songs-player-play', 'songs-mini-play'].forEach((id) => {
           const btn = document.getElementById(id);
           if (!btn) return;
@@ -11272,9 +11585,8 @@
         });
       }
       function updateSongsPlayerProgress_() {
-        const audio = document.getElementById('songs-player-audio');
-        const duration = audio && Number.isFinite(audio.duration) ? audio.duration : 0;
-        const current = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+        const duration = songsPlayerCurrentAudioDuration_();
+        const current = songsPlayerCurrentAudioTime_();
         const percent = duration > 0 ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
         ['songs-player-progress-fill', 'songs-mini-progress-fill'].forEach((id) => {
           const el = document.getElementById(id);
@@ -11302,6 +11614,7 @@
       }
       function closeSongsMiniPlayer_() {
         stopSongsPlayerAudio_(true);
+        stopSongsPlayerPitch_(true, true);
         stopSongsYoutubeVideo_();
         resetSongsPlayerSelection_();
         closeSongsPlayerItemMenu_();
@@ -11315,6 +11628,15 @@
       function toggleSongsPlayerPlayback_() {
         if (isSongsPlayerVideoItem_(songsPlayerState.currentItem)) {
           openSongsPlayer_();
+          return;
+        }
+        if (shouldUseSongsPlayerPitch_(songsPlayerState.currentItem)) {
+          if (isSongsPlayerPitchCurrent_() && songsPlayerPitchModule_.isPlaying()) {
+            songsPlayerPitchModule_.pause();
+          } else {
+            playSongsPlayerPitchAudio_(songsPlayerState.currentItem, { position: songsPlayerCurrentAudioTime_() });
+          }
+          updateSongsPlayerButtons_();
           return;
         }
         const audio = document.getElementById('songs-player-audio');
@@ -11333,15 +11655,25 @@
         updateSongsPlayerButtons_();
       }
       function seekSongsPlayer_(event) {
-        const audio = document.getElementById('songs-player-audio');
         const bar = document.getElementById('songs-player-progress');
-        if (!audio || !bar || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+        const duration = songsPlayerCurrentAudioDuration_();
+        if (!bar || !Number.isFinite(duration) || duration <= 0) return;
         const rect = bar.getBoundingClientRect();
         const x = Math.min(rect.width, Math.max(0, event.clientX - rect.left));
-        audio.currentTime = (x / rect.width) * audio.duration;
+        const nextTime = (x / rect.width) * duration;
+        if (isSongsPlayerPitchCurrent_() && shouldUseSongsPlayerPitch_(songsPlayerState.currentItem) && typeof songsPlayerPitchModule_?.seek === 'function') {
+          songsPlayerPitchModule_.seek(nextTime);
+        } else {
+          const audio = document.getElementById('songs-player-audio');
+          if (audio) audio.currentTime = nextTime;
+        }
         updateSongsPlayerProgress_();
       }
       function showSongsPlayerRoutePicker_() {
+        if (isSongsPlayerPitchCurrent_() && shouldUseSongsPlayerPitch_(songsPlayerState.currentItem)) {
+          toast('AirPlay ist im Pitch-Modus nur mit Original-Audio verfuegbar', 2000);
+          return;
+        }
         if (isSongsPlayerVideoItem_(songsPlayerState.currentItem)) {
           toast('AirPlay ist für YouTube im eingebetteten Player nicht verfügbar', 1800);
           return;

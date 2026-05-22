@@ -1,7 +1,8 @@
-const CACHE_NAME = 'clz-app-shell-v1';
+const CACHE_NAME = 'clz-app-shell-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/js/songs-audio-pitch.js',
   '/manifest.webmanifest'
 ];
 
