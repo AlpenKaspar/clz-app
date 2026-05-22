@@ -3358,15 +3358,18 @@ function rpc_import_runs(): array
 
 function rpc_sync_status(array $user): array
 {
+    $counts = rpc_data_counts();
+    $personenStatus = rpc_import_status_group(['people', 'families', 'groups']);
+    $personenStatus['count'] = (int) ($counts['people'] ?? ($personenStatus['count'] ?? 0));
     return [
         'ok' => true,
         'status' => 'ok',
-        'personen' => rpc_import_status_group(['people', 'families', 'groups']),
+        'personen' => $personenStatus,
         'kalender' => rpc_import_status_group(['calendar']),
         'serviceDetails' => rpc_import_status_group(['service_details']),
         'songs' => rpc_import_status_group(['songs']),
         'songDiagnostics' => rpc_song_diagnostics(),
-        'counts' => rpc_data_counts(),
+        'counts' => $counts,
         'cache' => rpc_cache_stats(),
         'latestRuns' => rpc_import_runs(),
         'user' => rpc_user_response($user),
