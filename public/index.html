@@ -5922,6 +5922,17 @@
     .songs-player-title-wrap i {
       color: var(--primary);
     }
+    .songs-player-head-actions {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .songs-player-shuffle-btn.is-active {
+      background: var(--primary);
+      color: #fff;
+    }
     .songs-player-now {
       margin: 12px 16px 0;
       padding: 14px;
@@ -6173,6 +6184,9 @@
       background: rgba(255,255,255,0.08);
       border-color: rgba(255,255,255,0.10);
     }
+    .songs-player-item.queued-next {
+      border-color: rgba(37,99,235,0.30);
+    }
     .songs-player-item-icon {
       flex: 0 0 36px;
       width: 36px;
@@ -6217,6 +6231,86 @@
     }
     body.dark .songs-player-item-kind {
       background: #2d3138;
+    }
+    .songs-player-item-kind.queue {
+      background: rgba(37,99,235,0.12);
+      color: var(--primary);
+    }
+    body.dark .songs-player-item-kind.queue {
+      background: rgba(96,165,250,0.18);
+      color: #93c5fd;
+    }
+    .songs-player-item-menu-btn {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--muted, #6b7280);
+      cursor: pointer;
+    }
+    .songs-player-item-menu-btn:hover {
+      background: rgba(148,163,184,0.16);
+      color: var(--primary);
+    }
+    .songs-player-action-menu {
+      position: fixed;
+      z-index: 1100;
+      min-width: 220px;
+      padding: 6px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.98);
+      color: var(--text-main);
+      border: 1px solid rgba(148,163,184,0.28);
+      box-shadow: 0 20px 45px rgba(15,23,42,0.22);
+      backdrop-filter: blur(18px);
+    }
+    body.dark .songs-player-action-menu {
+      background: rgba(24,28,36,0.98);
+      border-color: rgba(148,163,184,0.20);
+      box-shadow: 0 20px 45px rgba(0,0,0,0.42);
+    }
+    .songs-player-action-menu[hidden] {
+      display: none !important;
+    }
+    .songs-player-action-menu button {
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+    }
+    .songs-player-action-menu button:hover,
+    .songs-player-action-menu button:focus-visible {
+      background: rgba(37,99,235,0.10);
+      outline: none;
+    }
+    .songs-player-action-menu button[disabled] {
+      opacity: .42;
+      cursor: not-allowed;
+    }
+    .songs-player-action-menu.as-sheet {
+      left: max(12px, env(safe-area-inset-left)) !important;
+      right: max(12px, env(safe-area-inset-right)) !important;
+      bottom: calc(max(12px, env(safe-area-inset-bottom)) + 8px);
+      top: auto !important;
+      min-width: 0;
+      width: auto;
+      border-radius: 18px;
+      padding: 8px;
     }
     .songs-player-empty {
       padding: 32px 16px;
@@ -8095,9 +8189,14 @@
             <i class="fas fa-music"></i>
             <span id="songs-player-title">Audio/Video-Player</span>
           </div>
-          <button class="icon-btn" type="button" onclick="closeSongsPlayer_()" aria-label="Player einklappen">
-            <i class="fas fa-chevron-down"></i>
-          </button>
+          <div class="songs-player-head-actions">
+            <button id="songs-player-shuffle" class="icon-btn songs-player-shuffle-btn" type="button" onclick="shuffleSongsPlayer_()" title="Zufällig sortieren" aria-label="Zufällig sortieren">
+              <i class="fas fa-shuffle"></i>
+            </button>
+            <button class="icon-btn" type="button" onclick="closeSongsPlayer_()" aria-label="Player einklappen">
+              <i class="fas fa-chevron-down"></i>
+            </button>
+          </div>
         </div>
 
         <div id="songs-player-now" class="songs-player-now">
@@ -8144,13 +8243,13 @@
           <button class="songs-player-tab" data-filter="audio" type="button" onclick="setSongsPlayerFilter_('audio')">Audio</button>
           <button class="songs-player-tab" data-filter="playback" type="button" onclick="setSongsPlayerFilter_('playback')">Playbacks</button>
           <button class="songs-player-tab" data-filter="tracks" type="button" onclick="setSongsPlayerFilter_('tracks')">Spuren</button>
-          <button class="songs-player-tab" data-filter="livestream" type="button" onclick="setSongsPlayerFilter_('livestream')">Livestream</button>
         </div>
 
         <div id="songs-player-list" class="songs-player-list"></div>
         <div id="songs-player-empty" class="songs-player-empty" hidden>Keine abspielbaren Dateien gefunden.</div>
       </div>
     </div>
+    <div id="songs-player-action-menu" class="songs-player-action-menu" hidden></div>
     <div id="songs-mini-player" class="songs-mini-player" aria-hidden="true">
       <button id="songs-mini-play" class="songs-player-play-btn" type="button" onclick="toggleSongsPlayerPlayback_(); event.stopPropagation();" aria-label="Abspielen">
         <i class="fas fa-play"></i>
@@ -10186,10 +10285,18 @@
         currentSearch: '',
         currentIndex: -1,
         currentUrl: '',
-        currentItem: null
+        currentItem: null,
+        upNext: [],
+        shuffleEnabled: false,
+        shuffleRanks: {},
+        shuffleAvoidTopKey: '',
+        actionMenuIndex: -1
       };
       let songsYoutubeApiPromise_ = null;
       let songsYoutubePlayer_ = null;
+      let songsPlayerLongPressTimer_ = 0;
+      let songsPlayerLongPressStart_ = null;
+      let songsPlayerSuppressClick_ = false;
 
       function isAudioAssetForPlayer_(asset) {
         if (!asset || !asset.url) return false;
@@ -10339,7 +10446,22 @@
         return songsYoutubeApiPromise_;
       }
 
+      function takeNextSongsQueuedIndex_() {
+        while ((songsPlayerState.upNext || []).length) {
+          const key = songsPlayerState.upNext.shift();
+          const idx = songsPlayerState.filtered.findIndex(item => songsPlayerItemKey_(item) === key);
+          if (idx >= 0 && idx !== songsPlayerState.currentIndex) return idx;
+        }
+        return -1;
+      }
+
       function playNextSongsPlayerItem_() {
+        const queuedIdx = takeNextSongsQueuedIndex_();
+        if (queuedIdx >= 0) {
+          playSongsPlayerItem_(queuedIdx);
+          renderSongsPlayerList_();
+          return true;
+        }
         const next = songsPlayerState.currentIndex + 1;
         if (next < songsPlayerState.filtered.length) {
           playSongsPlayerItem_(next);
@@ -10441,6 +10563,73 @@
         if (item?.kind === 'livestream') return 'Livestream';
         if (item?.kind === 'video') return 'Video';
         return 'Audio';
+      }
+
+      function songsPlayerItemKey_(item) {
+        if (!item) return '';
+        return [
+          item.kind,
+          item.url || item.watchUrl,
+          item.songId,
+          item.videoId,
+          item.name,
+          item.songTitle
+        ].map(v => String(v || '').trim()).join('|');
+      }
+
+      function getSongsPlayerItemSongId_(item) {
+        return String(item?.songId || '').trim();
+      }
+
+      function isSongsPlayerQueuedNext_(item) {
+        const key = songsPlayerItemKey_(item);
+        return !!key && Array.isArray(songsPlayerState.upNext) && songsPlayerState.upNext.includes(key);
+      }
+
+      function pruneSongsPlayerUpNext_() {
+        const available = new Set((songsPlayerState.items || []).map(songsPlayerItemKey_).filter(Boolean));
+        songsPlayerState.upNext = (songsPlayerState.upNext || []).filter(key => available.has(key));
+      }
+
+      function applySongsPlayerShuffleOrder_(items) {
+        if (!songsPlayerState.shuffleEnabled || !Array.isArray(items) || items.length < 2) return items;
+        const ranks = songsPlayerState.shuffleRanks || {};
+        songsPlayerState.shuffleRanks = ranks;
+        items.forEach((item) => {
+          const key = songsPlayerItemKey_(item);
+          if (key && typeof ranks[key] !== 'number') ranks[key] = Math.random();
+        });
+        const ordered = items.slice().sort((a, b) => {
+          const ak = songsPlayerItemKey_(a);
+          const bk = songsPlayerItemKey_(b);
+          return (ranks[ak] || 0) - (ranks[bk] || 0);
+        });
+        const avoidKey = String(songsPlayerState.shuffleAvoidTopKey || '');
+        if (avoidKey && ordered.length > 1 && songsPlayerItemKey_(ordered[0]) === avoidKey) {
+          const swapIdx = ordered.findIndex(item => songsPlayerItemKey_(item) !== avoidKey);
+          if (swapIdx > 0) {
+            const tmp = ordered[0];
+            ordered[0] = ordered[swapIdx];
+            ordered[swapIdx] = tmp;
+          }
+        }
+        return ordered;
+      }
+
+      function updateSongsPlayerShuffleButton_() {
+        const btn = document.getElementById('songs-player-shuffle');
+        if (!btn) return;
+        btn.classList.toggle('is-active', !!songsPlayerState.shuffleEnabled);
+        btn.setAttribute('aria-pressed', songsPlayerState.shuffleEnabled ? 'true' : 'false');
+      }
+
+      function shuffleSongsPlayer_() {
+        const visible = Array.isArray(songsPlayerState.filtered) ? songsPlayerState.filtered : [];
+        songsPlayerState.shuffleEnabled = true;
+        songsPlayerState.shuffleRanks = {};
+        songsPlayerState.shuffleAvoidTopKey = songsPlayerItemKey_(visible[0] || songsPlayerState.currentItem);
+        renderSongsPlayerList_();
+        updateSongsPlayerShuffleButton_();
       }
 
       function resetSongsPlayerSelection_() {
@@ -10610,11 +10799,18 @@
               || (it.arrangementName && it.arrangementName.toLowerCase().includes(q))
               || (it.album && it.album.toLowerCase().includes(q));
         });
+        songsPlayerState.filtered = applySongsPlayerShuffleOrder_(songsPlayerState.filtered);
+        pruneSongsPlayerUpNext_();
+        const currentKey = songsPlayerItemKey_(songsPlayerState.currentItem);
+        if (currentKey) {
+          songsPlayerState.currentIndex = songsPlayerState.filtered.findIndex(item => songsPlayerItemKey_(item) === currentKey);
+        }
       }
       function renderSongsPlayerList_() {
         const host = document.getElementById('songs-player-list');
         const empty = document.getElementById('songs-player-empty');
         if (!host) return;
+        closeSongsPlayerItemMenu_();
         applySongsPlayerFilter_();
         const items = songsPlayerState.filtered;
         if (!items.length) {
@@ -10631,24 +10827,166 @@
         if (empty) empty.hidden = true;
         const html = items.map((it, idx) => {
           const isActive = it.url === songsPlayerState.currentUrl;
+          const queued = isSongsPlayerQueuedNext_(it);
           const kindLabel = it.kind === 'livestream' ? 'Live' : songsPlayerKindLabel_(it);
           const title = escapeHtml(it.songTitle || it.name);
           const sub = escapeHtml(songsPlayerSubtitleParts_(it).join(' · '));
           return `
-            <div class="songs-player-item${isActive ? ' active' : ''}" data-idx="${idx}" onclick="playSongsPlayerItem_(${idx})">
+            <div class="songs-player-item${isActive ? ' active' : ''}${queued ? ' queued-next' : ''}" data-idx="${idx}" onclick="onSongsPlayerItemClick_(event, ${idx})" onpointerdown="startSongsPlayerLongPress_(event, ${idx})" onpointermove="moveSongsPlayerLongPress_(event)" onpointerup="cancelSongsPlayerLongPress_()" onpointercancel="cancelSongsPlayerLongPress_()" onpointerleave="cancelSongsPlayerLongPress_()">
               <span class="songs-player-item-icon${(it.kind === 'video' || it.kind === 'livestream') ? ' video' : ''}"><i class="${(it.kind === 'video' || it.kind === 'livestream') ? 'fab fa-youtube' : 'fas fa-music'}"></i></span>
               <div class="songs-player-item-body">
                 <div class="songs-player-item-title">${title}</div>
                 <div class="songs-player-item-sub">${sub}</div>
               </div>
-              <span class="songs-player-item-kind">${kindLabel}</span>
+              <span class="songs-player-item-kind${queued ? ' queue' : ''}">${queued ? 'Nächste' : kindLabel}</span>
+              <button class="songs-player-item-menu-btn" type="button" onclick="openSongsPlayerItemMenu_(event, ${idx})" aria-label="Optionen zu diesem Titel" title="Optionen"><i class="fas fa-ellipsis-vertical"></i></button>
             </div>
           `;
         }).join('');
         host.innerHTML = html;
+        updateSongsPlayerShuffleButton_();
         if (items.length && !songsPlayerCurrentMatchesFilter_()) {
           previewSongsPlayerItem_(0);
         }
+      }
+
+      function onSongsPlayerItemClick_(event, idx) {
+        if (songsPlayerSuppressClick_) {
+          event?.preventDefault?.();
+          songsPlayerSuppressClick_ = false;
+          return;
+        }
+        playSongsPlayerItem_(idx);
+      }
+
+      function startSongsPlayerLongPress_(event, idx) {
+        if (event?.button && event.button !== 0) return;
+        if (event?.target?.closest?.('button,a,input,textarea,select')) return;
+        cancelSongsPlayerLongPress_();
+        songsPlayerLongPressStart_ = { x: Number(event?.clientX || 0), y: Number(event?.clientY || 0), idx };
+        songsPlayerLongPressTimer_ = setTimeout(() => {
+          songsPlayerSuppressClick_ = true;
+          openSongsPlayerItemMenu_({
+            clientX: songsPlayerLongPressStart_?.x || 0,
+            clientY: songsPlayerLongPressStart_?.y || 0,
+            preventDefault() {},
+            stopPropagation() {}
+          }, idx, true);
+        }, 520);
+      }
+
+      function moveSongsPlayerLongPress_(event) {
+        if (!songsPlayerLongPressTimer_ || !songsPlayerLongPressStart_) return;
+        const dx = Math.abs(Number(event?.clientX || 0) - songsPlayerLongPressStart_.x);
+        const dy = Math.abs(Number(event?.clientY || 0) - songsPlayerLongPressStart_.y);
+        if (dx > 12 || dy > 12) cancelSongsPlayerLongPress_();
+      }
+
+      function cancelSongsPlayerLongPress_() {
+        if (songsPlayerLongPressTimer_) clearTimeout(songsPlayerLongPressTimer_);
+        songsPlayerLongPressTimer_ = 0;
+        songsPlayerLongPressStart_ = null;
+      }
+
+      function closeSongsPlayerItemMenu_() {
+        const menu = document.getElementById('songs-player-action-menu');
+        if (!menu) return;
+        menu.hidden = true;
+        menu.classList.remove('as-sheet');
+        menu.style.left = '';
+        menu.style.top = '';
+        menu.style.visibility = '';
+        songsPlayerState.actionMenuIndex = -1;
+      }
+
+      function openSongsPlayerItemMenu_(event, idx, asSheet = false) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        cancelSongsPlayerLongPress_();
+        const menu = document.getElementById('songs-player-action-menu');
+        const item = songsPlayerState.filtered[idx];
+        if (!menu || !item) return;
+        const songId = getSongsPlayerItemSongId_(item);
+        const queued = isSongsPlayerQueuedNext_(item);
+        songsPlayerState.actionMenuIndex = idx;
+        menu.innerHTML = `
+          <button type="button" onclick="${queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${queued ? 'Aus Nächstes entfernen' : 'Als Nächstes abspielen'}</span></button>
+          <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
+          <button type="button" onclick="openSongsPlayerSongDetail_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Zum Song</span></button>
+        `;
+        const useSheet = !!asSheet || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 680px)').matches);
+        menu.hidden = false;
+        menu.classList.toggle('as-sheet', useSheet);
+        if (useSheet) {
+          menu.style.left = '';
+          menu.style.top = '';
+          menu.style.visibility = '';
+          return;
+        }
+        menu.style.visibility = 'hidden';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        const rect = event?.currentTarget?.getBoundingClientRect?.();
+        const x = Number(event?.clientX || rect?.right || 24);
+        const y = Number(event?.clientY || rect?.bottom || 24);
+        const box = menu.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+        const left = Math.min(Math.max(8, x - box.width + 12), Math.max(8, vw - box.width - 8));
+        const top = Math.min(Math.max(8, y + 8), Math.max(8, vh - box.height - 8));
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.visibility = '';
+      }
+
+      function queueSongsPlayerNext_(idx) {
+        const item = songsPlayerState.filtered[idx];
+        const key = songsPlayerItemKey_(item);
+        if (!item || !key) return;
+        songsPlayerState.upNext = (songsPlayerState.upNext || []).filter(entry => entry !== key);
+        songsPlayerState.upNext.unshift(key);
+        closeSongsPlayerItemMenu_();
+        renderSongsPlayerList_();
+        toast('Als Nächstes vorgemerkt', 1300);
+      }
+
+      function removeSongsPlayerNext_(idx) {
+        const key = songsPlayerItemKey_(songsPlayerState.filtered[idx]);
+        if (key) songsPlayerState.upNext = (songsPlayerState.upNext || []).filter(entry => entry !== key);
+        closeSongsPlayerItemMenu_();
+        renderSongsPlayerList_();
+      }
+
+      function openSongsPlayerSongDetail_(idx) {
+        const songId = getSongsPlayerItemSongId_(songsPlayerState.filtered[idx]);
+        closeSongsPlayerItemMenu_();
+        if (!songId) {
+          toast('Kein Song verknüpft', 1400);
+          return;
+        }
+        closeSongsPlayer_();
+        openSongDetail_(songId);
+      }
+
+      function openSongsPlayerSongText_(idx) {
+        const songId = getSongsPlayerItemSongId_(songsPlayerState.filtered[idx]);
+        closeSongsPlayerItemMenu_();
+        if (!songId) {
+          toast('Kein Songtext verknüpft', 1400);
+          return;
+        }
+        closeSongsPlayer_();
+        openSongDetail_(songId);
+        if (!currentSongData) return;
+        currentSongFilesExpanded = true;
+        renderSongDetail_(currentSongData);
+        const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
+        const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
+        if (!buildSongArrangementChordProText_(currentSongData, arrangement)) {
+          toast('Kein Akkordtext hinterlegt', 1400);
+          return;
+        }
+        setTimeout(() => openSongArrangementTextViewer_(), 0);
       }
 
       function songsPlayerCurrentMatchesFilter_() {
@@ -10699,6 +11037,7 @@
       function setSongsPlayerFilter_(filter) {
         songsPlayerState.currentFilter = String(filter || 'audio-all');
         resetSongsPlayerSelection_();
+        closeSongsPlayerItemMenu_();
         const activeFilter = normalizeSongsPlayerFilter_(songsPlayerState.currentFilter);
         const videoMode = songsPlayerState.currentFilter === 'video' || songsPlayerState.currentFilter === 'livestream';
         const livestreamMode = songsPlayerState.currentFilter === 'livestream';
@@ -10767,6 +11106,7 @@
         stopSongsPlayerAudio_(true);
         stopSongsYoutubeVideo_();
         resetSongsPlayerSelection_();
+        closeSongsPlayerItemMenu_();
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('songs-player-open');
@@ -10857,6 +11197,7 @@
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !openVideoMode);
         if (openLivestreamMode) loadSongsLivestreamItems_();
         renderSongsPlayerList_();
+        updateSongsPlayerShuffleButton_();
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'false');
         document.body.classList.add('songs-player-open');
@@ -10868,6 +11209,7 @@
       function closeSongsPlayer_() {
         const overlay = document.getElementById('songs-player-overlay');
         if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        closeSongsPlayerItemMenu_();
         document.body.classList.remove('songs-player-open');
         updateSongsMiniPlayer_();
       }
@@ -10890,6 +11232,19 @@
         overlay.dataset.bound = '1';
         overlay.addEventListener('click', (e) => {
           if (e.target === overlay) closeSongsPlayer_();
+        });
+      })();
+      (function bindSongsPlayerActionMenu_() {
+        if (document.body.dataset.songsPlayerMenuBound) return;
+        document.body.dataset.songsPlayerMenuBound = '1';
+        document.addEventListener('click', (event) => {
+          const menu = document.getElementById('songs-player-action-menu');
+          if (!menu || menu.hidden) return;
+          if (menu.contains(event.target) || event.target?.closest?.('.songs-player-item-menu-btn')) return;
+          closeSongsPlayerItemMenu_();
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') closeSongsPlayerItemMenu_();
         });
       })();
       (function bindSongsPlayerEnded_() {
