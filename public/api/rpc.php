@@ -22,7 +22,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
     return match ($fn) {
         'app_ping' => rpc_ping(),
         'app_bootstrap' => rpc_bootstrap($user),
-        'app_getUserAccessLight' => ['ok' => true, 'user' => array_merge($user, ['permissions' => rpc_permissions($user)]), 'permissions' => rpc_permissions($user)],
+        'app_getUserAccessLight' => ['ok' => true, 'user' => rpc_user_response($user), 'permissions' => rpc_permissions($user)],
         'app_loadContactsLite' => rpc_contacts_lite($user),
         'personenUi_getMainDetails' => rpc_person_main((string) ($args[0] ?? ''), $user),
         'personenUi_getFullDetails' => rpc_person_full((string) ($args[0] ?? ''), $user),
@@ -60,6 +60,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_adminUsersList' => rpc_admin_users_list($user),
         'tools_adminCreateUser' => rpc_admin_create_user($args[0] ?? [], $user),
         'tools_adminUpdateUser' => rpc_admin_update_user($args[0] ?? [], $user),
+        'tools_adminLinkUserPerson' => rpc_admin_link_user_person($args[0] ?? [], $user),
         'tools_adminImpersonateUser' => rpc_admin_impersonate_user((int) ($args[0] ?? 0), $user),
         'tools_adminStopImpersonation' => rpc_admin_stop_impersonation($user),
         'tools_installNightlyServerCacheRebuild' => rpc_nightly_cache_notice('install'),
@@ -93,20 +94,149 @@ function rpc_ping(): array
 
 function rpc_bootstrap(array $user): array
 {
+    $userResponse = rpc_user_response($user);
     return [
         'ok' => true,
         'ts' => date('c'),
         'dataVersion' => rpc_data_version(),
-        'user' => [
-            'email' => $user['email'] ?? '',
-            'role' => $user['role'] ?? 'member',
-            'permissions' => rpc_permissions($user),
-            'impersonating' => $user['impersonating'] ?? null,
-        ],
+        'user' => $userResponse,
         'cache' => [],
         'filters' => rpc_contact_filters(),
         'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard($user),
     ];
+}
+
+function rpc_user_response(array $user): array
+{
+    $person = rpc_user_contact_link($user);
+    return array_merge($user, [
+        'permissions' => rpc_permissions($user),
+        'personId' => $person['personId'],
+        'personName' => $person['personName'],
+        'personEmail' => $person['personEmail'],
+        'personLinkSource' => $person['personLinkSource'],
+    ]);
+}
+
+function rpc_user_contact_link(array $user): array
+{
+    $empty = [
+        'personId' => '',
+        'personName' => '',
+        'personEmail' => '',
+        'personLinkSource' => '',
+    ];
+    try {
+        rpc_ensure_user_person_link_schema();
+        $manualPersonId = '';
+        $userId = (int) ($user['id'] ?? 0);
+        if ($userId > 0) {
+            $stmt = db()->prepare('SELECT person_id FROM users WHERE id = ? LIMIT 1');
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch();
+            if (is_array($row)) {
+                $manualPersonId = rpc_str($row['person_id'] ?? '');
+            }
+        }
+
+        if ($manualPersonId !== '') {
+            $person = rpc_fetch_user_link_person_by_id($manualPersonId);
+            if ($person !== null) {
+                return rpc_user_person_payload($person, 'manual');
+            }
+        }
+
+        $email = strtolower(rpc_str($user['email'] ?? ''));
+        if ($email !== '') {
+            $person = rpc_fetch_user_link_person_by_email($email);
+            if ($person !== null) {
+                return rpc_user_person_payload($person, 'email');
+            }
+        }
+    } catch (Throwable) {
+        return $empty;
+    }
+    return $empty;
+}
+
+function rpc_ensure_user_person_link_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    $column = db()->query("SHOW COLUMNS FROM users LIKE 'person_id'")->fetch();
+    if (!is_array($column)) {
+        db()->exec('ALTER TABLE users ADD COLUMN person_id varchar(80) NULL AFTER display_name');
+    }
+
+    try {
+        $index = db()->query("SHOW INDEX FROM users WHERE Key_name = 'idx_users_person'")->fetch();
+        if (!is_array($index)) {
+            db()->exec('ALTER TABLE users ADD KEY idx_users_person (person_id)');
+        }
+    } catch (Throwable) {
+        // The column is enough for correctness; duplicate/missing index errors should not block login.
+    }
+
+    $done = true;
+}
+
+function rpc_fetch_user_link_person_by_id(string $personId): ?array
+{
+    if ($personId === '') {
+        return null;
+    }
+    $stmt = db()->prepare(
+        'SELECT id, email, firstname, preferred_name, lastname, display_name
+         FROM people
+         WHERE id = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$personId]);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function rpc_fetch_user_link_person_by_email(string $email): ?array
+{
+    $email = strtolower(rpc_str($email));
+    if ($email === '') {
+        return null;
+    }
+    $stmt = db()->prepare(
+        "SELECT id, email, firstname, preferred_name, lastname, display_name
+         FROM people
+         WHERE LOWER(COALESCE(email, '')) = ?
+           AND (status IS NULL OR status = '' OR LOWER(status) = 'active')
+         ORDER BY lastname, firstname
+         LIMIT 1"
+    );
+    $stmt->execute([$email]);
+    $row = $stmt->fetch();
+    return is_array($row) ? $row : null;
+}
+
+function rpc_user_person_payload(array $person, string $source): array
+{
+    return [
+        'personId' => rpc_str($person['id'] ?? ''),
+        'personName' => rpc_person_display_name($person),
+        'personEmail' => rpc_str($person['email'] ?? ''),
+        'personLinkSource' => $source,
+    ];
+}
+
+function rpc_person_display_name(array $person): string
+{
+    $display = rpc_str($person['display_name'] ?? '');
+    if ($display !== '') {
+        return $display;
+    }
+    $first = rpc_str($person['preferred_name'] ?? '') ?: rpc_str($person['firstname'] ?? '');
+    $last = rpc_str($person['lastname'] ?? '');
+    return trim($first . ' ' . $last) ?: rpc_str($person['email'] ?? '') ?: rpc_str($person['id'] ?? '');
 }
 
 function rpc_permissions(array $user = []): array
@@ -1007,17 +1137,26 @@ function rpc_require_real_super_admin(array $user): void
 function rpc_admin_users_list(array $user): array
 {
     rpc_require_real_super_admin($user);
+    rpc_ensure_user_person_link_schema();
     $rows = fetch_all_prepared_legacy(
-        'SELECT id, email, display_name, role, is_active, last_login_at
+        'SELECT id, email, display_name, person_id, role, is_active, last_login_at
          FROM users
          ORDER BY last_login_at DESC, email ASC',
         []
     );
+    $peopleById = rpc_admin_user_link_people_by_id($rows);
+    $peopleByEmail = rpc_admin_user_link_people_by_email($rows);
 
     return [
         'ok' => true,
         'roles' => ['super_admin', 'admin', 'member', 'guest'],
-        'users' => array_map(static function (array $row): array {
+        'users' => array_map(static function (array $row) use ($peopleById, $peopleByEmail): array {
+            $manualPersonId = rpc_str($row['person_id'] ?? '');
+            $email = strtolower(rpc_str($row['email'] ?? ''));
+            $manualPerson = $manualPersonId !== '' ? ($peopleById[$manualPersonId] ?? null) : null;
+            $emailPerson = $email !== '' ? ($peopleByEmail[$email] ?? null) : null;
+            $effectivePerson = $manualPerson ?? $emailPerson;
+            $source = $manualPerson ? 'manual' : ($emailPerson ? 'email' : '');
             return [
                 'id' => (int) ($row['id'] ?? 0),
                 'email' => rpc_str($row['email'] ?? ''),
@@ -1025,11 +1164,81 @@ function rpc_admin_users_list(array $user): array
                 'role' => rpc_str($row['role'] ?? 'guest') ?: 'guest',
                 'isActive' => ((int) ($row['is_active'] ?? 0)) === 1,
                 'lastLoginAt' => rpc_str($row['last_login_at'] ?? ''),
+                'personId' => $manualPersonId,
+                'personName' => $manualPerson ? rpc_person_display_name($manualPerson) : '',
+                'personEmail' => $manualPerson ? rpc_str($manualPerson['email'] ?? '') : '',
+                'autoPersonId' => $emailPerson ? rpc_str($emailPerson['id'] ?? '') : '',
+                'autoPersonName' => $emailPerson ? rpc_person_display_name($emailPerson) : '',
+                'autoPersonEmail' => $emailPerson ? rpc_str($emailPerson['email'] ?? '') : '',
+                'effectivePersonId' => $effectivePerson ? rpc_str($effectivePerson['id'] ?? '') : '',
+                'effectivePersonName' => $effectivePerson ? rpc_person_display_name($effectivePerson) : '',
+                'effectivePersonEmail' => $effectivePerson ? rpc_str($effectivePerson['email'] ?? '') : '',
+                'personLinkSource' => $source,
                 'createdAt' => '',
                 'updatedAt' => '',
             ];
         }, $rows),
     ];
+}
+
+function rpc_admin_user_link_people_by_id(array $rows): array
+{
+    $ids = [];
+    foreach ($rows as $row) {
+        $id = rpc_str($row['person_id'] ?? '');
+        if ($id !== '' && !in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+    }
+    if (!$ids) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $people = fetch_all_prepared_legacy(
+        "SELECT id, email, firstname, preferred_name, lastname, display_name
+         FROM people
+         WHERE id IN ({$placeholders})",
+        $ids
+    );
+    $map = [];
+    foreach ($people as $person) {
+        $id = rpc_str($person['id'] ?? '');
+        if ($id !== '') {
+            $map[$id] = $person;
+        }
+    }
+    return $map;
+}
+
+function rpc_admin_user_link_people_by_email(array $rows): array
+{
+    $emails = [];
+    foreach ($rows as $row) {
+        $email = strtolower(rpc_str($row['email'] ?? ''));
+        if ($email !== '' && !in_array($email, $emails, true)) {
+            $emails[] = $email;
+        }
+    }
+    if (!$emails) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($emails), '?'));
+    $people = fetch_all_prepared_legacy(
+        "SELECT id, email, firstname, preferred_name, lastname, display_name
+         FROM people
+         WHERE LOWER(COALESCE(email, '')) IN ({$placeholders})
+           AND (status IS NULL OR status = '' OR LOWER(status) = 'active')
+         ORDER BY lastname, firstname",
+        $emails
+    );
+    $map = [];
+    foreach ($people as $person) {
+        $email = strtolower(rpc_str($person['email'] ?? ''));
+        if ($email !== '' && !isset($map[$email])) {
+            $map[$email] = $person;
+        }
+    }
+    return $map;
 }
 
 function rpc_admin_update_user(mixed $payload, array $user): array
@@ -1078,6 +1287,29 @@ function rpc_admin_create_user(mixed $payload, array $user): array
     return rpc_admin_users_list($user);
 }
 
+function rpc_admin_link_user_person(mixed $payload, array $user): array
+{
+    rpc_require_real_super_admin($user);
+    rpc_ensure_user_person_link_schema();
+    $data = is_array($payload) ? $payload : [];
+    $id = (int) ($data['id'] ?? 0);
+    if ($id <= 0) {
+        throw new RuntimeException('User fehlt.');
+    }
+    $personId = rpc_str($data['personId'] ?? '');
+    if ($personId !== '') {
+        if (rpc_fetch_user_link_person_by_id($personId) === null) {
+            throw new RuntimeException('Kontakt wurde nicht gefunden.');
+        }
+        $stmt = db()->prepare('UPDATE users SET person_id = ? WHERE id = ?');
+        $stmt->execute([$personId, $id]);
+    } else {
+        $stmt = db()->prepare('UPDATE users SET person_id = NULL WHERE id = ?');
+        $stmt->execute([$id]);
+    }
+    return rpc_admin_users_list($user);
+}
+
 function rpc_admin_impersonate_user(int $targetUserId, array $user): array
 {
     rpc_require_real_super_admin($user);
@@ -1096,7 +1328,7 @@ function rpc_admin_impersonate_user(int $targetUserId, array $user): array
     }
     $_SESSION['user_id'] = $targetUserId;
     $nextUser = current_user() ?? [];
-    return ['ok' => true, 'user' => array_merge($nextUser, ['permissions' => rpc_permissions($nextUser)])];
+    return ['ok' => true, 'user' => rpc_user_response($nextUser)];
 }
 
 function rpc_admin_stop_impersonation(array $user): array
@@ -1104,12 +1336,12 @@ function rpc_admin_stop_impersonation(array $user): array
     start_app_session();
     $originalId = (int) ($_SESSION['impersonator_user_id'] ?? 0);
     if ($originalId <= 0) {
-        return ['ok' => true, 'user' => array_merge($user, ['permissions' => rpc_permissions($user)])];
+        return ['ok' => true, 'user' => rpc_user_response($user)];
     }
     $_SESSION['user_id'] = $originalId;
     unset($_SESSION['impersonator_user_id']);
     $nextUser = current_user() ?? [];
-    return ['ok' => true, 'user' => array_merge($nextUser, ['permissions' => rpc_permissions($nextUser)])];
+    return ['ok' => true, 'user' => rpc_user_response($nextUser)];
 }
 
 function rpc_normalize_ids(mixed $ids): array
@@ -3137,7 +3369,7 @@ function rpc_sync_status(array $user): array
         'counts' => rpc_data_counts(),
         'cache' => rpc_cache_stats(),
         'latestRuns' => rpc_import_runs(),
-        'user' => array_merge($user, ['permissions' => rpc_permissions($user)]),
+        'user' => rpc_user_response($user),
         'dataVersion' => rpc_data_version(),
     ];
 }

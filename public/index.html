@@ -5644,6 +5644,103 @@
       font-size: 12px;
     }
 
+    .admin-user-person-link {
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--bg);
+    }
+
+    .admin-user-person-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .admin-user-person-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .admin-user-person-chip.is-linked {
+      background: rgba(37, 99, 235, .12);
+      color: var(--primary);
+    }
+
+    .admin-user-person-chip span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .admin-user-person-search {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .admin-user-person-search input {
+      width: 100%;
+      min-width: 0;
+      height: 34px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--card-bg);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .admin-user-person-results {
+      display: grid;
+      gap: 4px;
+      max-height: 190px;
+      overflow: auto;
+    }
+
+    .admin-user-person-result {
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+      text-align: left;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--card-bg);
+      color: var(--text-main);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .admin-user-person-result strong {
+      font-size: 12px;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .admin-user-person-result span {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
     @media (max-width: 720px) {
       .admin-user-create {
         grid-template-columns: 1fr 1fr;
@@ -5656,6 +5753,9 @@
       }
       .admin-user-controls select {
         grid-column: 1 / -1;
+      }
+      .admin-user-person-search {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -8624,6 +8724,9 @@
       let currentLoginEmail = "";
       let currentUserRole = "guest";
       let currentUserImpersonating = null;
+      let currentUserPersonId = "";
+      let currentUserPersonName = "";
+      let currentUserPersonLinkSource = "";
       let adminUsersCache = [];
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
@@ -8893,6 +8996,7 @@
           currentPermissions = nextPerms;
           currentUserImpersonating = res.user.impersonating || null;
           if (userEmail) currentLoginEmail = userEmail;
+          applyCurrentUserPersonLink_(res.user, { allowClear: true });
           persistPermissionsCache_(res.user);
           // Throttle-Marker setzen, damit der separate refreshPermissionsInBackground_ Call nicht direkt nochmal feuert
           try { lastPermissionsRefreshAt = Date.now(); } catch (e) {}
@@ -9169,6 +9273,7 @@
           currentPermissions = nextPerms;
           currentUserImpersonating = user.impersonating || null;
           if (String(user.email || "").trim()) currentLoginEmail = String(user.email || "").trim();
+          applyCurrentUserPersonLink_(user);
           persistPermissionsCache_(user);
           updateWelcomeGreeting_();
           updateImpersonationBanner_();
@@ -9441,6 +9546,27 @@
         el.textContent = hello || "";
       }
 
+      function applyCurrentUserPersonLink_(user, { allowClear = false } = {}) {
+        if (!user || typeof user !== 'object') return false;
+        const hasLinkPayload = Object.prototype.hasOwnProperty.call(user, 'personId')
+          || Object.prototype.hasOwnProperty.call(user, 'personName')
+          || Object.prototype.hasOwnProperty.call(user, 'personLinkSource');
+        if (!hasLinkPayload && !allowClear) return false;
+
+        const nextPersonId = String(user.personId || '').trim();
+        const nextPersonName = String(user.personName || '').trim();
+        const nextSource = String(user.personLinkSource || '').trim();
+        const changed = nextPersonId !== currentUserPersonId
+          || nextPersonName !== currentUserPersonName
+          || nextSource !== currentUserPersonLinkSource;
+
+        currentUserPersonId = nextPersonId;
+        currentUserPersonName = nextPersonName;
+        currentUserPersonLinkSource = nextSource;
+        if (changed) renderCalendarViewSwitch_();
+        return changed;
+      }
+
       function getFilterDisplayLabel_(label) {
         return String(label || "").trim();
       }
@@ -9539,6 +9665,9 @@
           currentUserRole = role;
           currentPermissions = perms;
           currentUserImpersonating = parsed.impersonating || null;
+          currentUserPersonId = String(parsed.personId || '').trim();
+          currentUserPersonName = String(parsed.personName || '').trim();
+          currentUserPersonLinkSource = String(parsed.personLinkSource || '').trim();
           if (email) currentLoginEmail = email;
           applyAccessControlUi_();
           updateWelcomeGreeting_();
@@ -9578,6 +9707,9 @@
             email: email,
             role: String(user.role || 'guest').trim().toLowerCase(),
             impersonating: user.impersonating || null,
+            personId: String(user.personId || '').trim(),
+            personName: String(user.personName || '').trim(),
+            personLinkSource: String(user.personLinkSource || '').trim(),
             permissions: normalizePermissions_(user.permissions || {}),
             ts: Date.now()
           };
@@ -16969,6 +17101,17 @@ function updateBottomNavHighlight_() {
       }
 
       function getCalendarLoginContact_() {
+        const linkedPersonId = String(currentUserPersonId || '').trim();
+        if (linkedPersonId) {
+          const linked = findContactLiteById_(linkedPersonId);
+          if (linked) return linked;
+          return {
+            id: linkedPersonId,
+            displayName: currentUserPersonName || currentLoginEmail,
+            listDisplayName: currentUserPersonName || currentLoginEmail,
+            email: currentLoginEmail
+          };
+        }
         const email = normalizeUserEmail_(currentLoginEmail);
         if (!email || !Array.isArray(contactsLite)) return null;
         return contactsLite.find(contact => normalizeUserEmail_(contact?.email) === email) || null;
@@ -22919,6 +23062,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           persistPermissionsCache_(data?.user || {});
           applyAccessControlUi_();
           if (userEmail) currentLoginEmail = userEmail;
+          applyCurrentUserPersonLink_(data?.user || {}, { allowClear: true });
           const pIso = formatIsoShort_(p.iso || "");
           const kIso = formatIsoShort_(k.iso || "");
           const kCheckIso = formatIsoShort_(k.lastCheckIso || "");
@@ -23040,9 +23184,152 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
                 <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>
               </div>
+              ${renderAdminUserPersonLink_(user)}
             </div>
           `;
         }).join('');
+      }
+
+      function getAdminUserPersonState_(user) {
+        const source = String(user?.personLinkSource || '').trim();
+        const effectiveId = String(user?.effectivePersonId || user?.personId || user?.autoPersonId || '').trim();
+        const effectiveName = String(user?.effectivePersonName || user?.personName || user?.autoPersonName || '').trim();
+        const effectiveEmail = String(user?.effectivePersonEmail || user?.personEmail || user?.autoPersonEmail || '').trim();
+        const manualId = String(user?.personId || '').trim();
+        return {
+          source,
+          effectiveId,
+          effectiveName,
+          effectiveEmail,
+          manualId,
+          hasLink: !!effectiveId,
+          hasManual: !!manualId
+        };
+      }
+
+      function renderAdminUserPersonLink_(user) {
+        const id = Number(user?.id || 0);
+        const state = getAdminUserPersonState_(user);
+        const icon = state.hasLink ? 'fa-link' : 'fa-link-slash';
+        const labelPrefix = state.source === 'manual' ? 'Verkn&uuml;pft' : (state.source === 'email' ? 'E-Mail-Match' : 'Kein Kontakt');
+        const linkedText = state.hasLink
+          ? `${labelPrefix}: ${escapeHtml(state.effectiveName || state.effectiveEmail || state.effectiveId)}`
+          : 'Kontakt verkn&uuml;pfen';
+        const subText = state.hasLink && state.effectiveEmail ? ` &middot; ${escapeHtml(state.effectiveEmail)}` : '';
+        return `
+          <div class="admin-user-person-link">
+            <div class="admin-user-person-top">
+              <div class="admin-user-person-chip ${state.hasLink ? 'is-linked' : ''}">
+                <i class="fas ${icon}"></i>
+                <span>${linkedText}${subText}</span>
+              </div>
+              ${state.hasManual ? `<button class="btn btn-secondary" type="button" onclick="unlinkAdminUserPerson_(${id})" style="min-height:30px;padding:0 9px;font-size:11px;">L&ouml;sen</button>` : ``}
+            </div>
+            <div class="admin-user-person-search">
+              <input id="admin-user-person-search-${id}" type="search" placeholder="Kontakt suchen..." autocomplete="off" oninput="searchAdminUserPerson_(${id}, this.value)">
+              <button class="btn btn-secondary" type="button" onclick="searchAdminUserPerson_(${id}, document.getElementById('admin-user-person-search-${id}')?.value || '')" style="min-height:34px;padding:0 10px;font-size:12px;">
+                <i class="fas fa-magnifying-glass"></i><span>Suchen</span>
+              </button>
+            </div>
+            <div id="admin-user-person-results-${id}" class="admin-user-person-results"></div>
+          </div>
+        `;
+      }
+
+      function getAdminContactSearchRows_(query) {
+        const q = normalizeSearchText_(query);
+        if (q.replace(/\s+/g, '').length < 2) return [];
+        return (contactsLite || [])
+          .filter(contact => {
+            const fields = [
+              contact?.displayName,
+              contact?.listDisplayName,
+              contact?.firstName,
+              contact?.preferredName,
+              contact?.lastName,
+              contact?.email,
+              contact?.sub,
+              contact?.city,
+              contact?.postcode
+            ];
+            return normalizeSearchText_(fields.filter(Boolean).join(' ')).includes(q);
+          })
+          .slice(0, 8);
+      }
+
+      function renderAdminUserPersonResults_(userId, rows, query) {
+        const host = document.getElementById(`admin-user-person-results-${userId}`);
+        if (!host) return;
+        const q = String(query || '').trim();
+        if (!q) {
+          host.innerHTML = '';
+          return;
+        }
+        if (!rows.length) {
+          host.innerHTML = `<div class="service-empty-box" style="padding:8px 10px;font-size:11px;">Kein Kontakt gefunden.</div>`;
+          return;
+        }
+        host.innerHTML = rows.map(contact => {
+          const name = String(contact?.displayName || contact?.listDisplayName || contact?.email || 'Kontakt').trim();
+          const email = String(contact?.email || '').trim();
+          const place = String(contact?.sub || [contact?.postcode, contact?.city].filter(Boolean).join(' ')).trim();
+          const sub = [email, place].filter(Boolean).join(' - ');
+          return `
+            <button type="button" class="admin-user-person-result" data-person-id="${escapeAttr(contact?.id || '')}" onclick="linkAdminUserPersonFromButton_(${userId}, this)">
+              <strong>${escapeHtml(name)}</strong>
+              ${sub ? `<span>${escapeHtml(sub)}</span>` : ``}
+            </button>
+          `;
+        }).join('');
+      }
+
+      async function searchAdminUserPerson_(userId, query) {
+        const host = document.getElementById(`admin-user-person-results-${userId}`);
+        if (!host) return;
+        const q = String(query || '').trim();
+        if (q.replace(/\s+/g, '').length < 2) {
+          host.innerHTML = '';
+          return;
+        }
+        host.innerHTML = `<div class="service-inline-loader" style="padding:8px 0;"><div class="service-inline-loader-dot"></div></div>`;
+        try {
+          await ensureCalendarContactsReady_();
+          renderAdminUserPersonResults_(userId, getAdminContactSearchRows_(q), q);
+        } catch (err) {
+          host.innerHTML = `<div class="error-box">${escapeHtml(normalizeErrMsg_(err))}</div>`;
+        }
+      }
+
+      async function linkAdminUserPersonFromButton_(userId, button) {
+        const personId = String(button?.dataset?.personId || '').trim();
+        if (!personId) return;
+        await linkAdminUserPerson_(userId, personId);
+      }
+
+      async function linkAdminUserPerson_(userId, personId) {
+        try {
+          const data = await withGsRetry('tools_adminLinkUserPerson', [{ id: userId, personId }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          const ownUser = (adminUsersCache || []).find(u => normalizeUserEmail_(u?.email) === normalizeUserEmail_(currentLoginEmail));
+          if (ownUser) {
+            applyCurrentUserPersonLink_({
+              personId: ownUser.effectivePersonId || ownUser.personId || '',
+              personName: ownUser.effectivePersonName || ownUser.personName || '',
+              personLinkSource: ownUser.personLinkSource || ''
+            }, { allowClear: true });
+          }
+          renderAdminUsers_();
+          const status = document.getElementById('admin-users-status');
+          if (status) status.textContent = `${adminUsersCache.length} Benutzer`;
+          renderCalendarViewSwitch_();
+          toast(personId ? 'Kontakt verknuepft' : 'Kontakt geloest', 1300);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      function unlinkAdminUserPerson_(userId) {
+        linkAdminUserPerson_(userId, '');
       }
 
       async function createAdminUser_(event) {
@@ -23105,6 +23392,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentPermissions = normalizePermissions_(user.permissions || {});
           currentLoginEmail = String(user.email || '');
           currentUserImpersonating = user.impersonating || null;
+          applyCurrentUserPersonLink_(user, { allowClear: true });
           persistPermissionsCache_(user);
           applyAccessControlUi_();
           updateWelcomeGreeting_();
@@ -23122,6 +23410,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentPermissions = normalizePermissions_(user.permissions || {});
           currentLoginEmail = String(user.email || '');
           currentUserImpersonating = user.impersonating || null;
+          applyCurrentUserPersonLink_(user, { allowClear: true });
           persistPermissionsCache_(user);
           applyAccessControlUi_();
           updateWelcomeGreeting_();
@@ -23151,6 +23440,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentUserImpersonating = data?.user?.impersonating || null;
           persistPermissionsCache_(data?.user || {});
           if (userEmail) currentLoginEmail = userEmail;
+          applyCurrentUserPersonLink_(data?.user || {}, { allowClear: true });
           updateWelcomeGreeting_();
           updateImpersonationBanner_();
 

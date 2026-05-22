@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   id bigint unsigned NOT NULL AUTO_INCREMENT,
   email varchar(190) NOT NULL,
   display_name varchar(190) NULL,
+  person_id varchar(80) NULL,
   role varchar(40) NOT NULL DEFAULT 'guest',
   password_hash varchar(255) NULL,
   is_active tinyint(1) NOT NULL DEFAULT 1,
@@ -41,7 +42,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email)
+  UNIQUE KEY uq_users_email (email),
+  KEY idx_users_person (person_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS people (
@@ -335,4 +337,3 @@ CREATE TABLE IF NOT EXISTS prayer_pool_members (
   CONSTRAINT fk_prayer_pool_members_pool FOREIGN KEY (pool_id) REFERENCES prayer_pools(id) ON DELETE CASCADE,
   CONSTRAINT fk_prayer_pool_members_person FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
