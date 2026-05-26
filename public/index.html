@@ -8867,6 +8867,7 @@
       let extendedSearchPrefetchTimer = null;
       let extendedSearchPrefetchLastRunAt = 0;
       let extendedSearchPrefetch = { query: "", rows: null, inFlightQuery: "" };
+      let extendedSearchAutoLastKey = "";
       let contactFilterDefs = [];
       let dashboardStats = null;
       let currentLoginEmail = "";
@@ -16962,6 +16963,7 @@ function updateBottomNavHighlight_() {
             : (contactsViewMode === 'households' ? filteredContactFamilies.length : filteredContacts.length);
           setStatus("status", `${total} Treffer`, "");
           scheduleExtendedSearchPrefetch_(intent.raw, filteredContacts.length);
+          maybeAutoRunExtendedContactSearch_(intent.raw, filteredContacts.length);
           renderContactReset_();
           updateContactsStage_();
         });
@@ -17057,6 +17059,33 @@ function updateBottomNavHighlight_() {
             if (extendedSearchPrefetch.inFlightQuery === raw) extendedSearchPrefetch.inFlightQuery = "";
           }
         }, 650);
+      }
+
+      function extendedContactSearchAutoKey_(rawQuery) {
+        return [
+          String(rawQuery || "").trim().toLowerCase(),
+          String(contactsViewMode || ""),
+          String(activeDashboardFilterKey || ""),
+          contactCategoryFilters.map(v => String(v || "").trim()).sort().join("|"),
+          contactFilters.map(v => String(v || "").trim()).sort().join("|"),
+          JSON.stringify(activeSmartRules || [])
+        ].join("::");
+      }
+
+      function maybeAutoRunExtendedContactSearch_(rawQuery, localCount) {
+        const raw = String(rawQuery || "").trim();
+        if (raw.length < 3) return;
+        if (Number(localCount || 0) !== 0) return;
+        if (extendedContactSearchInFlight) return;
+        const key = extendedContactSearchAutoKey_(raw);
+        if (extendedSearchAutoLastKey === key) return;
+        extendedSearchAutoLastKey = key;
+        setTimeout(() => {
+          const currentRaw = String(document.getElementById("q")?.value || "").trim();
+          if (currentRaw !== raw) return;
+          if (extendedContactSearchInFlight) return;
+          runExtendedContactSearch_();
+        }, 80);
       }
 
       function buildContactBaseFilter_() {
