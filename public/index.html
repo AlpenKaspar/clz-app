@@ -17371,6 +17371,10 @@ function updateBottomNavHighlight_() {
         const singleRows = soloWithoutFamily.slice();
         Object.values(map).forEach(group => {
           const singles = (group.singles || []).slice();
+          if (!(group.members || []).length && singles.length) {
+            singleRows.push.apply(singleRows, singles);
+            return;
+          }
           const combinedMembers = (group.members || []).concat(singles);
           if (!combinedMembers.length) {
             singleRows.push.apply(singleRows, singles);
