@@ -1642,6 +1642,10 @@ function rpc_calendar_category_label(mixed $value): string
         return '';
     }
     $clean = preg_replace('/^[^_]*_+/', '', $name, 1) ?? $name;
+    $clean = trim($clean);
+    if ($clean !== 'Mitarbeiter') {
+        $clean = preg_replace('/\s+Mitarbeiter$/iu', '', $clean) ?? $clean;
+    }
     return trim($clean) !== '' ? trim($clean) : $name;
 }
 

@@ -16,12 +16,13 @@ function import_calendar_basic(): array
         $startStr = $start->format('Y-m-d');
         $endStr = $end->format('Y-m-d');
         $calendarMap = fetch_calendar_map();
+        $calendarCategoryMap = fetch_calendar_category_map();
 
         $pdo = db();
         $pdo->beginTransaction();
         $pdo->exec('DELETE FROM calendar_events');
 
-        $eventCount = import_calendar_events($startStr, $endStr, $calendarMap);
+        $eventCount = import_calendar_events($startStr, $endStr, $calendarMap, $calendarCategoryMap);
         $serviceCount = import_calendar_services($startStr, $endStr);
 
         set_app_setting('IMPORT_KALENDER_LAST', date('c'));
@@ -52,7 +53,7 @@ function import_calendar_basic(): array
     }
 }
 
-function import_calendar_events(string $startStr, string $endStr, array $calendarMap): int
+function import_calendar_events(string $startStr, string $endStr, array $calendarMap, array $calendarCategoryMap = []): int
 {
     $count = 0;
     $seen = [];
@@ -77,10 +78,9 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
                 continue;
             }
 
-            $calendarId = trim((string) ($event['calendar_id'] ?? ''));
-            $calInfo = $calendarMap[$calendarId] ?? [];
-            $category = clean_calendar_category_name(normalize_string($calInfo['name'] ?? 'Kalender'));
-            $categoryKey = $calendarId !== '' ? 'CAL-' . $calendarId : normalize_category_key($category);
+            $categoryInfo = calendar_event_category_info($event, $calendarMap, $calendarCategoryMap);
+            $category = $categoryInfo['name'];
+            $categoryKey = $categoryInfo['key'];
             if (should_exclude_calendar_category($category, $categoryKey)) {
                 continue;
             }
@@ -110,8 +110,8 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
                 'category' => $category,
                 'location' => normalize_string($event['where'] ?? ''),
                 'details' => extract_event_remark_text($event),
-                'status' => map_event_status($event, $calInfo),
-                'category_color' => calendar_event_color($event, $calInfo, $categoryKey),
+                'status' => map_event_status($event, $categoryInfo['calendarInfo'] ?? []),
+                'category_color' => calendar_event_color($event, $categoryInfo, $categoryKey),
                 'category_key' => $categoryKey,
                 'modified_raw' => normalize_string($event['date_modified'] ?? ($event['modified_date'] ?? ($event['updated'] ?? ''))),
                 'modified_at' => parse_elvanto_datetime($event['date_modified'] ?? ($event['modified_date'] ?? ($event['updated'] ?? ''))),
@@ -241,6 +241,32 @@ function fetch_calendar_map(): array
     return $out;
 }
 
+function fetch_calendar_category_map(): array
+{
+    try {
+        $data = elvanto_post('calendar/categories/getAll.json');
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    $categories = normalize_collection($data['categories']['category'] ?? []);
+    $out = [];
+    foreach ($categories as $category) {
+        if (!is_array($category) || empty($category['id'])) {
+            continue;
+        }
+        $id = trim((string) $category['id']);
+        if ($id === '') {
+            continue;
+        }
+        $out[$id] = [
+            'name' => clean_calendar_category_name(normalize_string($category['name'] ?? '')),
+            'color' => normalize_hex_color($category['colour'] ?? ($category['color'] ?? ($category['colour_code'] ?? ($category['color_code'] ?? '')))),
+        ];
+    }
+    return $out;
+}
+
 function upsert_calendar_event(array $row): void
 {
     $stmt = db()->prepare(
@@ -350,6 +376,10 @@ function clean_calendar_category_name(string $value): string
         return '';
     }
     $clean = preg_replace('/^[^_]*_+/', '', $name, 1) ?? $name;
+    $clean = trim($clean);
+    if ($clean !== 'Mitarbeiter') {
+        $clean = preg_replace('/\s+Mitarbeiter$/iu', '', $clean) ?? $clean;
+    }
     return trim($clean) !== '' ? trim($clean) : $name;
 }
 
@@ -366,13 +396,44 @@ function normalize_hex_color(string $value): string
     return preg_match('/^[0-9a-fA-F]{6}$/', $value) ? '#' . strtoupper($value) : '';
 }
 
-function calendar_event_color(array $event, array $calendarInfo, string $categoryKey): string
+function calendar_event_category_info(array $event, array $calendarMap, array $calendarCategoryMap): array
+{
+    $calendarId = trim((string) ($event['calendar_id'] ?? ''));
+    $calendarInfo = $calendarMap[$calendarId] ?? [];
+    $categoryId = trim((string) ($event['category_id'] ?? ''));
+    if ($categoryId === '' && is_array($event['category'] ?? null)) {
+        $categoryId = trim((string) ($event['category']['id'] ?? ''));
+    }
+    $categoryInfo = $categoryId !== '' ? ($calendarCategoryMap[$categoryId] ?? []) : [];
+    $rawName = normalize_string($calendarInfo['name'] ?? '');
+    if ($rawName === '') {
+        $rawName = normalize_string($categoryInfo['name'] ?? 'Kalender');
+    }
+    $name = clean_calendar_category_name($rawName);
+    $key = $calendarId !== ''
+        ? 'CAL-' . $calendarId
+        : ($categoryId !== '' ? 'CAT-' . $categoryId : normalize_category_key($name));
+
+    return [
+        'name' => $name,
+        'key' => $key,
+        'calendarColor' => normalize_hex_color((string) ($calendarInfo['color'] ?? '')),
+        'categoryColor' => normalize_hex_color((string) ($categoryInfo['color'] ?? '')),
+        'calendarInfo' => $calendarInfo,
+    ];
+}
+
+function calendar_event_color(array $event, array $categoryInfo, string $categoryKey): string
 {
     $payloadColor = extract_payload_color($event);
     if ($payloadColor !== '') {
         return $payloadColor;
     }
-    $calendarColor = normalize_hex_color((string) ($calendarInfo['color'] ?? ''));
+    $categoryColor = normalize_hex_color((string) ($categoryInfo['categoryColor'] ?? ''));
+    if ($categoryColor !== '') {
+        return $categoryColor;
+    }
+    $calendarColor = normalize_hex_color((string) ($categoryInfo['calendarColor'] ?? ''));
     if ($calendarColor !== '') {
         return $calendarColor;
     }
