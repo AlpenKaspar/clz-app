@@ -294,6 +294,15 @@ CREATE TABLE IF NOT EXISTS user_smart_filters (
   CONSTRAINT fk_user_smart_filters_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id bigint unsigned NOT NULL,
+  preference_key varchar(120) NOT NULL,
+  payload_json longtext NOT NULL,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, preference_key),
+  CONSTRAINT fk_user_preferences_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS prayer_sessions (
   session_id varchar(120) NOT NULL,
   user_email varchar(190) NULL,

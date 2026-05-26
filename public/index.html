@@ -659,7 +659,7 @@
       display:grid;
       place-items:center;
       border:1px solid rgba(37,99,235,.18);
-      border-radius:12px;
+      border-radius:14px;
       background:var(--primary);
       color:#fff;
       font-size:18px;
@@ -679,10 +679,10 @@
     .song-fullscreen-stop {
       width:46px;
       min-height:42px;
-      border:1px solid rgba(226,232,240,.95);
-      border-radius:12px;
-      background:#f8fafc;
-      color:var(--text-muted);
+      border:1px solid rgba(37,99,235,.18);
+      border-radius:14px;
+      background:#fff;
+      color:#2563eb;
       font-size:12px;
       font-weight:900;
       cursor:pointer;
@@ -691,9 +691,9 @@
       box-shadow:0 8px 18px rgba(15,23,42,.08);
     }
     .song-fullscreen-stop.is-running {
-      color:var(--primary);
-      border-color:rgba(37,99,235,.22);
-      background:#eff6ff;
+      color:#fff;
+      border-color:#2563eb;
+      background:#2563eb;
     }
     .song-chart-meta {
       display: inline-flex;
@@ -6505,7 +6505,7 @@
     }
     .songs-player-action-menu {
       position: fixed;
-      z-index: 1100;
+      z-index: 1300;
       min-width: 220px;
       padding: 6px;
       border-radius: 14px;
@@ -6551,7 +6551,7 @@
     .songs-player-action-menu.as-sheet {
       left: max(12px, env(safe-area-inset-left)) !important;
       right: max(12px, env(safe-area-inset-right)) !important;
-      bottom: calc(var(--nav-height) + 26px + env(safe-area-inset-bottom));
+      bottom: calc(var(--nav-height) + 76px + env(safe-area-inset-bottom));
       top: auto !important;
       min-width: 0;
       width: auto;
@@ -8642,6 +8642,33 @@
 
         <div class="tools-row member-only">
           <div class="tools-left">
+            <i class="fas fa-bell"></i>
+            <div>
+              <div class="tools-title">Benachrichtigungen</div>
+              <div id="user-preferences-status" class="tools-sub">Pro Login gespeichert</div>
+            </div>
+          </div>
+
+          <div style="display:grid;gap:8px;justify-items:end;">
+            <div class="switch-row" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text-muted);">
+              <span>Geburtstage heute</span>
+              <label class="switch" aria-label="Geburtstage heute">
+                <input id="pref-birthday-today" type="checkbox" onchange="setUserNotificationPreference_('birthdaysToday', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="switch-row" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text-muted);">
+              <span>Diese Woche</span>
+              <label class="switch" aria-label="Geburtstage diese Woche">
+                <input id="pref-birthday-week" type="checkbox" onchange="setUserNotificationPreference_('birthdaysWeek', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="tools-row member-only">
+          <div class="tools-left">
             <i class="fas fa-tower-broadcast"></i>
             <div>
               <div class="tools-title">OnAir Test</div>
@@ -8876,6 +8903,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false } };
       let adminUsersCache = [];
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
@@ -9128,6 +9156,68 @@
         `;
       }
 
+      function normalizeUserPreferences_(prefs) {
+        const notifications = prefs && typeof prefs === 'object' && prefs.notifications && typeof prefs.notifications === 'object'
+          ? prefs.notifications
+          : {};
+        return {
+          notifications: {
+            birthdaysToday: !!notifications.birthdaysToday,
+            birthdaysWeek: !!notifications.birthdaysWeek,
+            servicesMine: !!notifications.servicesMine
+          }
+        };
+      }
+
+      function applyUserPreferences_(prefs) {
+        currentUserPreferences = normalizeUserPreferences_(prefs);
+        renderUserPreferences_();
+      }
+
+      function renderUserPreferences_() {
+        const n = currentUserPreferences?.notifications || {};
+        const today = document.getElementById('pref-birthday-today');
+        const week = document.getElementById('pref-birthday-week');
+        const status = document.getElementById('user-preferences-status');
+        if (today) today.checked = !!n.birthdaysToday;
+        if (week) week.checked = !!n.birthdaysWeek;
+        if (status) {
+          const active = [n.birthdaysToday ? 'heute' : '', n.birthdaysWeek ? 'Woche' : ''].filter(Boolean);
+          status.textContent = active.length ? `Aktiv: ${active.join(', ')}` : 'Pro Login gespeichert';
+        }
+      }
+
+      async function loadUserPreferences_() {
+        try {
+          const data = await withGsRetry('tools_loadUserPreferences', [], { retries: 1, retryDelay: 500 });
+          applyUserPreferences_(data?.preferences || {});
+        } catch (err) {
+          const status = document.getElementById('user-preferences-status');
+          if (status) status.textContent = 'Einstellungen konnten nicht geladen werden';
+        }
+      }
+
+      async function saveUserPreferences_() {
+        const status = document.getElementById('user-preferences-status');
+        if (status) status.textContent = 'Speichere...';
+        try {
+          const data = await withGsRetry('tools_saveUserPreferences', [currentUserPreferences], { retries: 1, retryDelay: 500 });
+          applyUserPreferences_(data?.preferences || currentUserPreferences);
+          toast('Benachrichtigungen gespeichert', 1200);
+        } catch (err) {
+          renderUserPreferences_();
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      function setUserNotificationPreference_(key, value) {
+        const prefs = normalizeUserPreferences_(currentUserPreferences);
+        prefs.notifications[String(key || '')] = !!value;
+        currentUserPreferences = normalizeUserPreferences_(prefs);
+        renderUserPreferences_();
+        saveUserPreferences_();
+      }
+
       function applyBootstrapPayload_(res, { force = false } = {}) {
         if (!res?.ok) return;
         const serverVersion = String(res?.dataVersion || '');
@@ -9145,6 +9235,7 @@
           currentPermissions = nextPerms;
           currentUserImpersonating = res.user.impersonating || null;
           if (userEmail) currentLoginEmail = userEmail;
+          applyUserPreferences_(res.user.preferences || res.preferences || {});
           applyCurrentUserPersonLink_(res.user, { allowClear: true });
           persistPermissionsCache_(res.user);
           // Throttle-Marker setzen, damit der separate refreshPermissionsInBackground_ Call nicht direkt nochmal feuert
@@ -9979,6 +10070,7 @@
 
         const adminPanel = document.getElementById('admin-users-panel');
         if (adminPanel) adminPanel.style.display = canManageUsers_() ? '' : 'none';
+        renderUserPreferences_();
         updateImpersonationBanner_();
 
         if (navChanged && canUseTab_('contacts')) {
@@ -12733,7 +12825,7 @@
       }
 
       function songFullscreenSpeedPx_() {
-        const speeds = [0, 14, 22, 32, 44, 58, 75];
+        const speeds = [0, 7, 11, 16, 22, 29, 38];
         return speeds[Math.max(0, Math.min(6, Number(songFullscreenState.speed || 0)))] || 0;
       }
 
@@ -23734,6 +23826,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           persistPermissionsCache_(data?.user || {});
           applyAccessControlUi_();
           if (userEmail) currentLoginEmail = userEmail;
+          applyUserPreferences_(data?.user?.preferences || currentUserPreferences);
           applyCurrentUserPersonLink_(data?.user || {}, { allowClear: true });
           const pIso = formatIsoShort_(p.iso || "");
           const kIso = formatIsoShort_(k.iso || "");
@@ -24064,6 +24157,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentPermissions = normalizePermissions_(user.permissions || {});
           currentLoginEmail = String(user.email || '');
           currentUserImpersonating = user.impersonating || null;
+          applyUserPreferences_(user.preferences || {});
           applyCurrentUserPersonLink_(user, { allowClear: true });
           persistPermissionsCache_(user);
           applyAccessControlUi_();
@@ -24082,6 +24176,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentPermissions = normalizePermissions_(user.permissions || {});
           currentLoginEmail = String(user.email || '');
           currentUserImpersonating = user.impersonating || null;
+          applyUserPreferences_(user.preferences || {});
           applyCurrentUserPersonLink_(user, { allowClear: true });
           persistPermissionsCache_(user);
           applyAccessControlUi_();
@@ -24110,6 +24205,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentUserRole = nextRole;
           currentPermissions = nextPerms;
           currentUserImpersonating = data?.user?.impersonating || null;
+          applyUserPreferences_(data?.user?.preferences || {});
           persistPermissionsCache_(data?.user || {});
           if (userEmail) currentLoginEmail = userEmail;
           applyCurrentUserPersonLink_(data?.user || {}, { allowClear: true });

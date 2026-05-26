@@ -47,6 +47,8 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_getCacheDiagnostics' => ['ok' => true, 'cache' => rpc_cache_stats(), 'dataVersion' => rpc_data_version()],
         'tools_debugCachePayloads' => ['ok' => true, 'cache' => rpc_cache_stats(), 'latestRuns' => rpc_import_runs()],
         'tools_rebuildServerCaches' => rpc_rebuild_server_caches($user),
+        'tools_loadUserPreferences' => rpc_load_user_preferences($user),
+        'tools_saveUserPreferences' => rpc_save_user_preferences($args[0] ?? [], $user),
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
@@ -100,6 +102,7 @@ function rpc_bootstrap(array $user): array
         'ts' => date('c'),
         'dataVersion' => rpc_data_version(),
         'user' => $userResponse,
+        'preferences' => rpc_load_user_preferences($user)['preferences'] ?? rpc_default_user_preferences(),
         'cache' => [],
         'filters' => rpc_contact_filters(),
         'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard($user),
@@ -115,6 +118,7 @@ function rpc_user_response(array $user): array
         'personName' => $person['personName'],
         'personEmail' => $person['personEmail'],
         'personLinkSource' => $person['personLinkSource'],
+        'preferences' => rpc_load_user_preferences($user)['preferences'] ?? rpc_default_user_preferences(),
     ]);
 }
 
@@ -2995,6 +2999,90 @@ function rpc_save_user_smart_filters(mixed $payload, array $user): array
     );
     $stmt->execute([$userId, 'default', $json]);
     return ['ok' => true];
+}
+
+function rpc_default_user_preferences(): array
+{
+    return [
+        'notifications' => [
+            'birthdaysToday' => false,
+            'birthdaysWeek' => false,
+            'servicesMine' => false,
+        ],
+    ];
+}
+
+function rpc_ensure_user_preferences_schema(): void
+{
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id bigint unsigned NOT NULL,
+            preference_key varchar(120) NOT NULL,
+            payload_json longtext NOT NULL,
+            updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, preference_key),
+            CONSTRAINT fk_user_preferences_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+}
+
+function rpc_normalize_user_preferences(mixed $payload): array
+{
+    $defaults = rpc_default_user_preferences();
+    $data = is_array($payload) ? $payload : [];
+    $notifications = is_array($data['notifications'] ?? null) ? $data['notifications'] : [];
+    return [
+        'notifications' => [
+            'birthdaysToday' => (bool) ($notifications['birthdaysToday'] ?? $defaults['notifications']['birthdaysToday']),
+            'birthdaysWeek' => (bool) ($notifications['birthdaysWeek'] ?? $defaults['notifications']['birthdaysWeek']),
+            'servicesMine' => (bool) ($notifications['servicesMine'] ?? $defaults['notifications']['servicesMine']),
+        ],
+    ];
+}
+
+function rpc_load_user_preferences(array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    $defaults = rpc_default_user_preferences();
+    if ($userId <= 0) {
+        return ['ok' => true, 'email' => rpc_str($user['email'] ?? ''), 'found' => false, 'preferences' => $defaults];
+    }
+    rpc_ensure_user_preferences_schema();
+
+    $stmt = db()->prepare('SELECT payload_json FROM user_preferences WHERE user_id = ? AND preference_key = ? LIMIT 1');
+    $stmt->execute([$userId, 'default']);
+    $payload = $stmt->fetchColumn();
+    if (!is_string($payload) || trim($payload) === '') {
+        return ['ok' => true, 'email' => rpc_str($user['email'] ?? ''), 'found' => false, 'preferences' => $defaults];
+    }
+    $decoded = json_decode($payload, true);
+    return [
+        'ok' => true,
+        'email' => rpc_str($user['email'] ?? ''),
+        'found' => is_array($decoded),
+        'preferences' => rpc_normalize_user_preferences($decoded),
+    ];
+}
+
+function rpc_save_user_preferences(mixed $payload, array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0) {
+        return ['ok' => false, 'error' => 'Einstellungen konnten nicht gespeichert werden.'];
+    }
+    rpc_ensure_user_preferences_schema();
+    $preferences = rpc_normalize_user_preferences($payload);
+    $json = json_encode($preferences, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        return ['ok' => false, 'error' => 'Einstellungen konnten nicht serialisiert werden.'];
+    }
+    $stmt = db()->prepare(
+        'INSERT INTO user_preferences (user_id, preference_key, payload_json)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE payload_json = VALUES(payload_json), updated_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([$userId, 'default', $json]);
+    return ['ok' => true, 'preferences' => $preferences];
 }
 
 function rpc_prayer_deck(array $user = []): array
