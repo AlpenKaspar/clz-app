@@ -79,7 +79,7 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
 
             $calendarId = trim((string) ($event['calendar_id'] ?? ''));
             $calInfo = $calendarMap[$calendarId] ?? [];
-            $category = normalize_string($calInfo['name'] ?? 'Kalender');
+            $category = clean_calendar_category_name(normalize_string($calInfo['name'] ?? 'Kalender'));
             $categoryKey = $calendarId !== '' ? 'CAL-' . $calendarId : normalize_category_key($category);
             if (should_exclude_calendar_category($category, $categoryKey)) {
                 continue;
@@ -228,7 +228,7 @@ function fetch_calendar_map(): array
             continue;
         }
         $out[(string) $calendar['id']] = [
-            'name' => normalize_string($calendar['name'] ?? ''),
+            'name' => clean_calendar_category_name(normalize_string($calendar['name'] ?? '')),
             'color' => normalize_hex_color($calendar['colour'] ?? ($calendar['color'] ?? ($calendar['colour_code'] ?? ($calendar['color_code'] ?? '')))),
             'members' => normalize_string($calendar['members'] ?? ''),
             'published' => normalize_string($calendar['published'] ?? ''),
@@ -343,6 +343,16 @@ function normalize_category_key(string $value): string
     return $value !== '' ? $value : 'cat_unknown';
 }
 
+function clean_calendar_category_name(string $value): string
+{
+    $name = trim($value);
+    if ($name === '') {
+        return '';
+    }
+    $clean = preg_replace('/^[^_]*_+/', '', $name, 1) ?? $name;
+    return trim($clean) !== '' ? trim($clean) : $name;
+}
+
 function normalize_hex_color(string $value): string
 {
     $value = trim($value);
@@ -358,12 +368,15 @@ function normalize_hex_color(string $value): string
 
 function calendar_event_color(array $event, array $calendarInfo, string $categoryKey): string
 {
+    $payloadColor = extract_payload_color($event);
+    if ($payloadColor !== '') {
+        return $payloadColor;
+    }
     $calendarColor = normalize_hex_color((string) ($calendarInfo['color'] ?? ''));
     if ($calendarColor !== '') {
         return $calendarColor;
     }
-    $payloadColor = extract_payload_color($event);
-    return $payloadColor !== '' ? $payloadColor : fallback_calendar_color($categoryKey);
+    return fallback_calendar_color($categoryKey);
 }
 
 function service_category_color(array $service, string $categoryKey): string

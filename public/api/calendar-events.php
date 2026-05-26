@@ -18,6 +18,16 @@ function calendar_api_color(array $row): string
     return $palette[(int) (abs(crc32($seed)) % count($palette))];
 }
 
+function calendar_api_category_label(mixed $value): string
+{
+    $name = trim((string) $value);
+    if ($name === '') {
+        return '';
+    }
+    $clean = preg_replace('/^[^_]*_+/', '', $name, 1) ?? $name;
+    return trim($clean) !== '' ? trim($clean) : $name;
+}
+
 try {
     require_user();
 
@@ -53,7 +63,7 @@ try {
             'startTime' => substr((string) $row['start_time'], 0, 5),
             'endDate' => $row['end_date'],
             'endTime' => $row['end_time'] ? substr((string) $row['end_time'], 0, 5) : '',
-            'category' => $row['category'],
+            'category' => calendar_api_category_label($row['category']),
             'location' => $row['location'],
             'details' => $row['details'],
             'status' => $row['status'],

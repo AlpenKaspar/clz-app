@@ -1635,6 +1635,16 @@ function rpc_calendar_display_color(array $row): string
     return $palette[(int) (abs(crc32($seed)) % count($palette))];
 }
 
+function rpc_calendar_category_label(mixed $value): string
+{
+    $name = rpc_str($value);
+    if ($name === '') {
+        return '';
+    }
+    $clean = preg_replace('/^[^_]*_+/', '', $name, 1) ?? $name;
+    return trim($clean) !== '' ? trim($clean) : $name;
+}
+
 function rpc_calendar_event(array $row): array
 {
     $id = rpc_str($row['elvanto_id'] ?? '');
@@ -1646,7 +1656,7 @@ function rpc_calendar_event(array $row): array
         'EndDatum' => rpc_ui_date($row['end_date'] ?? ($row['start_date'] ?? '')),
         'StartZeit' => rpc_time($row['start_time'] ?? ''),
         'EndZeit' => rpc_time($row['end_time'] ?? ''),
-        'Kategorie' => rpc_str($row['category'] ?? ''),
+        'Kategorie' => rpc_calendar_category_label($row['category'] ?? ''),
         'Ort' => rpc_str($row['location'] ?? ''),
         'Details' => rpc_str($row['details'] ?? ''),
         'Ressourcen' => rpc_str($row['resources'] ?? ''),
@@ -2174,7 +2184,7 @@ function rpc_songs_lite(): array
 {
     $songs = [];
     try {
-        $stmt = db()->query('SELECT song_id, title, artist, category, default_key_name, bpm, raw_json FROM songs ORDER BY title');
+        $stmt = db()->query('SELECT song_id, title, artist, category, default_key_name, bpm, raw_json, imported_at FROM songs ORDER BY title');
         foreach ($stmt as $row) {
             $songId = rpc_str($row['song_id'] ?? '');
             $title = rpc_str($row['title'] ?? '');
@@ -2184,6 +2194,9 @@ function rpc_songs_lite(): array
             $bpm = rpc_str($row['bpm'] ?? '');
             $raw = rpc_decode_json_array($row['raw_json'] ?? null);
             $timeSignature = rpc_song_first_field($raw, ['time_signature', 'timeSignature', 'meter', 'Meter', 'takt', 'Takt', 'taktart', 'Taktart', 'Arrangement_Time_Signature', 'Arrangement_Taktart']);
+            $dateModified = rpc_song_first_field($raw, ['date_modified', 'dateModified', 'modified', 'updated', 'updated_at', 'Song_Date_Modified']);
+            $dateAdded = rpc_song_first_field($raw, ['date_added', 'dateAdded', 'created', 'created_at', 'Song_Date_Added']);
+            $sortDate = $dateModified ?: ($dateAdded ?: rpc_str($row['imported_at'] ?? ''));
             if ($category === '') {
                 $category = rpc_song_category_payload($raw);
             }
@@ -2206,6 +2219,10 @@ function rpc_songs_lite(): array
                 'keyName' => $keyNames[0] ?? $keyName,
                 'keyNames' => $keyNames,
                 'bpm' => $bpm,
+                'dateAdded' => $dateAdded,
+                'dateModified' => $dateModified,
+                'importedAt' => rpc_str($row['imported_at'] ?? ''),
+                'sortDate' => $sortDate,
                 'timeSignature' => $timeSignature,
                 'ccliNumber' => rpc_song_first_field($raw, ['ccli_number', 'ccli', 'CCLI_Number']),
                 'songStatus' => rpc_song_first_field($raw, ['status', 'song_status', 'Song_Status']),
@@ -2289,6 +2306,9 @@ function rpc_song_arrangements_payload(array $song, string $fallbackTitle, strin
             'keyName' => $keyNames[0] ?? $fallbackKey,
             'keyNames' => $keyNames,
             'bpm' => rpc_song_first_field($source, ['bpm', 'tempo', 'Arrangement_BPM']) ?: $fallbackBpm,
+            'dateAdded' => rpc_song_first_field($source, ['date_added', 'dateAdded', 'created', 'created_at', 'Arrangement_Date_Added']),
+            'dateModified' => rpc_song_first_field($source, ['date_modified', 'dateModified', 'modified', 'updated', 'updated_at', 'Arrangement_Date_Modified']),
+            'sortDate' => rpc_song_first_field($source, ['date_modified', 'dateModified', 'modified', 'updated', 'updated_at', 'Arrangement_Date_Modified']) ?: rpc_song_first_field($source, ['date_added', 'dateAdded', 'created', 'created_at', 'Arrangement_Date_Added']),
             'timeSignature' => rpc_song_first_field($source, ['time_signature', 'timeSignature', 'meter', 'Meter', 'takt', 'Takt', 'taktart', 'Taktart', 'Arrangement_Time_Signature', 'Arrangement_Taktart']) ?: $fallbackTimeSignature,
             'minutes' => rpc_song_first_field($source, ['minutes', 'Arrangement_Minutes']),
             'seconds' => rpc_song_first_field($source, ['seconds', 'Arrangement_Seconds']),

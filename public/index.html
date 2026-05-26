@@ -10616,6 +10616,17 @@
         return 'audio';
       }
 
+      function songsPlayerSortableDate_(value) {
+        const ts = Date.parse(String(value || ''));
+        return Number.isFinite(ts) ? ts : 0;
+      }
+
+      function songsPlayerVideoTitle_(label, song) {
+        const clean = String(label || '').trim();
+        if (clean && !/^youtube(?:\s+\d+)?$/i.test(clean)) return clean;
+        return String(song?.songTitle || song?.arrangementName || 'YouTube').trim() || 'YouTube';
+      }
+
       function splitSongsLivestreamTitle_(title) {
         const parts = String(title || '').split('|').map(v => v.trim()).filter(Boolean);
         return {
@@ -11265,18 +11276,19 @@
           const embed = buildYoutubeEmbedUrl_(embedUrl);
           if (!embed || seenUrls.has(embed)) return;
           seenUrls.add(embed);
-          const songTitle = String(song?.songTitle || song?.arrangementName || label || '').trim();
+          const videoTitle = songsPlayerVideoTitle_(label, song);
           out.push({
             url: embed,
             watchUrl: buildYoutubeWatchUrl_(embed),
             name: String(label || 'YouTube').trim(),
-            songTitle: songTitle || 'YouTube',
+            songTitle: videoTitle,
             artist: String(song?.artist || '').trim(),
             album: String(song?.album || '').trim(),
             arrangementName: String(arrangement?.arrangementName || '').trim(),
             keyName: String(arrangement?.keyName || song?.keyName || '').trim(),
             bpm: String(arrangement?.bpm || song?.bpm || '').trim(),
             songId: String(song?.songId || '').trim(),
+            sortDate: String(arrangement?.sortDate || arrangement?.dateModified || song?.sortDate || song?.dateModified || song?.dateAdded || song?.importedAt || '').trim(),
             fileType: 'Video',
             fileMode: 'YouTube',
             extension: '',
@@ -11306,6 +11318,7 @@
             keyName: String(keyLabel || arrangement?.keyName || song?.keyName || '').trim(),
             bpm: String(arrangement?.bpm || song?.bpm || '').trim(),
             songId: String(song?.songId || '').trim(),
+            sortDate: String(arrangement?.sortDate || arrangement?.dateModified || song?.sortDate || song?.dateModified || song?.dateAdded || song?.importedAt || '').trim(),
             fileType: fileType,
             fileMode: fileMode,
             extension: songAssetExtension_(asset),
@@ -11355,6 +11368,13 @@
               || (it.arrangementName && it.arrangementName.toLowerCase().includes(q))
               || (it.album && it.album.toLowerCase().includes(q));
         });
+        if (filter === 'video') {
+          songsPlayerState.filtered.sort((a, b) => {
+            const byDate = songsPlayerSortableDate_(b.sortDate || '') - songsPlayerSortableDate_(a.sortDate || '');
+            if (byDate !== 0) return byDate;
+            return String(a.songTitle || a.name || '').localeCompare(String(b.songTitle || b.name || ''), 'de');
+          });
+        }
         songsPlayerState.filtered = applySongsPlayerShuffleOrder_(songsPlayerState.filtered);
         pruneSongsPlayerUpNext_();
         const currentKey = songsPlayerItemKey_(songsPlayerState.currentItem);
