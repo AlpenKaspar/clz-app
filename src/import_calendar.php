@@ -111,7 +111,7 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
                 'location' => normalize_string($event['where'] ?? ''),
                 'details' => extract_event_remark_text($event),
                 'status' => map_event_status($event, $calInfo),
-                'category_color' => normalize_hex_color($calInfo['color'] ?? ''),
+                'category_color' => calendar_event_color($event, $calInfo, $categoryKey),
                 'category_key' => $categoryKey,
                 'modified_raw' => normalize_string($event['date_modified'] ?? ($event['modified_date'] ?? ($event['updated'] ?? ''))),
                 'modified_at' => parse_elvanto_datetime($event['date_modified'] ?? ($event['modified_date'] ?? ($event['updated'] ?? ''))),
@@ -196,7 +196,7 @@ function import_calendar_services(string $startStr, string $endStr): int
                     'location' => normalize_string($service['location']['name'] ?? ''),
                     'details' => extract_event_remark_text($service),
                     'status' => map_service_status($service['status'] ?? null),
-                    'category_color' => '',
+                    'category_color' => service_category_color($service, $categoryKey),
                     'category_key' => $categoryKey,
                     'modified_raw' => normalize_string($service['date_modified'] ?? ($service['modified_date'] ?? ($service['updated'] ?? ''))),
                     'modified_at' => parse_elvanto_datetime($service['date_modified'] ?? ($service['modified_date'] ?? ($service['updated'] ?? ''))),
@@ -356,6 +356,87 @@ function normalize_hex_color(string $value): string
     return preg_match('/^[0-9a-fA-F]{6}$/', $value) ? '#' . strtoupper($value) : '';
 }
 
+function calendar_event_color(array $event, array $calendarInfo, string $categoryKey): string
+{
+    $calendarColor = normalize_hex_color((string) ($calendarInfo['color'] ?? ''));
+    if ($calendarColor !== '') {
+        return $calendarColor;
+    }
+    $payloadColor = extract_payload_color($event);
+    return $payloadColor !== '' ? $payloadColor : fallback_calendar_color($categoryKey);
+}
+
+function service_category_color(array $service, string $categoryKey): string
+{
+    $payloadColor = extract_payload_color($service);
+    return $payloadColor !== '' ? $payloadColor : fallback_calendar_color($categoryKey);
+}
+
+function extract_payload_color(array $payload): string
+{
+    $color = first_payload_color($payload, ['colour', 'color', 'colour_code', 'color_code', 'hex', 'hex_color']);
+    if ($color !== '') {
+        return $color;
+    }
+
+    foreach (['calendar', 'category', 'service_type'] as $key) {
+        if (isset($payload[$key]) && is_array($payload[$key])) {
+            $color = extract_payload_color($payload[$key]);
+            if ($color !== '') {
+                return $color;
+            }
+        }
+    }
+
+    $serviceTypes = $payload['service_types']['service_type'] ?? ($payload['service_types'] ?? null);
+    foreach (normalize_collection($serviceTypes) as $serviceType) {
+        if (is_array($serviceType)) {
+            $color = extract_payload_color($serviceType);
+            if ($color !== '') {
+                return $color;
+            }
+        }
+    }
+
+    return '';
+}
+
+function first_payload_color(array $payload, array $keys): string
+{
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $payload)) {
+            continue;
+        }
+        $value = $payload[$key];
+        $color = is_array($value) ? extract_payload_color($value) : normalize_hex_color((string) $value);
+        if ($color !== '') {
+            return $color;
+        }
+    }
+    return '';
+}
+
+function fallback_calendar_color(string $categoryKey): string
+{
+    $seed = trim($categoryKey);
+    if ($seed === '') {
+        return '#CBD5E1';
+    }
+    $palette = [
+        '#2563EB',
+        '#16A34A',
+        '#D97706',
+        '#DC2626',
+        '#7C3AED',
+        '#0891B2',
+        '#DB2777',
+        '#4F46E5',
+        '#059669',
+        '#EA580C',
+    ];
+    return $palette[(int) (abs(crc32($seed)) % count($palette))];
+}
+
 function map_event_status(array $event, array $calendarInfo): string
 {
     foreach ([$event['status'] ?? null, $event['public'] ?? null, $event['published'] ?? null, $event['visibility'] ?? null] as $candidate) {
@@ -469,4 +550,3 @@ function extract_resource_names(array $obj): string
     }
     return implode(', ', array_values(array_unique($names)));
 }
-

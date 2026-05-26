@@ -4,6 +4,20 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../src/bootstrap.php';
 
+function services_api_color(array $row): string
+{
+    $color = trim((string) ($row['category_color'] ?? ''));
+    if ($color !== '') {
+        return $color;
+    }
+    $seed = trim((string) (($row['category_key'] ?? '') ?: ($row['category'] ?? '')));
+    if ($seed === '') {
+        return '#cbd5e1';
+    }
+    $palette = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#4f46e5', '#059669', '#ea580c'];
+    return $palette[(int) (abs(crc32($seed)) % count($palette))];
+}
+
 try {
     require_user();
 
@@ -19,7 +33,7 @@ try {
 
     $stmt = db()->prepare(
         "SELECT ce.id, ce.elvanto_id, ce.start_date, ce.start_time, ce.end_date, ce.end_time,
-                ce.title, ce.category, ce.location, ce.status, ce.category_color,
+                ce.title, ce.category, ce.location, ce.status, ce.category_color, ce.category_key,
                 s.service_id, s.imported_at AS details_imported_at,
                 (SELECT COUNT(*) FROM service_times st WHERE st.service_id = s.service_id) AS time_count,
                 (SELECT COUNT(*) FROM service_volunteers sv WHERE sv.service_id = s.service_id) AS volunteer_count,
@@ -50,7 +64,7 @@ try {
             'category' => $row['category'],
             'location' => $row['location'],
             'status' => $row['status'],
-            'categoryColor' => $row['category_color'],
+            'categoryColor' => services_api_color($row),
             'detailsImportedAt' => $row['details_imported_at'],
             'counts' => [
                 'times' => (int) $row['time_count'],

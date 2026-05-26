@@ -1610,6 +1610,31 @@ function rpc_calendar(string $startIso, string $endIso): array
     return ['ok' => true, 'events' => $events, 'categories' => $categories];
 }
 
+function rpc_calendar_display_color(array $row): string
+{
+    $color = rpc_str($row['category_color'] ?? '');
+    if ($color !== '') {
+        return $color;
+    }
+    $seed = rpc_str($row['category_key'] ?? '') ?: rpc_str($row['category'] ?? '');
+    if ($seed === '') {
+        return '#cbd5e1';
+    }
+    $palette = [
+        '#2563eb',
+        '#16a34a',
+        '#d97706',
+        '#dc2626',
+        '#7c3aed',
+        '#0891b2',
+        '#db2777',
+        '#4f46e5',
+        '#059669',
+        '#ea580c',
+    ];
+    return $palette[(int) (abs(crc32($seed)) % count($palette))];
+}
+
 function rpc_calendar_event(array $row): array
 {
     $id = rpc_str($row['elvanto_id'] ?? '');
@@ -1625,7 +1650,7 @@ function rpc_calendar_event(array $row): array
         'Ort' => rpc_str($row['location'] ?? ''),
         'Details' => rpc_str($row['details'] ?? ''),
         'Ressourcen' => rpc_str($row['resources'] ?? ''),
-        'displayColor' => rpc_str($row['category_color'] ?? '') ?: '#cbd5e1',
+        'displayColor' => rpc_calendar_display_color($row),
         '_elvantoId' => $id,
         '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : rpc_elvanto_calendar_url($id),
         'hasServiceFlow' => $serviceId !== '',

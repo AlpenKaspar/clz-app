@@ -4,6 +4,20 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../src/bootstrap.php';
 
+function calendar_api_color(array $row): string
+{
+    $color = trim((string) ($row['category_color'] ?? ''));
+    if ($color !== '') {
+        return $color;
+    }
+    $seed = trim((string) (($row['category_key'] ?? '') ?: ($row['category'] ?? '')));
+    if ($seed === '') {
+        return '#cbd5e1';
+    }
+    $palette = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#4f46e5', '#059669', '#ea580c'];
+    return $palette[(int) (abs(crc32($seed)) % count($palette))];
+}
+
 try {
     require_user();
 
@@ -43,7 +57,7 @@ try {
             'location' => $row['location'],
             'details' => $row['details'],
             'status' => $row['status'],
-            'categoryColor' => $row['category_color'],
+            'categoryColor' => calendar_api_color($row),
             'categoryKey' => $row['category_key'],
             'resources' => $row['resources'],
             'predigtskriptUrl' => $row['predigtskript_url'],
