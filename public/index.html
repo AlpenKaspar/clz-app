@@ -6069,6 +6069,7 @@
       color: #fff;
     }
     .songs-player-now {
+      position: relative;
       margin: 12px 16px 0;
       padding: 14px;
       border-radius: 14px;
@@ -6118,15 +6119,30 @@
       background: rgba(148,163,184,0.16);
     }
     .songs-player-pitch-trigger {
-      width: 30px;
-      padding: 0 !important;
+      position: absolute;
+      top: 17px;
+      right: 14px;
+      z-index: 2;
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+      padding: 0;
+      border: 1px solid rgba(148,163,184,0.24);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.74);
+      color: var(--muted, #6b7280);
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 18px rgba(15,23,42,0.08);
+      cursor: pointer;
       display: none;
     }
     .songs-player-pitch-trigger.is-visible {
-      display: inline-flex;
+      display: flex;
     }
     .songs-player-pitch-trigger.is-active {
       background: var(--primary);
+      border-color: var(--primary);
       color: #fff;
     }
     .songs-player-pitch {
@@ -6189,8 +6205,14 @@
       background: rgba(148,163,184,0.12);
       border-color: rgba(148,163,184,0.18);
     }
+    body.dark .songs-player-pitch-trigger {
+      background: rgba(15,23,42,0.72);
+      border-color: rgba(148,163,184,0.26);
+      color: var(--text-muted);
+    }
     body.dark .songs-player-pitch-trigger.is-active {
       background: var(--primary);
+      border-color: var(--primary);
       color: #fff;
     }
     .songs-player-video-frame {
@@ -7870,7 +7892,7 @@
   <body>
 <div id="toast" class="global-toast"></div>
 
-<div id="welcome-overlay" class="welcome-overlay">
+<div id="welcome-overlay" class="welcome-overlay show">
   <div class="welcome-card">
     <div class="welcome-mark">
       <img
@@ -8435,11 +8457,11 @@
             <button id="songs-player-mode-audio" class="active" type="button" onclick="setSongsPlayerFilter_('audio')">Audio</button>
             <button id="songs-player-mode-video" type="button" onclick="setSongsPlayerFilter_('video')">Video</button>
             <button id="songs-player-mode-livestream" type="button" onclick="setSongsPlayerFilter_('livestream')">Livestream</button>
-            <button id="songs-player-pitch-trigger" class="songs-player-pitch-trigger" type="button" onclick="toggleSongsPlayerPitchPanel_()" title="Pitch" aria-label="Pitch">
-              <i class="fas fa-wave-square"></i>
-            </button>
           </div>
           <div id="songs-player-now-title" class="songs-player-now-title">Kein Titel ausgewählt</div>
+          <button id="songs-player-pitch-trigger" class="songs-player-pitch-trigger" type="button" onclick="toggleSongsPlayerPitchPanel_()" title="Pitch" aria-label="Pitch">
+            <i class="fas fa-wave-square"></i>
+          </button>
           <div id="songs-player-now-meta" class="songs-player-now-meta"></div>
           <div id="songs-player-pitch" class="songs-player-pitch" hidden>
             <button class="songs-player-pitch-step" type="button" onclick="stepSongsPlayerPitch_(-1)" aria-label="Einen Halbton tiefer">
