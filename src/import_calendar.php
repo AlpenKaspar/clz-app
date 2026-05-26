@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/import_people.php';
 
-function import_calendar_basic(): array
+function import_calendar_basic(bool $force = false): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('calendar');
@@ -17,6 +17,36 @@ function import_calendar_basic(): array
         $endStr = $end->format('Y-m-d');
         $calendarMap = fetch_calendar_map();
         $calendarCategoryMap = fetch_calendar_category_map();
+        $footprint = build_calendar_import_footprint($calendarMap, $calendarCategoryMap);
+        $previousFootprint = app_setting('IMPORT_KALENDER_FOOTPRINT', '');
+
+        if (!$force && $footprint['hash'] !== '' && hash_equals($previousFootprint, $footprint['hash'])) {
+            set_app_setting('IMPORT_KALENDER_LAST_CHECK', date('c'));
+            set_app_setting('IMPORT_KALENDER_FOOTPRINT_META', json_encode($footprint, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            import_run_finish($runId, 'ok', 0, 'Skipped calendar import; footprint unchanged.');
+
+            return [
+                'ok' => true,
+                'type' => 'calendar',
+                'skipped' => true,
+                'reason' => 'footprint_unchanged',
+                'events' => 0,
+                'services' => 0,
+                'total' => 0,
+                'footprint' => [
+                    'hash' => $footprint['hash'],
+                    'count' => $footprint['count'],
+                    'range' => $footprint['range'],
+                    'limit' => $footprint['limit'],
+                ],
+                'range' => [
+                    'start' => $startStr,
+                    'end' => $endStr,
+                ],
+                'startedAt' => $startedAt,
+                'finishedAt' => date('Y-m-d H:i:s'),
+            ];
+        }
 
         $pdo = db();
         $pdo->beginTransaction();
@@ -26,17 +56,29 @@ function import_calendar_basic(): array
         $serviceCount = import_calendar_services($startStr, $endStr);
 
         set_app_setting('IMPORT_KALENDER_LAST', date('c'));
+        set_app_setting('IMPORT_KALENDER_LAST_CHECK', date('c'));
+        set_app_setting('IMPORT_KALENDER_FOOTPRINT', $footprint['hash']);
+        set_app_setting('IMPORT_KALENDER_FOOTPRINT_META', json_encode($footprint, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $pdo->commit();
 
         $total = $eventCount + $serviceCount;
-        import_run_finish($runId, 'ok', $total, "Imported {$eventCount} events and {$serviceCount} service entries.");
+        $forceText = $force ? ' Forced import.' : '';
+        import_run_finish($runId, 'ok', $total, "Imported {$eventCount} events and {$serviceCount} service entries.{$forceText}");
 
         return [
             'ok' => true,
             'type' => 'calendar',
+            'skipped' => false,
+            'forced' => $force,
             'events' => $eventCount,
             'services' => $serviceCount,
             'total' => $total,
+            'footprint' => [
+                'hash' => $footprint['hash'],
+                'count' => $footprint['count'],
+                'range' => $footprint['range'],
+                'limit' => $footprint['limit'],
+            ],
             'range' => [
                 'start' => $startStr,
                 'end' => $endStr,
@@ -51,6 +93,157 @@ function import_calendar_basic(): array
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
     }
+}
+
+function build_calendar_import_footprint(array $calendarMap, array $calendarCategoryMap, int $limit = 50): array
+{
+    $timezone = new DateTimeZone(env('APP_TIMEZONE', 'Europe/Zurich') ?: 'Europe/Zurich');
+    $start = new DateTimeImmutable('today', $timezone);
+    $end = $start->modify('+16 months');
+    $entries = array_merge(
+        collect_calendar_event_footprint_entries($start->format('Y-m-d'), $end->format('Y-m-d'), $calendarMap, $calendarCategoryMap),
+        collect_calendar_service_footprint_entries($start->format('Y-m-d'), $end->format('Y-m-d'))
+    );
+
+    usort($entries, static function (array $a, array $b): int {
+        $dateCmp = strcmp((string) ($a['startDate'] ?? ''), (string) ($b['startDate'] ?? ''));
+        if ($dateCmp !== 0) {
+            return $dateCmp;
+        }
+        $timeCmp = strcmp((string) ($a['startTime'] ?? ''), (string) ($b['startTime'] ?? ''));
+        if ($timeCmp !== 0) {
+            return $timeCmp;
+        }
+        return strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? ''));
+    });
+
+    $entries = array_slice($entries, 0, max(1, $limit));
+    $payload = [
+        'version' => 1,
+        'limit' => $limit,
+        'range' => [
+            'start' => $start->format('Y-m-d'),
+            'end' => $end->format('Y-m-d'),
+        ],
+        'entries' => $entries,
+    ];
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return [
+        'hash' => is_string($json) ? hash('sha256', $json) : '',
+        'count' => count($entries),
+        'limit' => $limit,
+        'range' => $payload['range'],
+        'entries' => $entries,
+    ];
+}
+
+function collect_calendar_event_footprint_entries(string $startStr, string $endStr, array $calendarMap, array $calendarCategoryMap): array
+{
+    $data = elvanto_post('calendar/events/getAll.json', [
+        'start' => $startStr,
+        'end' => $endStr,
+        'page' => 1,
+        'page_size' => 500,
+    ]);
+
+    $entries = [];
+    foreach (normalize_collection($data['events']['event'] ?? []) as $event) {
+        if (!is_array($event) || empty($event['id'])) {
+            continue;
+        }
+
+        $categoryInfo = calendar_event_category_info($event, $calendarMap, $calendarCategoryMap);
+        $category = $categoryInfo['name'];
+        $categoryKey = $categoryInfo['key'];
+        if (should_exclude_calendar_category($category, $categoryKey)) {
+            continue;
+        }
+
+        $start = parse_elvanto_datetime_local($event['start_date'] ?? '');
+        $end = parse_elvanto_datetime_local($event['end_date'] ?? '');
+        if (!$start) {
+            continue;
+        }
+
+        $allDay = (string) ($event['all_day'] ?? '0') === '1';
+        $startTime = $allDay ? '00:00:00' : $start['time'];
+        $endTime = $allDay ? '23:59:00' : ($end['time'] ?? '');
+
+        $entries[] = [
+            'key' => 'EVENT-' . (string) $event['id'] . '|' . $start['date'] . '|' . $startTime,
+            'type' => 'event',
+            'id' => (string) $event['id'],
+            'title' => normalize_string($event['name'] ?? ''),
+            'startDate' => $start['date'],
+            'startTime' => $startTime,
+            'endDate' => $end['date'] ?? $start['date'],
+            'endTime' => $endTime,
+            'category' => $category,
+            'location' => normalize_string($event['where'] ?? ''),
+            'details' => normalize_calendar_footprint_text(extract_event_remark_text($event)),
+            'modified' => normalize_string($event['date_modified'] ?? ($event['modified_date'] ?? ($event['updated'] ?? ''))),
+        ];
+    }
+    return $entries;
+}
+
+function collect_calendar_service_footprint_entries(string $startStr, string $endStr): array
+{
+    $data = elvanto_post('services/getAll.json', [
+        'start' => $startStr,
+        'end' => $endStr,
+        'page' => 1,
+        'page_size' => 500,
+        'fields' => ['service_times'],
+    ]);
+
+    $entries = [];
+    foreach (normalize_collection($data['services']['service'] ?? []) as $service) {
+        if (!is_array($service) || empty($service['id'])) {
+            continue;
+        }
+
+        $category = get_service_category_name($service);
+        $categoryKey = get_service_category_key($service, $category);
+        if (should_exclude_calendar_category($category, $categoryKey)) {
+            continue;
+        }
+
+        foreach (extract_service_times($service) as $time) {
+            if (!is_array($time)) {
+                continue;
+            }
+            $start = parse_elvanto_datetime_local($time['starts'] ?? '');
+            $end = parse_elvanto_datetime_local($time['ends'] ?? '');
+            if (!$start) {
+                continue;
+            }
+            $timeKey = trim((string) ($time['id'] ?? ($time['starts'] ?? '')));
+            $entries[] = [
+                'key' => 'SERVICE-' . (string) $service['id'] . '|' . $timeKey . '|' . $start['date'] . '|' . $start['time'],
+                'type' => 'service',
+                'id' => (string) $service['id'],
+                'title' => normalize_string($service['name'] ?? ''),
+                'startDate' => $start['date'],
+                'startTime' => $start['time'],
+                'endDate' => $end['date'] ?? $start['date'],
+                'endTime' => $end['time'] ?? '',
+                'category' => $category,
+                'location' => normalize_string($service['location']['name'] ?? ''),
+                'details' => normalize_calendar_footprint_text(extract_event_remark_text($service)),
+                'modified' => normalize_string($service['date_modified'] ?? ($service['modified_date'] ?? ($service['updated'] ?? ''))),
+            ];
+        }
+    }
+    return $entries;
+}
+
+function normalize_calendar_footprint_text(string $value): string
+{
+    $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    return trim(mb_substr($value, 0, 800));
 }
 
 function import_calendar_events(string $startStr, string $endStr, array $calendarMap, array $calendarCategoryMap = []): int
