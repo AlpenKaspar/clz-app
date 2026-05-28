@@ -9340,6 +9340,14 @@
         return location.protocol === 'https:' && !!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
       }
 
+      function serviceWorkerReadyWithTimeout_(timeoutMs = 1600) {
+        if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+        return Promise.race([
+          navigator.serviceWorker.ready.catch(() => null),
+          new Promise(resolve => setTimeout(() => resolve(null), Math.max(250, Number(timeoutMs || 1600))))
+        ]);
+      }
+
       async function refreshPushNotificationStatus_() {
         pushNotificationStatus.supported = pushIsSupported_();
         pushNotificationStatus.permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
@@ -9354,8 +9362,8 @@
           pushNotificationStatus.enabled = !!data?.enabled;
           pushNotificationStatus.publicKey = String(data?.publicKey || '');
           if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
-            const sub = await reg.pushManager.getSubscription();
+            const reg = await serviceWorkerReadyWithTimeout_();
+            const sub = reg && reg.pushManager?.getSubscription ? await reg.pushManager.getSubscription() : null;
             pushNotificationStatus.subscribed = !!sub;
           }
         } catch (err) {
@@ -9379,12 +9387,13 @@
             toast('Push-Key fehlt auf dem Server', 2200);
             return;
           }
-          const reg = await navigator.serviceWorker.ready;
+          const reg = await serviceWorkerReadyWithTimeout_();
+          if (!reg) throw new Error('Service Worker ist noch nicht bereit.');
           const existing = await reg.pushManager.getSubscription();
           if (existing) {
             const payload = existing.toJSON ? existing.toJSON() : { endpoint: existing.endpoint };
-            await existing.unsubscribe();
             await withGsRetry('notifications_deleteSubscription', [payload], { retries: 1, retryDelay: 500 });
+            await existing.unsubscribe();
             pushNotificationStatus.subscribed = false;
             toast('Push deaktiviert', 1400);
             return;
@@ -9797,13 +9806,16 @@
         el._timer = setTimeout(() => el.classList.remove("show"), ms);
       }
 
-      function logoutApp_() {
+      async function logoutApp_() {
         try {
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready
-              .then(reg => reg.pushManager?.getSubscription ? reg.pushManager.getSubscription() : null)
-              .then(sub => sub ? sub.unsubscribe() : null)
-              .catch(() => {});
+            const reg = await serviceWorkerReadyWithTimeout_(900);
+            const sub = reg && reg.pushManager?.getSubscription ? await reg.pushManager.getSubscription().catch(() => null) : null;
+            if (sub) {
+              const payload = sub.toJSON ? sub.toJSON() : { endpoint: sub.endpoint };
+              await withGsRetry('notifications_deleteSubscription', [payload], { retries: 0, retryDelay: 0 }).catch(() => {});
+              await sub.unsubscribe().catch(() => {});
+            }
           }
           localStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
           sessionStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
