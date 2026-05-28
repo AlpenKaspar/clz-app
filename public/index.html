@@ -9471,7 +9471,7 @@
         const week = document.getElementById('pref-birthday-week');
         const status = document.getElementById('user-preferences-status');
         const pushBtn = document.getElementById('push-notification-btn');
-        const notificationToggleDisabled = !!pushNotificationStatus.loading || !pushNotificationStatus.supported || !pushNotificationStatus.enabled;
+        const notificationToggleDisabled = !!pushNotificationStatus.loading;
         if (today) {
           today.checked = !!n.birthdaysToday;
           today.disabled = notificationToggleDisabled;
@@ -9670,18 +9670,18 @@
 
       async function setUserNotificationPreference_(key, value) {
         const prefKey = String(key || '');
-        if (value && (prefKey === 'birthdaysToday' || prefKey === 'birthdaysWeek')) {
-          const pushOk = await ensurePushNotificationsActive_();
-          if (!pushOk) {
-            renderUserPreferences_();
-            return;
-          }
-        }
         const prefs = normalizeUserPreferences_(currentUserPreferences);
         prefs.notifications[prefKey] = !!value;
         currentUserPreferences = normalizeUserPreferences_(prefs);
         renderUserPreferences_();
         saveUserPreferences_();
+        if (value && (prefKey === 'birthdaysToday' || prefKey === 'birthdaysWeek')) {
+          const pushOk = await ensurePushNotificationsActive_();
+          if (!pushOk) {
+            toast('Wunsch gespeichert, Push noch nicht aktiv', 2200);
+            renderUserPreferences_();
+          }
+        }
       }
 
       function defaultBirthdayMessageTemplate_() {
