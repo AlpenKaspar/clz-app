@@ -9783,10 +9783,11 @@
         return raw.split(/\s+/).filter(Boolean)[0] || 'dir';
       }
 
-      function buildBirthdayGreetingText_(data) {
+      function buildBirthdayGreetingText_(data, channel = '') {
         const name = birthdayMessageRecipientName_(data);
         const template = getBirthdayMessageTemplate_();
-        return [`Lieber ${name}`, '', template].join('\n').trim();
+        const gap = String(channel || '') === 'whatsapp' ? '\n' : '\n\n';
+        return `Lieber ${name}${gap}${template}`.trim();
       }
 
       function normalizeBirthdayWhatsappNumber_(rawValue) {
@@ -9814,7 +9815,7 @@
           ev.stopPropagation();
         }
         const mode = String(channel || '').trim();
-        const body = buildBirthdayGreetingText_(data || currentData || {});
+        const body = buildBirthdayGreetingText_(data || currentData || {}, mode);
         if (mode === 'email') {
           const email = String(value || '').replace(/[\r\n]/g, '').trim();
           if (!email) return;
