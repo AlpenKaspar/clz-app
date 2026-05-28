@@ -5685,7 +5685,7 @@
       background: var(--card-bg);
       overflow: hidden;
     }
-    .settings-collapsible summary {
+    .settings-collapsible > summary {
       list-style: none;
       cursor: pointer;
       padding: 12px 14px;
@@ -5697,9 +5697,9 @@
       font-weight: 800;
       color: var(--text-color);
     }
-    .settings-collapsible summary::-webkit-details-marker { display: none; }
-    .settings-collapsible summary::marker { content: ""; }
-    .settings-collapsible summary::after {
+    .settings-collapsible > summary::-webkit-details-marker { display: none; }
+    .settings-collapsible > summary::marker { content: ""; }
+    .settings-collapsible > summary::after {
       content: '\f078';
       font-family: 'Font Awesome 6 Free';
       font-weight: 900;
@@ -5707,7 +5707,7 @@
       color: var(--text-muted);
       transition: transform .18s ease;
     }
-    .settings-collapsible[open] summary::after {
+    .settings-collapsible[open] > summary::after {
       transform: rotate(180deg);
     }
     .settings-collapsible-body {
