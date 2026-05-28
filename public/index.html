@@ -5547,18 +5547,6 @@
       gap: 12px;
     }
 
-    .tools-push-action {
-      display: flex;
-      justify-content: flex-start;
-    }
-
-    .tools-push-action .btn {
-      min-height: 34px;
-      padding: 0 12px;
-      font-size: 12px;
-      border-radius: 14px;
-    }
-
     .tools-section-label {
       margin-top: 2px;
       color: var(--text-muted);
@@ -5595,11 +5583,7 @@
         align-items: flex-start;
       }
 
-      .tools-notification-head {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 10px;
-      }
+      .tools-notification-head { display: block; }
     }
 
     .subhead {
@@ -8852,11 +8836,6 @@
                   <div class="tools-title">Benachrichtigungen</div>
                   <div id="user-preferences-status" class="tools-sub">Pro Login gespeichert</div>
                 </div>
-                <div class="tools-push-action">
-                  <button id="push-notification-btn" class="btn btn-secondary" type="button" onclick="togglePushNotifications_()">
-                    <i class="fas fa-bell"></i><span>Push aktivieren</span>
-                  </button>
-                </div>
               </div>
               <div>
                 <div class="tools-section-label">Geburtstage</div>
@@ -9119,6 +9098,7 @@
       let currentUserPersonLinkSource = "";
       let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false } };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
+      let pushActivationInFlight = null;
       let adminUsersCache = [];
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
@@ -9395,8 +9375,15 @@
         const week = document.getElementById('pref-birthday-week');
         const status = document.getElementById('user-preferences-status');
         const pushBtn = document.getElementById('push-notification-btn');
-        if (today) today.checked = !!n.birthdaysToday;
-        if (week) week.checked = !!n.birthdaysWeek;
+        const notificationToggleDisabled = !!pushNotificationStatus.loading || !pushNotificationStatus.supported || !pushNotificationStatus.enabled;
+        if (today) {
+          today.checked = !!n.birthdaysToday;
+          today.disabled = notificationToggleDisabled;
+        }
+        if (week) {
+          week.checked = !!n.birthdaysWeek;
+          week.disabled = notificationToggleDisabled;
+        }
         if (pushBtn) {
           const icon = pushNotificationStatus.subscribed ? 'fa-bell-slash' : 'fa-bell';
           const text = pushNotificationStatus.loading
@@ -9458,6 +9445,60 @@
           pushNotificationStatus.subscribed = false;
         }
         renderUserPreferences_();
+      }
+
+      async function ensurePushNotificationsActive_() {
+        if (pushNotificationStatus.subscribed) return true;
+        if (!pushIsSupported_()) {
+          toast('Push ist auf diesem Gerät nicht verfügbar', 1800);
+          return false;
+        }
+        if (pushActivationInFlight) return pushActivationInFlight;
+
+        pushActivationInFlight = (async () => {
+          pushNotificationStatus.loading = true;
+          renderUserPreferences_();
+          try {
+            if (Notification.permission !== 'granted') {
+              const permission = await Notification.requestPermission();
+              pushNotificationStatus.permission = permission;
+              if (permission !== 'granted') {
+                toast('Benachrichtigungen wurden nicht erlaubt', 2200);
+                return false;
+              }
+            }
+            const status = await withGsRetry('notifications_getStatus', [], { retries: 1, retryDelay: 500 });
+            const publicKey = String(status?.publicKey || '');
+            if (!status?.enabled || !publicKey) {
+              toast('Push-Key fehlt auf dem Server', 2200);
+              return false;
+            }
+            const reg = await serviceWorkerReadyWithTimeout_();
+            if (!reg) throw new Error('Service Worker ist noch nicht bereit.');
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+              pushNotificationStatus.subscribed = true;
+              return true;
+            }
+            const subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array_(publicKey)
+            });
+            await withGsRetry('notifications_saveSubscription', [subscription.toJSON()], { retries: 1, retryDelay: 500 });
+            pushNotificationStatus.subscribed = true;
+            toast('Push aktiviert', 1400);
+            return true;
+          } catch (err) {
+            toast(normalizeErrMsg_(err), 2200);
+            return false;
+          } finally {
+            pushNotificationStatus.loading = false;
+            pushActivationInFlight = null;
+            refreshPushNotificationStatus_();
+          }
+        })();
+
+        return pushActivationInFlight;
       }
 
       async function togglePushNotifications_() {
@@ -9531,9 +9572,17 @@
         }
       }
 
-      function setUserNotificationPreference_(key, value) {
+      async function setUserNotificationPreference_(key, value) {
+        const prefKey = String(key || '');
+        if (value && (prefKey === 'birthdaysToday' || prefKey === 'birthdaysWeek')) {
+          const pushOk = await ensurePushNotificationsActive_();
+          if (!pushOk) {
+            renderUserPreferences_();
+            return;
+          }
+        }
         const prefs = normalizeUserPreferences_(currentUserPreferences);
-        prefs.notifications[String(key || '')] = !!value;
+        prefs.notifications[prefKey] = !!value;
         currentUserPreferences = normalizeUserPreferences_(prefs);
         renderUserPreferences_();
         saveUserPreferences_();
