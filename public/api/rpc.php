@@ -805,6 +805,10 @@ function rpc_person_main(string $personId, array $user = []): array
             'familyId' => $lite['familyId'],
             'pictureUrl' => $lite['pictureUrl'],
             'elvantoUrl' => rpc_elvanto_person_url($personId),
+            'firstName' => $lite['firstName'],
+            'preferredName' => $lite['preferredName'],
+            'birthday' => $lite['birthday'],
+            'birthdayToday' => (bool) ($lite['birthdayToday'] ?? false),
         ],
     ];
 }

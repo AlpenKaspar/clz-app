@@ -5578,12 +5578,89 @@
       white-space: nowrap;
     }
 
+    .tools-message-row {
+      align-items: flex-start;
+    }
+
+    .tools-message-row .tools-left {
+      flex: 1 1 auto;
+      min-width: 0;
+      align-items: flex-start;
+    }
+
+    .tools-message-panel {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .tools-textarea {
+      width: 100%;
+      min-height: 82px;
+      resize: vertical;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: rgba(248,250,252,0.9);
+      color: var(--text-main);
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.45;
+      outline: none;
+    }
+
+    body.dark .tools-textarea {
+      background: rgba(15,23,42,0.68);
+    }
+
+    .tools-textarea:focus {
+      border-color: rgba(37,99,235,0.55);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+
+    .birthday-message-btn {
+      appearance: none;
+      border: 1px solid rgba(217,119,6,0.22);
+      background: rgba(251,191,36,0.16);
+      color: #d97706;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .birthday-message-btn:hover {
+      background: rgba(251,191,36,0.24);
+      color: #b45309;
+    }
+
+    body.dark .birthday-message-btn {
+      color: #fbbf24;
+      background: rgba(251,191,36,0.12);
+      border-color: rgba(251,191,36,0.22);
+    }
+
     @media (max-width: 520px) {
       .tools-notification-row {
         align-items: flex-start;
       }
 
       .tools-notification-head { display: block; }
+
+      .tools-message-row {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .tools-message-row .btn {
+        justify-self: flex-start;
+        margin-left: 42px;
+      }
     }
 
     .subhead {
@@ -8860,6 +8937,23 @@
           </div>
         </div>
 
+        <div class="tools-row tools-message-row member-only">
+          <div class="tools-left">
+            <i class="fas fa-cake-candles"></i>
+            <div class="tools-message-panel">
+              <div>
+                <div class="tools-title">Geburtstagsnachricht</div>
+                <div class="tools-sub">Textblock für Kontakte mit Geburtstag heute</div>
+              </div>
+              <textarea id="birthday-message-template" class="tools-textarea" rows="3" placeholder="Alles Liebe und Gottes Segen zum Geburtstag!"></textarea>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
+            <i class="fas fa-floppy-disk"></i><span>Speichern</span>
+          </button>
+        </div>
+
         <div class="tools-row member-only">
           <div class="tools-left">
             <i class="fas fa-tower-broadcast"></i>
@@ -9247,7 +9341,9 @@
       const DARK_MODE_DARK = "dark";
       const CAL_FILTERS_KEY = "clz_calendar_filters_v1";
       const ON_AIR_BANNER_KEY = "clz_on_air_banner_test_v1";
+      const BIRTHDAY_MESSAGE_TEMPLATE_KEY = "clz_birthday_message_template_v1";
       const ON_AIR_TEST_VIDEO_ID = "ZmpfGd2BpOk";
+      let birthdayMessageTemplate = "";
       let calendarViewMode = "all";
       let calendarViewThumbSyncRaf = null;
       let calendarViewThumbSyncTimer = null;
@@ -9586,6 +9682,132 @@
         currentUserPreferences = normalizeUserPreferences_(prefs);
         renderUserPreferences_();
         saveUserPreferences_();
+      }
+
+      function defaultBirthdayMessageTemplate_() {
+        return 'Alles Liebe und Gottes Segen zum Geburtstag!';
+      }
+
+      function loadBirthdayMessageTemplate_() {
+        try {
+          const saved = localStorage.getItem(BIRTHDAY_MESSAGE_TEMPLATE_KEY);
+          birthdayMessageTemplate = saved != null ? String(saved) : defaultBirthdayMessageTemplate_();
+        } catch (e) {
+          birthdayMessageTemplate = defaultBirthdayMessageTemplate_();
+        }
+        syncBirthdayMessageTemplateUi_();
+      }
+
+      function syncBirthdayMessageTemplateUi_() {
+        const field = document.getElementById('birthday-message-template');
+        if (!field || document.activeElement === field) return;
+        field.value = birthdayMessageTemplate || '';
+      }
+
+      function saveBirthdayMessageTemplate_() {
+        const field = document.getElementById('birthday-message-template');
+        const value = String(field?.value || '').trim();
+        birthdayMessageTemplate = value || defaultBirthdayMessageTemplate_();
+        try {
+          localStorage.setItem(BIRTHDAY_MESSAGE_TEMPLATE_KEY, birthdayMessageTemplate);
+        } catch (e) {}
+        syncBirthdayMessageTemplateUi_();
+        toast('Geburtstagsnachricht gespeichert', 1200);
+      }
+
+      function getBirthdayMessageTemplate_() {
+        return String(birthdayMessageTemplate || '').trim() || defaultBirthdayMessageTemplate_();
+      }
+
+      function birthdayRawIsToday_(raw) {
+        const value = String(raw || '').trim();
+        if (!value) return false;
+        let day = '';
+        let month = '';
+        const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (iso) {
+          month = iso[2];
+          day = iso[3];
+        } else {
+          const dotted = value.match(/^(\d{1,2})[.\-/](\d{1,2})(?:[.\-/]\d{2,4})?/);
+          if (dotted) {
+            day = dotted[1];
+            month = dotted[2];
+          }
+        }
+        if (!day || !month) return false;
+        const today = new Date();
+        return Number(day) === today.getDate() && Number(month) === today.getMonth() + 1;
+      }
+
+      function contactHasBirthdayToday_(data) {
+        if (data?.meta?.birthdayToday === true || data?.meta?.birthdayToday === '1') return true;
+        if (birthdayRawIsToday_(data?.meta?.birthday)) return true;
+        const birthdayDetail = (data?.details || []).find(d => {
+          const label = String(d?.label || '').trim().toUpperCase();
+          return label === 'GEBURTSDATUM' || label === 'BIRTHDAY';
+        });
+        return birthdayRawIsToday_(birthdayDetail?.value);
+      }
+
+      function birthdayMessageRecipientName_(data) {
+        const metaName = String(data?.meta?.preferredName || data?.meta?.firstName || '').trim();
+        const display = String(data?.displayName || '').trim();
+        const raw = metaName || display;
+        return raw.split(/\s+/).filter(Boolean)[0] || 'dir';
+      }
+
+      function buildBirthdayGreetingText_(data) {
+        const name = birthdayMessageRecipientName_(data);
+        const template = getBirthdayMessageTemplate_();
+        return [`Lieber ${name}`, '', template].join('\n').trim();
+      }
+
+      function normalizeBirthdayWhatsappNumber_(rawValue) {
+        const compact = String(rawValue || '').replace(/[^\d+]/g, '');
+        if (/^\+417\d+/.test(compact)) return compact.slice(1);
+        if (/^\+4107\d+/.test(compact)) return `41${compact.slice(4)}`;
+        if (/^00417\d+/.test(compact)) return compact.slice(2);
+        if (/^004107\d+/.test(compact)) return `41${compact.slice(5)}`;
+        if (/^07\d+/.test(compact)) return `41${compact.slice(1)}`;
+        return '';
+      }
+
+      function canUseBirthdayGreetingTarget_(data, detail, channel) {
+        if (!contactHasBirthdayToday_(data)) return false;
+        const value = String(detail?.value || '').trim();
+        if (!value) return false;
+        if (channel === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+        if (channel === 'whatsapp') return !!normalizeBirthdayWhatsappNumber_(value);
+        return false;
+      }
+
+      function openBirthdayGreeting_(ev, channel, value, data) {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+        const mode = String(channel || '').trim();
+        const body = buildBirthdayGreetingText_(data || currentData || {});
+        if (mode === 'email') {
+          const email = String(value || '').replace(/[\r\n]/g, '').trim();
+          if (!email) return;
+          window.location.href = `mailto:${email}?subject=${encodeURIComponent('Alles Gute zum Geburtstag')}&body=${encodeURIComponent(body)}`;
+          return;
+        }
+        if (mode === 'whatsapp') {
+          const phone = normalizeBirthdayWhatsappNumber_(value);
+          if (!phone) {
+            toast('Keine WhatsApp-taugliche Mobile-Nummer', 1400);
+            return;
+          }
+          const url = `https://wa.me/${phone}?text=${encodeURIComponent(body)}`;
+          const opened = window.open(url, '_blank');
+          if (opened) {
+            try { opened.opener = null; } catch (e) {}
+          }
+          if (!opened) window.location.href = url;
+        }
       }
 
       function applyBootstrapPayload_(res, { force = false } = {}) {
@@ -13908,6 +14130,7 @@ function updateBottomNavHighlight_() {
           renderDashboard();
         }
         if (tab === 'tools') {
+          syncBirthdayMessageTemplateUi_();
           setTimeout(() => refreshSyncStatus_().catch(() => {}), 80);
           setTimeout(() => loadAdminUsers_({ silent: true }).catch(() => {}), 120);
         }
@@ -18808,7 +19031,11 @@ function updateBottomNavHighlight_() {
             personId: String(c.id || ''),
             familyId: '',
             elvantoUrl: '',
-            pictureUrl: String(c.pictureUrl || '')
+            pictureUrl: String(c.pictureUrl || ''),
+            firstName: String(c.firstName || c.firstname || ''),
+            preferredName: String(c.preferredName || ''),
+            birthday: String(c.birthday || ''),
+            birthdayToday: !!c.birthdayToday
           },
           previewOnly: true
         };
@@ -18828,6 +19055,20 @@ function updateBottomNavHighlight_() {
             </div>
           </div>
         `).join('');
+      }
+
+      function appendBirthdayGreetingButton_(rightEl, data, detail, channel) {
+        if (!rightEl || !canUseBirthdayGreetingTarget_(data, detail, channel)) return false;
+        rightEl.style.display = 'flex';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'birthday-message-btn';
+        btn.title = 'Geburtstagsgruss';
+        btn.setAttribute('aria-label', 'Geburtstagsgruss senden');
+        btn.innerHTML = '<i class="fas fa-cake-candles"></i>';
+        btn.addEventListener('click', ev => openBirthdayGreeting_(ev, channel, detail?.value || '', data));
+        rightEl.appendChild(btn);
+        return true;
       }
 
       function startServicePrefetch_() {
@@ -19921,17 +20162,25 @@ function updateBottomNavHighlight_() {
             row.onclick = openFamily;
           } else if (d.type === "email" && d.href) {
             valueEl.innerHTML = `<a class="value-link" href="${escapeAttr(d.href)}">${escapeHtml(d.value || "")}</a>`;
+            appendBirthdayGreetingButton_(rightEl, data, d, 'email');
           } else if (d.type === "phone") {
             if (d.href) valueEl.innerHTML = `<a class="value-link" href="${escapeAttr(d.href)}">${escapeHtml(d.value || "")}</a>`;
             else valueEl.textContent = String(d.value || "");
 
-            if (d.waHref) {
+            if (d.waHref || canUseBirthdayGreetingTarget_(data, d, 'whatsapp')) {
               rightEl.style.display = "flex";
-              rightEl.innerHTML = `
-                <a class="icon-link" href="${escapeAttr(d.waHref)}" target="_blank" rel="noopener" title="WhatsApp">
-                  <i class="fab fa-whatsapp"></i>
-                </a>
-              `;
+              rightEl.innerHTML = "";
+              if (d.waHref) {
+                const waLink = document.createElement('a');
+                waLink.className = 'icon-link';
+                waLink.href = String(d.waHref || '');
+                waLink.target = '_blank';
+                waLink.rel = 'noopener';
+                waLink.title = 'WhatsApp';
+                waLink.innerHTML = '<i class="fab fa-whatsapp"></i>';
+                rightEl.appendChild(waLink);
+              }
+              appendBirthdayGreetingButton_(rightEl, data, d, 'whatsapp');
             }
           } else if (d.type === "address") {
             valueEl.textContent = String(d.value || "");
@@ -24750,6 +24999,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         restoreCalendarFilterState_();
         loadPrintTitleOverrides_();
         loadSmartFilterHistory_();
+        loadBirthdayMessageTemplate_();
         perfMark_('app_start');
 
         updateClearButtons_();
