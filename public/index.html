@@ -9304,6 +9304,7 @@
       let currentSongArrangementIndex = 0;
       let currentSongSequenceExpanded = false;
       let currentSongNotesExpanded = false;
+      let currentSongChordsExpanded = false;
       let currentSongFilesExpanded = false;
       let currentSongTextState = null;
       let currentSongDetailReturnView = '';
@@ -12334,15 +12335,15 @@
         closeSongsPlayer_();
         openSongDetail_(songId);
         if (!currentSongData) return;
-        currentSongFilesExpanded = true;
-        renderSongDetail_(currentSongData);
         const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
         const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
         if (!buildSongArrangementChordProText_(currentSongData, arrangement)) {
           toast('Kein Akkordtext hinterlegt', 1400);
           return;
         }
-        setTimeout(() => openSongArrangementTextViewer_(), 0);
+        currentSongChordsExpanded = true;
+        currentSongTextState = null;
+        renderSongDetail_(currentSongData);
       }
 
       function songsPlayerCurrentMatchesFilter_() {
@@ -12657,7 +12658,9 @@
         currentSongArrangementIndex = 0;
         currentSongSequenceExpanded = false;
         currentSongNotesExpanded = false;
+        currentSongChordsExpanded = false;
         currentSongFilesExpanded = false;
+        currentSongTextState = null;
         renderSongDetail_(song);
         setActiveListItem_('#songs-results', wanted);
         showDetailView_('song-detail-view');
@@ -12675,21 +12678,27 @@
         if (!song || !arrangements.length) return;
         const next = Math.max(0, Math.min(arrangements.length - 1, Number(index) || 0));
         currentSongArrangementIndex = next;
+        if (currentSongTextState?.sourceType === 'arrangement') currentSongTextState = null;
         renderSongDetail_(song);
       }
 
       function formatSongSequenceLabel_(rawStep) {
-        const step = String(rawStep || '').trim();
+        const step = String(rawStep || '')
+          .trim()
+          .replace(/([A-Za-zÄÖÜäöü])(\d)/g, '$1 $2')
+          .replace(/\s+/g, ' ');
         if (!step) return '';
         const english = [
-          { re: /^verse\s*/i, to: 'Vers ' },
-          { re: /^chorus\s*/i, to: 'Chorus ' },
-          { re: /^pre\s*chorus\s*/i, to: 'Pre-Chorus ' },
+          { re: /^pre[\s-]*chorus\s*/i, to: 'Pre-Chorus ' },
+          { re: /^(verse|vers|strophe)\s*/i, to: 'Vers ' },
+          { re: /^(chorus|refrain)\s*/i, to: 'Chorus ' },
           { re: /^bridge\s*/i, to: 'Bridge ' },
           { re: /^intro\s*/i, to: 'Intro ' },
           { re: /^outro\s*/i, to: 'Outro ' },
           { re: /^tag\s*/i, to: 'Tag ' },
-          { re: /^instrumental\s*/i, to: 'Instrumental ' }
+          { re: /^instrumental\s*/i, to: 'Instrumental ' },
+          { re: /^zwischenspiel\s*/i, to: 'Zwischenspiel ' },
+          { re: /^(ending|ende)\s*/i, to: 'Ending ' }
         ];
         for (let i = 0; i < english.length; i++) {
           if (english[i].re.test(step)) {
@@ -12732,6 +12741,13 @@
       function toggleSongNotesExpanded_() {
         if (!currentSongData) return;
         currentSongNotesExpanded = !currentSongNotesExpanded;
+        renderSongDetail_(currentSongData);
+      }
+
+      function toggleSongChordsExpanded_() {
+        if (!currentSongData) return;
+        currentSongChordsExpanded = !currentSongChordsExpanded;
+        if (!currentSongChordsExpanded) currentSongTextState = null;
         renderSongDetail_(currentSongData);
       }
 
@@ -12954,6 +12970,7 @@
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
+          .replace(/([a-z])(\d)/g, '$1 $2')
           .replace(/[._-]+/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
@@ -12967,11 +12984,12 @@
           .replace(/^#+\s*/, '')
           .replace(/^\[|\]$/g, '')
           .replace(/:$/, '')
+          .replace(/([A-Za-zÄÖÜäöü])(\d)/g, '$1 $2')
           .replace(/\s+/g, ' ');
         const leading = text.match(/^(\d+)\s*[.)]?\s*(?:strophe|vers|verse)$/i);
         if (leading) text = `Vers ${leading[1]}`;
-        text = text.replace(/^strophe\s*/i, 'Vers ');
-        text = text.replace(/^refrain\s*/i, 'Chorus ');
+        text = text.replace(/^(?:strophe|verse|vers)\s*/i, 'Vers ');
+        text = text.replace(/^(?:refrain|chorus)\s*/i, 'Chorus ');
         return formatSongSequenceLabel_(text);
       }
 
@@ -12982,10 +13000,11 @@
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
+          .replace(/([a-z])(\d)/g, '$1 $2')
           .replace(/\bstrophe\b/g, 'vers')
           .replace(/\bverse\b/g, 'vers')
           .replace(/\brefrain\b/g, 'chorus')
-          .replace(/\bpre\s*chorus\b/g, 'prechorus')
+          .replace(/\bpre[\s-]*chorus\b/g, 'prechorus')
           .replace(/[^a-z0-9]+/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
@@ -13000,10 +13019,14 @@
         const v = String(value || '').trim();
         if (k.startsWith('start_of_')) {
           const type = k.replace(/^start_of_/, '').replace(/_/g, ' ');
-          return formatSongSectionLabel_(v || type);
+          const label = v && /^[0-9]+[a-z]?$/i.test(v) ? `${type} ${v}` : (v || type);
+          return formatSongSectionLabel_(label);
         }
         const shortMap = { sov: 'Verse', soc: 'Chorus', sob: 'Bridge', sop: 'Pre-Chorus' };
-        if (shortMap[k]) return formatSongSectionLabel_(v || shortMap[k]);
+        if (shortMap[k]) {
+          const label = v && /^[0-9]+[a-z]?$/i.test(v) ? `${shortMap[k]} ${v}` : (v || shortMap[k]);
+          return formatSongSectionLabel_(label);
+        }
         if (['comment', 'c', 'comment_italic', 'ci'].includes(k) && looksLikeSongSectionLabel_(v)) {
           return formatSongSectionLabel_(v);
         }
@@ -13802,11 +13825,33 @@
 
       function openSongArrangementTextViewer_() {
         if (!currentSongData) return;
-        const arrangements = Array.isArray(currentSongData?.arrangements) ? currentSongData.arrangements : [];
-        const arrangement = arrangements[currentSongArrangementIndex] || arrangements[0] || null;
-        const text = buildSongArrangementChordProText_(currentSongData, arrangement);
-        if (!text) return;
-        openSongTextViewer_('', 'Akkorde & Text', text, arrangement?.chordChartKey || arrangement?.keyName || currentSongData?.keyName || '');
+        currentSongChordsExpanded = true;
+        renderSongDetail_(currentSongData);
+      }
+
+      function ensureSongArrangementTextState_(song, arrangement) {
+        const text = buildSongArrangementChordProText_(song, arrangement);
+        if (!text) return false;
+        const sourceKey = [
+          'arrangement',
+          String(song?.songId || song?.id || ''),
+          String(arrangement?.arrangementId || arrangement?.id || currentSongArrangementIndex || 0),
+          String(text.length)
+        ].join(':');
+        if (currentSongTextState?.sourceType === 'arrangement' && currentSongTextState?.sourceKey === sourceKey) return true;
+        currentSongTextState = {
+          sourceType: 'arrangement',
+          sourceKey,
+          url: '',
+          label: 'Akkorde & Text',
+          title: String(song?.songTitle || 'Akkorde & Text').trim() || 'Akkorde & Text',
+          rawText: normalizeSongSheetText_(text),
+          baseKey: arrangement?.chordChartKey || arrangement?.keyName || song?.keyName || '',
+          transpose: 0,
+          includeSequence: false,
+          showChords: true
+        };
+        return true;
       }
 
       function buildElvantoSongUrl_(song) {
@@ -13815,13 +13860,28 @@
       }
 
       async function openSongTextViewer_(url, label, inlineText = '', baseKey = '') {
-        const slot = document.getElementById('song-text-viewer-slot');
         const normalizedUrl = normalizeElvantoUrl_(url);
+        const title = String(label || 'Songtext').trim() || 'Songtext';
+        currentSongChordsExpanded = true;
+        currentSongTextState = {
+          sourceType: 'external',
+          sourceKey: inlineText ? `inline:${title}:${String(inlineText || '').length}` : normalizedUrl,
+          url: normalizedUrl,
+          label: title,
+          title: String(currentSongData?.songTitle || title).trim() || title,
+          rawText: inlineText ? normalizeSongSheetText_(inlineText) : '',
+          baseKey: baseKey || '',
+          transpose: 0,
+          includeSequence: false,
+          showChords: true
+        };
+        renderSongDetail_(currentSongData);
+        const slot = document.getElementById('song-text-viewer-slot');
         if (!slot) {
           if (normalizedUrl) window.open(normalizedUrl, '_blank', 'noopener');
           return;
         }
-        const title = String(label || 'Songtext').trim() || 'Songtext';
+        if (inlineText) return;
         slot.innerHTML = `
           <div class="song-text-viewer">
             <div class="song-text-viewer-head">
@@ -13834,11 +13894,6 @@
             <div class="song-text-viewer-body"><div class="song-chart-line">Lade Songtext...</div></div>
           </div>
         `;
-        if (inlineText) {
-          currentSongTextState = { url: '', label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(inlineText), baseKey: baseKey || '', transpose: 0, includeSequence: false, showChords: true };
-          refreshSongTextViewer_();
-          return;
-        }
         try {
           const response = await fetch('/api/song-text.php?url=' + encodeURIComponent(normalizedUrl), {
             method: 'GET',
@@ -13849,7 +13904,7 @@
           if (!response.ok || data?.ok === false) {
             throw new Error(data?.detail || data?.error || ('HTTP ' + response.status));
           }
-          currentSongTextState = { url: normalizedUrl, label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0, includeSequence: false, showChords: true };
+          currentSongTextState = { sourceType: 'external', sourceKey: normalizedUrl, url: normalizedUrl, label: title, title: String(currentSongData?.songTitle || title).trim() || title, rawText: normalizeSongSheetText_(data.text || ''), baseKey: baseKey || '', transpose: 0, includeSequence: false, showChords: true };
           refreshSongTextViewer_();
         } catch (err) {
           currentSongTextState = null;
@@ -13914,9 +13969,10 @@
           </div>
           ${activeSequenceSteps.length ? `<div class="song-detail-section song-detail-card"><button type="button" class="song-section-head-btn" aria-expanded="${currentSongSequenceExpanded ? 'true' : 'false'}" onclick="toggleSongSequenceExpanded_()"><span class="song-detail-section-title">Ablauf</span><span class="song-section-head-right"><span>${currentSongSequenceExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongSequenceExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button><div class="song-sequence-compact">${compactSequence.map(step => `<span class="song-sequence-bubble">${escapeHtml(step)}</span>`).join('')}</div>${currentSongSequenceExpanded ? `<div class="song-sequence-list">${activeSequenceSteps.map((step, idx) => `<div class="song-sequence-item"><div class="song-sequence-index">${idx + 1}</div><div class="song-sequence-label">${escapeHtml(step)}</div></div>`).join('')}</div>` : ``}</div>` : ``}
           ${arrangements.length ? `<div class="song-detail-section song-detail-card"><button type="button" class="song-section-head-btn" aria-expanded="${currentSongNotesExpanded ? 'true' : 'false'}" onclick="toggleSongNotesExpanded_()"><span class="song-detail-section-title">Tonarten & Noten</span><span class="song-section-head-right"><span>${currentSongNotesExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongNotesExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button>${currentSongNotesExpanded ? `<div class="song-note-chip-row">${renderSongKeyResourcesTable_(activeArrangement, song)}</div>` : ``}</div>` : ``}
+          ${(hasArrangementText || currentSongTextState) ? `<div class="song-detail-section song-detail-card"><button type="button" class="song-section-head-btn" aria-expanded="${currentSongChordsExpanded ? 'true' : 'false'}" onclick="toggleSongChordsExpanded_()"><span class="song-detail-section-title">Akkorde & Text</span><span class="song-section-head-right"><span>${currentSongChordsExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongChordsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button>${currentSongChordsExpanded ? `<div id="song-text-viewer-slot"></div>` : ``}</div>` : ``}
           <div class="song-detail-section song-detail-card">
             <button type="button" class="song-section-head-btn" aria-expanded="${currentSongFilesExpanded ? 'true' : 'false'}" onclick="toggleSongFilesExpanded_()"><span class="song-detail-section-title">Dateien</span><span class="song-section-head-right"><span>${currentSongFilesExpanded ? 'Ausblenden' : 'Anzeigen'}</span><i class="fas ${currentSongFilesExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></span></button>
-            ${currentSongFilesExpanded ? `<div class="action-grid" id="song-detail-actions"></div><div id="song-text-viewer-slot"></div>${embedUrls.map((embedUrl, idx) => `<div class="song-file-video-wrap"><div style="position:relative;width:100%;padding-top:56.25%;border-radius:16px;overflow:hidden;background:#000;"><iframe src="${escapeAttr(embedUrl)}" title="Song Video ${idx + 1}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe></div></div>`).join('')}` : ``}
+            ${currentSongFilesExpanded ? `<div class="action-grid" id="song-detail-actions"></div>${embedUrls.map((embedUrl, idx) => `<div class="song-file-video-wrap"><div style="position:relative;width:100%;padding-top:56.25%;border-radius:16px;overflow:hidden;background:#000;"><iframe src="${escapeAttr(embedUrl)}" title="Song Video ${idx + 1}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe></div></div>`).join('')}` : ``}
           </div>
           <div style="height:12px;"></div>
         `;
@@ -13960,11 +14016,17 @@
         const actions = document.getElementById('song-detail-actions');
         if (actions) {
           const html = `
-            ${hasArrangementText ? `<button class="btn btn-secondary" type="button" onclick="openSongArrangementTextViewer_()"><i class="fas fa-align-left"></i><span>Akkorde & Text</span></button>` : ``}
             ${renderGroupedSongAssets_(allAssets)}
             ${ytUrl ? `<button class="btn btn-secondary" type="button" onclick="openSongsPlayerForUrl_('${escapeAttr(ytUrl)}')"><i class="fab fa-youtube"></i><span>YouTube</span></button>` : ``}
           `;
           actions.innerHTML = html.trim() || '<div class="service-empty-box">Keine Links vorhanden.</div>';
+        }
+        if (currentSongChordsExpanded) {
+          if (currentSongTextState?.sourceType === 'external') {
+            if (String(currentSongTextState.rawText || '').trim()) refreshSongTextViewer_();
+          } else if (ensureSongArrangementTextState_(song, activeArrangement)) {
+            refreshSongTextViewer_();
+          }
         }
       }
 
@@ -17002,6 +17064,37 @@ function updateBottomNavHighlight_() {
             }, 40);
           }
         } catch (e) {}
+      }
+
+      function routeFilterLabel_(key) {
+        const labels = {
+          birthday_today: 'Heute',
+          birthday_week: 'Diese Woche',
+          birthday_month: 'Dieser Monat'
+        };
+        return labels[String(key || '')] || String(key || '');
+      }
+
+      function applyRouteFromUrl_() {
+        let params = null;
+        try {
+          params = new URLSearchParams(String(window.location.search || ''));
+        } catch (e) {
+          return false;
+        }
+        if (!params) return false;
+        const tab = String(params.get('tab') || '').trim().toLowerCase();
+        const filter = String(params.get('filter') || params.get('dashboardFilter') || '').trim();
+        if (tab !== 'contacts' && !filter) return false;
+        if (filter) {
+          setTimeout(() => openDashboardFilter(filter, routeFilterLabel_(filter)), 80);
+          return true;
+        }
+        if (tab === 'contacts') {
+          switchTab('contacts');
+          return true;
+        }
+        return false;
       }
       async function printCurrentContacts_() {
         if (!canPrintContacts_()) {
@@ -25079,6 +25172,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         syncOnAirBannerToggleUi_();
         maybeRenderIdleContacts_();
         requestAnimationFrame(updateBottomNavHighlight_);
+        applyRouteFromUrl_();
         applyShareStateFromUrl_();
         try {
           startGlobalLiveBannerWatcher_();

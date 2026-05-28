@@ -132,7 +132,7 @@ try {
                 'title' => count($todayItems) === 1 ? 'Geburtstag heute' : 'Geburtstage heute',
                 'body' => birthday_push_body($todayItems, false),
                 'tag' => 'clz-birthdays-today-' . $today->format('Y-m-d'),
-                'url' => '/?tab=contacts',
+                'url' => '/?tab=contacts&filter=birthday_today',
             ],
         ]);
     }
@@ -144,7 +144,7 @@ try {
                 'title' => 'Geburtstage diese Woche',
                 'body' => birthday_push_body($weekItems, true),
                 'tag' => 'clz-birthdays-week-' . $today->format('o-W'),
-                'url' => '/?tab=contacts',
+                'url' => '/?tab=contacts&filter=birthday_week',
             ],
         ]);
     }
