@@ -5523,6 +5523,88 @@
     .tools-title { font-weight: 900; }
     .tools-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
+    .tools-notification-row {
+      align-items: flex-start;
+    }
+
+    .tools-notification-row .tools-left {
+      flex: 1 1 auto;
+      min-width: 0;
+      align-items: flex-start;
+    }
+
+    .tools-notification-panel {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .tools-notification-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .tools-push-action {
+      display: flex;
+      justify-content: flex-start;
+    }
+
+    .tools-push-action .btn {
+      min-height: 34px;
+      padding: 0 12px;
+      font-size: 12px;
+      border-radius: 14px;
+    }
+
+    .tools-section-label {
+      margin-top: 2px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .tools-toggle-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .tools-toggle-row {
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 8px 10px 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--primary) 3%, var(--card-bg));
+    }
+
+    .tools-toggle-label {
+      min-width: 0;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 520px) {
+      .tools-notification-row {
+        align-items: flex-start;
+      }
+
+      .tools-notification-head {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+    }
+
     .subhead {
       font-weight: 900;
       margin: 10px 0 6px;
@@ -8764,32 +8846,40 @@
           </div>
         </div>
 
-        <div class="tools-row member-only">
+        <div class="tools-row tools-notification-row member-only">
           <div class="tools-left">
             <i class="fas fa-bell"></i>
-            <div>
-              <div class="tools-title">Benachrichtigungen</div>
-              <div id="user-preferences-status" class="tools-sub">Pro Login gespeichert</div>
-            </div>
-          </div>
-
-          <div style="display:grid;gap:8px;justify-items:end;">
-            <button id="push-notification-btn" class="btn btn-secondary" type="button" onclick="togglePushNotifications_()" style="min-height:32px;padding:0 12px;font-size:12px;">
-              <i class="fas fa-bell"></i><span>Push aktivieren</span>
-            </button>
-            <div class="switch-row" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text-muted);">
-              <span>Geburtstage heute</span>
-              <label class="switch" aria-label="Geburtstage heute">
-                <input id="pref-birthday-today" type="checkbox" onchange="setUserNotificationPreference_('birthdaysToday', this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div class="switch-row" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text-muted);">
-              <span>Diese Woche</span>
-              <label class="switch" aria-label="Geburtstage diese Woche">
-                <input id="pref-birthday-week" type="checkbox" onchange="setUserNotificationPreference_('birthdaysWeek', this.checked)">
-                <span class="slider"></span>
-              </label>
+            <div class="tools-notification-panel">
+              <div class="tools-notification-head">
+                <div>
+                  <div class="tools-title">Benachrichtigungen</div>
+                  <div id="user-preferences-status" class="tools-sub">Pro Login gespeichert</div>
+                </div>
+                <div class="tools-push-action">
+                  <button id="push-notification-btn" class="btn btn-secondary" type="button" onclick="togglePushNotifications_()">
+                    <i class="fas fa-bell"></i><span>Push aktivieren</span>
+                  </button>
+                </div>
+              </div>
+              <div>
+                <div class="tools-section-label">Geburtstage</div>
+                <div class="tools-toggle-list">
+                  <div class="tools-toggle-row">
+                    <span class="tools-toggle-label">Heute</span>
+                    <label class="switch" aria-label="Geburtstage heute">
+                      <input id="pref-birthday-today" type="checkbox" onchange="setUserNotificationPreference_('birthdaysToday', this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                  <div class="tools-toggle-row">
+                    <span class="tools-toggle-label">Diese Woche</span>
+                    <label class="switch" aria-label="Geburtstage diese Woche">
+                      <input id="pref-birthday-week" type="checkbox" onchange="setUserNotificationPreference_('birthdaysWeek', this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
