@@ -1041,6 +1041,90 @@
       opacity: 0;
     }
 
+    .auth-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 2600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(37,99,235,0.10), transparent 42%),
+        linear-gradient(180deg, rgba(248,250,252,0.98), rgba(255,255,255,0.98));
+    }
+
+    .auth-gate[hidden] {
+      display: none;
+    }
+
+    .auth-card {
+      width: min(420px, 100%);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      background: var(--card-bg);
+      padding: 28px 24px 24px;
+      text-align: center;
+      box-shadow: 0 24px 70px rgba(2,6,23,0.16);
+    }
+
+    .auth-logo {
+      width: 74px;
+      height: 74px;
+      margin: 0 auto 16px;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #eff6ff;
+      overflow: hidden;
+    }
+
+    .auth-logo img {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+    }
+
+    .auth-title {
+      font-size: 25px;
+      line-height: 1.1;
+      font-weight: 950;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .auth-subtitle {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin: 0 auto 20px;
+      max-width: 320px;
+    }
+
+    .auth-actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .auth-actions .btn {
+      justify-content: center;
+      min-height: 46px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    body.dark .auth-gate {
+      background:
+        radial-gradient(circle at 50% 18%, rgba(148,163,184,0.09), transparent 42%),
+        linear-gradient(180deg, rgba(11,18,32,0.98), rgba(11,18,32,0.98));
+    }
+
+    body.dark .auth-logo {
+      background: rgba(37,99,235,0.18);
+    }
+
     .welcome-card {
       position: relative;
       width: min(100%, 448px);
@@ -7912,6 +7996,26 @@
   <body>
 <div id="toast" class="global-toast"></div>
 
+<div id="auth-gate" class="auth-gate" hidden>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img
+        src="https://www.clzspiez.ch/app/themes/wly.wp.theme/assets/images/logo-bplus-mobile.svg"
+        alt="CLZ Logo"
+        loading="eager"
+        decoding="sync"
+      >
+    </div>
+    <div class="auth-title">CLZ APP</div>
+    <div id="auth-gate-message" class="auth-subtitle">Melde dich mit deinem Google-Konto an, um Kontakte, Kalender, Songs und Übersicht zu laden.</div>
+    <div class="auth-actions">
+      <button class="btn btn-primary" type="button" onclick="startGoogleLogin_()">
+        <i class="fab fa-google"></i><span>Anmelden</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="welcome-overlay" class="welcome-overlay show">
   <div class="welcome-card">
     <div class="welcome-mark">
@@ -9650,6 +9754,40 @@
         setTimeout(keepAuthSessionAlive_, 45 * 1000);
       }
 
+      async function loadAuthStatus_() {
+        const response = await fetch('/api/auth/me.php', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) throw new Error(data?.error || 'Loginstatus konnte nicht geladen werden.');
+        return data;
+      }
+
+      function startGoogleLogin_() {
+        window.location.href = '/api/auth/google-start.php';
+      }
+
+      function showLoginGate_(message) {
+        const gate = document.getElementById('auth-gate');
+        const text = document.getElementById('auth-gate-message');
+        if (text && message) text.textContent = message;
+        if (gate) gate.hidden = false;
+        authExpiredShown = true;
+        try {
+          localStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
+          sessionStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
+        } catch (e) {}
+        hideWelcomeOverlay_();
+      }
+
+      function hideLoginGate_() {
+        const gate = document.getElementById('auth-gate');
+        if (gate) gate.hidden = true;
+        authExpiredShown = false;
+      }
+
       function toast(msg, ms = 1800) {
         const el = document.getElementById("toast");
         if (!el) return;
@@ -9661,8 +9799,17 @@
 
       function logoutApp_() {
         try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready
+              .then(reg => reg.pushManager?.getSubscription ? reg.pushManager.getSubscription() : null)
+              .then(sub => sub ? sub.unsubscribe() : null)
+              .catch(() => {});
+          }
           localStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
           sessionStorage.removeItem(USER_PERMISSIONS_CACHE_KEY);
+          Object.keys(localStorage).forEach(k => {
+            if (String(k || '').startsWith('clz_')) localStorage.removeItem(k);
+          });
         } catch (e) {}
         window.location.href = '/api/auth/logout.php';
       }
@@ -24408,11 +24555,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
-        // Permissions aus localStorage SOFORT anwenden, damit Menüpunkte für wiederkehrende User instant korrekt stehen
-        // (vor dem ganzen DOM-Setup, weil applyAccessControlUi_ nur display:none/'' auf die Nav-Buttons setzt)
-        applyCachedPermissions_();
-        applyAccessControlUi_();
-
         const savedRaw = String(localStorage.getItem(DARK_KEY) || "").trim().toLowerCase();
         const migratedMode = savedRaw === "1"
           ? DARK_MODE_DARK
@@ -24433,6 +24575,29 @@ function dashDynamicValueCard_(icon, prefix, item) {
             });
           }
         } catch (e) {}
+
+        let initialAuth = null;
+        try {
+          initialAuth = await loadAuthStatus_();
+        } catch (e) {
+          showLoginGate_('Loginstatus konnte nicht geladen werden. Prüfe die Verbindung und melde dich erneut an.');
+          return;
+        }
+
+        if (!initialAuth?.user?.isAuthenticated || !String(initialAuth?.user?.email || '').trim()) {
+          showLoginGate_(initialAuth?.googleConfigured === false
+            ? 'Google Login ist auf dem Server noch nicht konfiguriert.'
+            : 'Melde dich mit deinem Google-Konto an, um Kontakte, Kalender, Songs und Übersicht zu laden.');
+          return;
+        }
+
+        hideLoginGate_();
+        currentLoginEmail = String(initialAuth.user.email || '').trim();
+        currentUserRole = String(initialAuth.user.role || 'guest').trim().toLowerCase() || 'guest';
+        currentPermissions = normalizePermissions_(initialAuth.user.permissions || {});
+        currentUserImpersonating = initialAuth.user.impersonating || null;
+        persistPermissionsCache_(initialAuth.user || {});
+        applyAccessControlUi_();
 
         restoreCalendarFilterState_();
         loadPrintTitleOverrides_();
