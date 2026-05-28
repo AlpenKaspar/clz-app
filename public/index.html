@@ -13804,14 +13804,83 @@
         downloadTextFile_(songSafeFileName_(`${songSheetTitle_()}${key}`, 'chopro.txt'), chordPro);
       }
 
+      function buildSongPrintPreviewHtml_(documentHtml, title) {
+        const safeTitle = escapeHtml(String(title || 'Song PDF').trim() || 'Song PDF');
+        const toolbarCss = `
+          <style>
+            @media screen {
+              body { padding-top:74px!important; }
+              .song-print-preview-toolbar {
+                position:fixed;left:0;right:0;top:0;z-index:999999;
+                display:flex;align-items:center;justify-content:space-between;gap:10px;
+                padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;
+                background:rgba(255,255,255,.96);backdrop-filter:blur(14px);
+                border-bottom:1px solid #dbe4ef;
+                font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+              }
+              .song-print-preview-title {
+                min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                font-size:14px;font-weight:900;color:#0f172a;
+              }
+              .song-print-preview-actions { display:flex;align-items:center;gap:8px;flex:0 0 auto; }
+              .song-print-preview-btn {
+                border:1px solid #dbe4ef;border-radius:14px;background:#fff;color:#0f172a;
+                min-height:40px;padding:0 13px;font-size:14px;font-weight:900;
+              }
+              .song-print-preview-btn.primary { border-color:#2563eb;background:#2563eb;color:#fff; }
+            }
+            @media print {
+              body { padding-top:0!important; }
+              .song-print-preview-toolbar { display:none!important; }
+            }
+          </style>
+        `;
+        const toolbar = `
+          <div class="song-print-preview-toolbar">
+            <div class="song-print-preview-title">${safeTitle}</div>
+            <div class="song-print-preview-actions">
+              <button class="song-print-preview-btn primary" type="button" onclick="window.print()">Drucken/PDF</button>
+              <button class="song-print-preview-btn" type="button" onclick="closeSongPrintPreview_()">Schliessen</button>
+            </div>
+          </div>
+          <script>
+            function closeSongPrintPreview_() {
+              try {
+                if (window.opener) {
+                  window.close();
+                  return;
+                }
+              } catch (e) {}
+              try {
+                if (history.length > 1) {
+                  history.back();
+                  return;
+                }
+              } catch (e) {}
+              try { window.close(); } catch (e) {}
+            }
+          <\/script>
+        `;
+        return String(documentHtml || '')
+          .replace('</head>', `${toolbarCss}</head>`)
+          .replace(/<body([^>]*)>/i, `<body$1>${toolbar}`);
+      }
+
       function printSongHtmlDocument_(documentHtml, title) {
         const win = window.open('', '_blank');
         if (win) {
+          const iosPrintPreview = isIOSAudioDevice_();
           win.document.open();
-          win.document.write(documentHtml);
+          win.document.write(iosPrintPreview ? buildSongPrintPreviewHtml_(documentHtml, title) : documentHtml);
           win.document.close();
           win.focus();
-          setTimeout(() => win.print(), 250);
+          if (!iosPrintPreview) setTimeout(() => win.print(), 250);
+          return;
+        }
+
+        if (isIOSAudioDevice_()) {
+          const blob = new Blob([buildSongPrintPreviewHtml_(documentHtml, title)], { type: 'text/html;charset=utf-8' });
+          window.location.href = URL.createObjectURL(blob);
           return;
         }
 
