@@ -3607,6 +3607,21 @@
       font-size: 13px;
     }
 
+    .prayer-member-new-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #2563eb;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
     .prayer-member-age {
       margin-top: 2px;
       font-size: 13px;
@@ -3975,6 +3990,11 @@
 
     body.dark .prayer-member-name {
       color: #e2e8f0;
+    }
+
+    body.dark .prayer-member-new-badge {
+      background: rgba(37, 99, 235, .22);
+      color: #bfdbfe;
     }
 
     body.dark .prayer-member-avatar {
@@ -8650,6 +8670,9 @@
           </div>
 
           <div style="display:grid;gap:8px;justify-items:end;">
+            <button id="push-notification-btn" class="btn btn-secondary" type="button" onclick="togglePushNotifications_()" style="min-height:32px;padding:0 12px;font-size:12px;">
+              <i class="fas fa-bell"></i><span>Push aktivieren</span>
+            </button>
             <div class="switch-row" style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--text-muted);">
               <span>Geburtstage heute</span>
               <label class="switch" aria-label="Geburtstage heute">
@@ -8904,6 +8927,7 @@
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
       let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false } };
+      let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let adminUsersCache = [];
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
@@ -9179,11 +9203,106 @@
         const today = document.getElementById('pref-birthday-today');
         const week = document.getElementById('pref-birthday-week');
         const status = document.getElementById('user-preferences-status');
+        const pushBtn = document.getElementById('push-notification-btn');
         if (today) today.checked = !!n.birthdaysToday;
         if (week) week.checked = !!n.birthdaysWeek;
+        if (pushBtn) {
+          const icon = pushNotificationStatus.subscribed ? 'fa-bell-slash' : 'fa-bell';
+          const text = pushNotificationStatus.loading
+            ? 'Bitte warten...'
+            : (pushNotificationStatus.subscribed ? 'Push deaktivieren' : 'Push aktivieren');
+          pushBtn.disabled = !!pushNotificationStatus.loading || !pushNotificationStatus.supported || !pushNotificationStatus.enabled;
+          pushBtn.innerHTML = `<i class="fas ${icon}"></i><span>${text}</span>`;
+        }
         if (status) {
           const active = [n.birthdaysToday ? 'heute' : '', n.birthdaysWeek ? 'Woche' : ''].filter(Boolean);
-          status.textContent = active.length ? `Aktiv: ${active.join(', ')}` : 'Pro Login gespeichert';
+          const pushText = !pushNotificationStatus.supported
+            ? 'Push nicht verfügbar'
+            : (!pushNotificationStatus.enabled ? 'Push-Key fehlt' : (pushNotificationStatus.subscribed ? 'Push aktiv' : 'Push aus'));
+          status.textContent = `${active.length ? `Aktiv: ${active.join(', ')}` : 'Pro Login gespeichert'} · ${pushText}`;
+        }
+      }
+
+      function urlBase64ToUint8Array_(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+      }
+
+      function pushIsSupported_() {
+        return location.protocol === 'https:' && !!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+      }
+
+      async function refreshPushNotificationStatus_() {
+        pushNotificationStatus.supported = pushIsSupported_();
+        pushNotificationStatus.permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+        if (!pushNotificationStatus.supported) {
+          pushNotificationStatus.enabled = false;
+          pushNotificationStatus.subscribed = false;
+          renderUserPreferences_();
+          return;
+        }
+        try {
+          const data = await withGsRetry('notifications_getStatus', [], { retries: 1, retryDelay: 500 });
+          pushNotificationStatus.enabled = !!data?.enabled;
+          pushNotificationStatus.publicKey = String(data?.publicKey || '');
+          if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            pushNotificationStatus.subscribed = !!sub;
+          }
+        } catch (err) {
+          pushNotificationStatus.enabled = false;
+          pushNotificationStatus.subscribed = false;
+        }
+        renderUserPreferences_();
+      }
+
+      async function togglePushNotifications_() {
+        if (!pushIsSupported_()) {
+          toast('Push ist auf diesem Gerät nicht verfügbar', 1800);
+          return;
+        }
+        pushNotificationStatus.loading = true;
+        renderUserPreferences_();
+        try {
+          const status = await withGsRetry('notifications_getStatus', [], { retries: 1, retryDelay: 500 });
+          const publicKey = String(status?.publicKey || '');
+          if (!status?.enabled || !publicKey) {
+            toast('Push-Key fehlt auf dem Server', 2200);
+            return;
+          }
+          const reg = await navigator.serviceWorker.ready;
+          const existing = await reg.pushManager.getSubscription();
+          if (existing) {
+            const payload = existing.toJSON ? existing.toJSON() : { endpoint: existing.endpoint };
+            await existing.unsubscribe();
+            await withGsRetry('notifications_deleteSubscription', [payload], { retries: 1, retryDelay: 500 });
+            pushNotificationStatus.subscribed = false;
+            toast('Push deaktiviert', 1400);
+            return;
+          }
+          const permission = await Notification.requestPermission();
+          pushNotificationStatus.permission = permission;
+          if (permission !== 'granted') {
+            toast('Benachrichtigungen wurden nicht erlaubt', 2200);
+            return;
+          }
+          const subscription = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array_(publicKey)
+          });
+          await withGsRetry('notifications_saveSubscription', [subscription.toJSON()], { retries: 1, retryDelay: 500 });
+          pushNotificationStatus.subscribed = true;
+          toast('Push aktiviert', 1400);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 2200);
+        } finally {
+          pushNotificationStatus.loading = false;
+          refreshPushNotificationStatus_();
         }
       }
 
@@ -9194,6 +9313,8 @@
         } catch (err) {
           const status = document.getElementById('user-preferences-status');
           if (status) status.textContent = 'Einstellungen konnten nicht geladen werden';
+        } finally {
+          refreshPushNotificationStatus_();
         }
       }
 
@@ -14849,16 +14970,16 @@ function updateBottomNavHighlight_() {
 
         const renderCardHtml_ = (item, index) => {
           const members = Array.isArray(item?.members) ? item.members : [];
-          const adults = members.filter(m => !m?.isChild);
-          const children = members.filter(m => !!m?.isChild);
+          const adults = Array.isArray(item?.adults) ? item.adults : members.filter(m => !m?.isChild);
+          const children = Array.isArray(item?.children) ? item.children : members.filter(m => !!m?.isChild);
           const orderedMembers = adults.concat(children);
           const location = String(item?.location || "").trim();
           const earlyBadge = (showEarlyMessage && index === 0)
             ? `<div class="prayer-card-topline"><div class="prayer-card-early-badge"><i class="fas fa-mug-hot"></i><span>Woow du bist heute aber schon frueh dran am beten.</span></div></div>`
             : ``;
-          const newestMonths = members.some(m => !!m?.new3) ? 3 : (members.some(m => !!m?.new6) ? 6 : (members.some(m => !!m?.new12) ? 12 : 0));
+          const newestMonths = Number(item?.newMonths || 0) || (members.some(m => !!m?.new3) ? 3 : (members.some(m => !!m?.new6) ? 6 : (members.some(m => !!m?.new12) ? 12 : 0)));
           const newBadge = newestMonths ? `<div class="prayer-card-new-badge">Neu<br>${newestMonths}</div>` : ``;
-          const subtitle = item?.type === 'single' ? 'Einzelperson' : 'Familie';
+          const subtitle = String(item?.subtitle || (item?.type === 'single' ? 'Einzelperson' : 'Familie'));
           const safeTitle = String(item?.title || (item?.type === 'single' ? 'Einzelperson' : 'Familie'));
           const renderMemberRow_ = (m) => `
             <div class="prayer-member-row">
@@ -14868,7 +14989,7 @@ function updateBottomNavHighlight_() {
                   : `<span class="prayer-member-avatar prayer-member-avatar-fallback"><i class="fas fa-user"></i></span>`
                 }
                 <div class="prayer-member-main">
-                  <div class="prayer-member-name">${escapeHtml(String(m?.name || 'Person'))}${krankSet[String(m?.personId || '').trim()] ? `<i class="fas fa-heart-pulse prayer-member-pool-icon" title="Kranke"></i>` : ``}</div>
+                  <div class="prayer-member-name">${escapeHtml(String(m?.name || 'Person'))}${m?.newBadge ? `<span class="prayer-member-new-badge">${escapeHtml(String(m.newBadge))}</span>` : ``}${krankSet[String(m?.personId || '').trim()] ? `<i class="fas fa-heart-pulse prayer-member-pool-icon" title="Kranke"></i>` : ``}</div>
                   ${m?.age != null && String(m.age) !== '' ? `<div class="prayer-member-age">${escapeHtml(String(m.age))} Jahre</div>` : ``}
                 </div>
               </div>

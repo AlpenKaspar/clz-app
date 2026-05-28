@@ -49,6 +49,9 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_rebuildServerCaches' => rpc_rebuild_server_caches($user),
         'tools_loadUserPreferences' => rpc_load_user_preferences($user),
         'tools_saveUserPreferences' => rpc_save_user_preferences($args[0] ?? [], $user),
+        'notifications_getStatus' => rpc_notifications_status($user),
+        'notifications_saveSubscription' => rpc_notifications_save_subscription($args[0] ?? [], $user),
+        'notifications_deleteSubscription' => rpc_notifications_delete_subscription($args[0] ?? [], $user),
         'tools_loadUserSmartFilters' => rpc_load_user_smart_filters($user),
         'tools_saveUserSmartFilters' => rpc_save_user_smart_filters($args[0] ?? [], $user),
         'tools_importPersonen' => rpc_run_import('personen', $user),
@@ -670,6 +673,15 @@ function rpc_family_relationship_kind(string $relationship): string
 
 function rpc_prayer_member_payload(array $contact): array
 {
+    $newMonths = 0;
+    if ((bool) ($contact['new3'] ?? false)) {
+        $newMonths = 3;
+    } elseif ((bool) ($contact['new6'] ?? false)) {
+        $newMonths = 6;
+    } elseif ((bool) ($contact['new12'] ?? false)) {
+        $newMonths = 12;
+    }
+
     return [
         'personId' => rpc_str($contact['id'] ?? ''),
         'name' => rpc_str($contact['displayName'] ?? ''),
@@ -680,6 +692,8 @@ function rpc_prayer_member_payload(array $contact): array
         'new12' => (bool) ($contact['new12'] ?? false),
         'new6' => (bool) ($contact['new6'] ?? false),
         'new3' => (bool) ($contact['new3'] ?? false),
+        'newMonths' => $newMonths,
+        'newBadge' => $newMonths > 0 ? 'Neu ' . $newMonths : '',
     ];
 }
 
@@ -3085,6 +3099,122 @@ function rpc_save_user_preferences(mixed $payload, array $user): array
     return ['ok' => true, 'preferences' => $preferences];
 }
 
+function rpc_ensure_push_subscription_schema(): void
+{
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id bigint unsigned NOT NULL AUTO_INCREMENT,
+            user_id bigint unsigned NOT NULL,
+            endpoint text NOT NULL,
+            endpoint_hash char(64) NOT NULL,
+            p256dh text NULL,
+            auth text NULL,
+            user_agent text NULL,
+            is_active tinyint(1) NOT NULL DEFAULT 1,
+            last_seen_at datetime NOT NULL,
+            created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_push_endpoint_hash (endpoint_hash),
+            KEY idx_push_user_active (user_id, is_active),
+            CONSTRAINT fk_push_subscriptions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS push_notification_log (
+            id bigint unsigned NOT NULL AUTO_INCREMENT,
+            user_id bigint unsigned NOT NULL,
+            notification_key varchar(190) NOT NULL,
+            sent_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_push_notification_log_user_key (user_id, notification_key),
+            KEY idx_push_notification_log_sent (sent_at),
+            CONSTRAINT fk_push_notification_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+}
+
+function rpc_vapid_public_key(): string
+{
+    return rpc_str(env('VAPID_PUBLIC_KEY', ''));
+}
+
+function rpc_push_subscription_count(int $userId): int
+{
+    if ($userId <= 0) {
+        return 0;
+    }
+    rpc_ensure_push_subscription_schema();
+    $stmt = db()->prepare('SELECT COUNT(*) FROM push_subscriptions WHERE user_id = ? AND is_active = 1');
+    $stmt->execute([$userId]);
+    return (int) $stmt->fetchColumn();
+}
+
+function rpc_notifications_status(array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    $publicKey = rpc_vapid_public_key();
+    return [
+        'ok' => true,
+        'enabled' => $publicKey !== '',
+        'publicKey' => $publicKey,
+        'subscriptions' => rpc_push_subscription_count($userId),
+    ];
+}
+
+function rpc_notifications_save_subscription(mixed $payload, array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    if ($userId <= 0 || !is_array($payload)) {
+        return ['ok' => false, 'error' => 'Benachrichtigung konnte nicht gespeichert werden.'];
+    }
+    $endpoint = rpc_str($payload['endpoint'] ?? '');
+    $keys = is_array($payload['keys'] ?? null) ? $payload['keys'] : [];
+    $p256dh = rpc_str($keys['p256dh'] ?? '');
+    $auth = rpc_str($keys['auth'] ?? '');
+    if ($endpoint === '' || $p256dh === '' || $auth === '') {
+        return ['ok' => false, 'error' => 'Browser-Subscription ist unvollständig.'];
+    }
+
+    rpc_ensure_push_subscription_schema();
+    $hash = hash('sha256', $endpoint);
+    $userAgent = substr(rpc_str($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500);
+    $stmt = db()->prepare(
+        'INSERT INTO push_subscriptions (user_id, endpoint, endpoint_hash, p256dh, auth, user_agent, is_active, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+         ON DUPLICATE KEY UPDATE
+            user_id = VALUES(user_id),
+            endpoint = VALUES(endpoint),
+            p256dh = VALUES(p256dh),
+            auth = VALUES(auth),
+            user_agent = VALUES(user_agent),
+            is_active = 1,
+            last_seen_at = NOW()'
+    );
+    $stmt->execute([$userId, $endpoint, $hash, $p256dh, $auth, $userAgent]);
+
+    return [
+        'ok' => true,
+        'subscriptions' => rpc_push_subscription_count($userId),
+    ];
+}
+
+function rpc_notifications_delete_subscription(mixed $payload, array $user): array
+{
+    $userId = (int) ($user['id'] ?? 0);
+    $endpoint = is_array($payload) ? rpc_str($payload['endpoint'] ?? '') : '';
+    if ($userId <= 0 || $endpoint === '') {
+        return ['ok' => true, 'subscriptions' => rpc_push_subscription_count($userId)];
+    }
+    rpc_ensure_push_subscription_schema();
+    $stmt = db()->prepare('UPDATE push_subscriptions SET is_active = 0, last_seen_at = NOW() WHERE user_id = ? AND endpoint_hash = ?');
+    $stmt->execute([$userId, hash('sha256', $endpoint)]);
+    return [
+        'ok' => true,
+        'subscriptions' => rpc_push_subscription_count($userId),
+    ];
+}
+
 function rpc_prayer_deck(array $user = []): array
 {
     $contacts = array_values(array_filter(
@@ -3145,15 +3275,31 @@ function rpc_prayer_deck(array $user = []): array
         if (!$payloadMembers) {
             continue;
         }
+        $adultMembers = array_values(array_filter($payloadMembers, static fn(array $member): bool => !((bool) ($member['isChild'] ?? false))));
+        $childMembers = array_values(array_filter($payloadMembers, static fn(array $member): bool => (bool) ($member['isChild'] ?? false)));
+        $newMonths = 0;
+        foreach ([3, 6, 12] as $months) {
+            foreach ($payloadMembers as $member) {
+                if ((int) ($member['newMonths'] ?? 0) === $months) {
+                    $newMonths = $months;
+                    break 2;
+                }
+            }
+        }
         $cards[] = [
             'id' => $familyKey,
             'type' => $isSingle ? 'single' : 'family',
             'title' => $title,
+            'subtitle' => $isSingle ? 'Einzelperson' : 'Familie',
             'sortLastName' => $primaryLast ?: rpc_str($members[0]['lastName'] ?? ''),
             'sortFirstName' => rpc_str($members[0]['firstName'] ?? ($members[0]['preferredName'] ?? '')),
             'sortKey' => rpc_str($primaryLast ?: $fallbackName ?: $title),
             'location' => rpc_contact_location($members[0] ?? []),
             'members' => $payloadMembers,
+            'adults' => $adultMembers,
+            'children' => $childMembers,
+            'newMonths' => $newMonths,
+            'newBadge' => $newMonths > 0 ? 'Neu ' . $newMonths : '',
         ];
     }
 

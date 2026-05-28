@@ -303,6 +303,35 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   CONSTRAINT fk_user_preferences_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint unsigned NOT NULL,
+  endpoint text NOT NULL,
+  endpoint_hash char(64) NOT NULL,
+  p256dh text NULL,
+  auth text NULL,
+  user_agent text NULL,
+  is_active tinyint(1) NOT NULL DEFAULT 1,
+  last_seen_at datetime NOT NULL,
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_push_endpoint_hash (endpoint_hash),
+  KEY idx_push_user_active (user_id, is_active),
+  CONSTRAINT fk_push_subscriptions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS push_notification_log (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint unsigned NOT NULL,
+  notification_key varchar(190) NOT NULL,
+  sent_at datetime NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_push_notification_log_user_key (user_id, notification_key),
+  KEY idx_push_notification_log_sent (sent_at),
+  CONSTRAINT fk_push_notification_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS prayer_sessions (
   session_id varchar(120) NOT NULL,
   user_email varchar(190) NULL,
