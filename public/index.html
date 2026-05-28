@@ -5569,20 +5569,17 @@
     }
 
     .tools-toggle-list {
-      display: grid;
-      gap: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
     }
 
     .tools-toggle-row {
-      min-height: 38px;
-      display: flex;
+      min-height: 30px;
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      padding: 8px 10px 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      background: color-mix(in srgb, var(--primary) 3%, var(--card-bg));
+      justify-content: flex-start;
+      gap: 8px;
     }
 
     .tools-toggle-label {
