@@ -3027,6 +3027,7 @@ function rpc_default_user_preferences(): array
             'birthdaysWeek' => false,
             'servicesMine' => false,
         ],
+        'birthdayMessageTemplate' => '',
     ];
 }
 
@@ -3049,12 +3050,17 @@ function rpc_normalize_user_preferences(mixed $payload): array
     $defaults = rpc_default_user_preferences();
     $data = is_array($payload) ? $payload : [];
     $notifications = is_array($data['notifications'] ?? null) ? $data['notifications'] : [];
+    $birthdayMessageTemplate = rpc_str($data['birthdayMessageTemplate'] ?? $defaults['birthdayMessageTemplate']);
+    if (strlen($birthdayMessageTemplate) > 2000) {
+        $birthdayMessageTemplate = substr($birthdayMessageTemplate, 0, 2000);
+    }
     return [
         'notifications' => [
             'birthdaysToday' => (bool) ($notifications['birthdaysToday'] ?? $defaults['notifications']['birthdaysToday']),
             'birthdaysWeek' => (bool) ($notifications['birthdaysWeek'] ?? $defaults['notifications']['birthdaysWeek']),
             'servicesMine' => (bool) ($notifications['servicesMine'] ?? $defaults['notifications']['servicesMine']),
         ],
+        'birthdayMessageTemplate' => $birthdayMessageTemplate,
     ];
 }
 

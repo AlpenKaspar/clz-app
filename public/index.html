@@ -5619,6 +5619,17 @@
       box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
     }
 
+    .tools-message-collapsible {
+      display: grid;
+      gap: 10px;
+      padding-top: 12px;
+    }
+
+    .tools-message-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
     .birthday-message-btn {
       appearance: none;
       border: 1px solid rgba(217,119,6,0.22);
@@ -8937,23 +8948,6 @@
           </div>
         </div>
 
-        <div class="tools-row tools-message-row member-only">
-          <div class="tools-left">
-            <i class="fas fa-cake-candles"></i>
-            <div class="tools-message-panel">
-              <div>
-                <div class="tools-title">Geburtstagsnachricht</div>
-                <div class="tools-sub">Textblock für Kontakte mit Geburtstag heute</div>
-              </div>
-              <textarea id="birthday-message-template" class="tools-textarea" rows="3" placeholder="Alles Liebe und Gottes Segen zum Geburtstag!"></textarea>
-            </div>
-          </div>
-
-          <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
-            <i class="fas fa-floppy-disk"></i><span>Speichern</span>
-          </button>
-        </div>
-
         <div class="tools-row member-only">
           <div class="tools-left">
             <i class="fas fa-tower-broadcast"></i>
@@ -9066,6 +9060,21 @@
               </button>
             </div>
             <div id="admin-users-list" class="admin-users-list"></div>
+          </div>
+        </details>
+
+        <details class="settings-collapsible member-only">
+          <summary>Geburtstagsnachricht</summary>
+          <div class="settings-collapsible-body">
+            <div class="tools-import-note">Pro Login gespeichert. Wird beim Kuchen-Icon in Kontakte verwendet.</div>
+            <div class="tools-message-collapsible">
+              <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Alles Liebe und Gottes Segen zum Geburtstag!"></textarea>
+              <div class="tools-message-actions">
+                <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
+                  <i class="fas fa-floppy-disk"></i><span>Speichern</span>
+                </button>
+              </div>
+            </div>
           </div>
         </details>
 
@@ -9190,7 +9199,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
-      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false } };
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayMessageTemplate: "" };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
@@ -9451,18 +9460,23 @@
         const notifications = prefs && typeof prefs === 'object' && prefs.notifications && typeof prefs.notifications === 'object'
           ? prefs.notifications
           : {};
+        const template = prefs && typeof prefs === 'object'
+          ? String(prefs.birthdayMessageTemplate || '').slice(0, 2000)
+          : '';
         return {
           notifications: {
             birthdaysToday: !!notifications.birthdaysToday,
             birthdaysWeek: !!notifications.birthdaysWeek,
             servicesMine: !!notifications.servicesMine
-          }
+          },
+          birthdayMessageTemplate: template
         };
       }
 
       function applyUserPreferences_(prefs) {
         currentUserPreferences = normalizeUserPreferences_(prefs);
         renderUserPreferences_();
+        loadBirthdayMessageTemplate_();
       }
 
       function renderUserPreferences_() {
@@ -9655,13 +9669,13 @@
         }
       }
 
-      async function saveUserPreferences_() {
+      async function saveUserPreferences_(successMessage = 'Benachrichtigungen gespeichert') {
         const status = document.getElementById('user-preferences-status');
         if (status) status.textContent = 'Speichere...';
         try {
           const data = await withGsRetry('tools_saveUserPreferences', [currentUserPreferences], { retries: 1, retryDelay: 500 });
           applyUserPreferences_(data?.preferences || currentUserPreferences);
-          toast('Benachrichtigungen gespeichert', 1200);
+          if (successMessage) toast(successMessage, 1200);
         } catch (err) {
           renderUserPreferences_();
           toast(normalizeErrMsg_(err), 1800);
@@ -9689,8 +9703,15 @@
       }
 
       function loadBirthdayMessageTemplate_() {
+        const savedInPreferences = String(currentUserPreferences?.birthdayMessageTemplate || '').trim();
+        if (savedInPreferences) {
+          birthdayMessageTemplate = savedInPreferences;
+          syncBirthdayMessageTemplateUi_();
+          return;
+        }
         try {
-          const saved = localStorage.getItem(BIRTHDAY_MESSAGE_TEMPLATE_KEY);
+          const loginKey = String(currentLoginEmail || '').trim().toLowerCase();
+          const saved = localStorage.getItem(loginKey ? `${BIRTHDAY_MESSAGE_TEMPLATE_KEY}_${loginKey}` : BIRTHDAY_MESSAGE_TEMPLATE_KEY);
           birthdayMessageTemplate = saved != null ? String(saved) : defaultBirthdayMessageTemplate_();
         } catch (e) {
           birthdayMessageTemplate = defaultBirthdayMessageTemplate_();
@@ -9704,15 +9725,20 @@
         field.value = birthdayMessageTemplate || '';
       }
 
-      function saveBirthdayMessageTemplate_() {
+      async function saveBirthdayMessageTemplate_() {
         const field = document.getElementById('birthday-message-template');
         const value = String(field?.value || '').trim();
         birthdayMessageTemplate = value || defaultBirthdayMessageTemplate_();
-        try {
-          localStorage.setItem(BIRTHDAY_MESSAGE_TEMPLATE_KEY, birthdayMessageTemplate);
-        } catch (e) {}
+        currentUserPreferences = normalizeUserPreferences_({
+          ...currentUserPreferences,
+          birthdayMessageTemplate
+        });
         syncBirthdayMessageTemplateUi_();
-        toast('Geburtstagsnachricht gespeichert', 1200);
+        try {
+          const loginKey = String(currentLoginEmail || '').trim().toLowerCase();
+          localStorage.setItem(loginKey ? `${BIRTHDAY_MESSAGE_TEMPLATE_KEY}_${loginKey}` : BIRTHDAY_MESSAGE_TEMPLATE_KEY, birthdayMessageTemplate);
+        } catch (e) {}
+        await saveUserPreferences_('Geburtstagsnachricht gespeichert');
       }
 
       function getBirthdayMessageTemplate_() {
