@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clz-app-shell-v3';
+const CACHE_NAME = 'clz-app-shell-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -51,19 +51,38 @@ self.addEventListener('push', event => {
     data = {};
   }
 
-  const title = data.title || 'CLZ Spiez';
-  const options = {
-    body: data.body || 'Neue Geburtstagsinfos sind verfügbar.',
-    icon: data.icon || 'https://rollsimply.com/elvanto-icon.png',
-    badge: data.badge || 'https://rollsimply.com/elvanto-icon.png',
-    tag: data.tag || 'clz-notification',
-    renotify: !!data.renotify,
-    data: {
-      url: data.url || '/'
+  const show = async () => {
+    if (!data.title && !data.body) {
+      try {
+        const res = await fetch('/api/birthday-push-summary.php', {
+          cache: 'no-store',
+          credentials: 'same-origin'
+        });
+        if (res.ok) {
+          const summary = await res.json();
+          if (summary && summary.ok && summary.notification) {
+            data = Object.assign({}, data, summary.notification);
+          }
+        }
+      } catch (e) {}
     }
+
+    const title = data.title || 'CLZ Spiez';
+    const options = {
+      body: data.body || 'Öffne die App für aktuelle Geburtstage.',
+      icon: data.icon || 'https://rollsimply.com/elvanto-icon.png',
+      badge: data.badge || 'https://rollsimply.com/elvanto-icon.png',
+      tag: data.tag || 'clz-notification',
+      renotify: !!data.renotify,
+      data: {
+        url: data.url || '/'
+      }
+    };
+
+    return self.registration.showNotification(title, options);
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(show());
 });
 
 self.addEventListener('notificationclick', event => {
