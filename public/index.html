@@ -12873,12 +12873,22 @@
             } else if (['comment', 'c', 'comment_italic', 'ci'].includes(key) && value) {
               html.push(`<div class="song-chart-section">${escapeHtml(value)}</div>`);
             } else if (/^(start_of_|soc|sov|sob|sop)/.test(key)) {
-              html.push(`<div class="song-chart-section">${escapeHtml(value || key.replace(/^start_of_/, '').toUpperCase())}</div>`);
+              const sectionLabel = songDirectiveSectionLabel_(key, value) || value || key.replace(/^start_of_/, '').toUpperCase();
+              html.push(`<div class="song-chart-section">${escapeHtml(sectionLabel)}</div>`);
             }
             return;
           }
           if (!trimmed) {
             html.push('<div class="song-chart-line is-blank"></div>');
+            return;
+          }
+          const sectionStart = parseSongSectionStart_(line);
+          if (sectionStart) {
+            html.push(`<div class="song-chart-section">${escapeHtml(sectionStart.label)}</div>`);
+            if (sectionStart.rest) {
+              const renderedRest = escapeHtml(sectionStart.rest).replace(/\[([^\]]+)\]/g, '<span class="song-chart-chord">[$1]</span>');
+              html.push(`<div class="song-chart-line">${renderedRest}</div>`);
+            }
             return;
           }
           if (/^(verse|vers|chorus|bridge|intro|outro|tag|pre.?chorus|instrumental|zwischenspiel)\b/i.test(trimmed.replace(/:$/, ''))) {
@@ -13033,6 +13043,44 @@
         return '';
       }
 
+      function looksLikeSongChordContent_(value) {
+        const text = String(value || '').trim();
+        if (!text) return false;
+        if (/[|]/.test(text) || /\[[A-G](?:#|b)?[^\]]*\]/i.test(text)) return true;
+        const tokens = text
+          .replace(/[(),.;:]+/g, ' ')
+          .split(/\s+/)
+          .map(token => token.trim())
+          .filter(Boolean);
+        if (!tokens.length || tokens.length > 6) return false;
+        const chordTokens = tokens.filter(token => /^[A-G](?:#|b)?m?(?:maj|min|sus|dim|aug|add|[0-9()+#b/.-])*$/i.test(token));
+        return chordTokens.length > 0 && chordTokens.length === tokens.length;
+      }
+
+      function parseSongSectionStart_(line) {
+        const trimmed = String(line || '').trim();
+        if (!trimmed) return null;
+        const exact = parseSongSectionHeading_(trimmed);
+        if (exact) return { label: exact, rest: '' };
+
+        const bracket = trimmed.match(/^\[([^\]]+)\]\s*(.+)$/);
+        if (bracket && looksLikeSongSectionLabel_(bracket[1])) {
+          return { label: formatSongSectionLabel_(bracket[1]), rest: String(bracket[2] || '').trim() };
+        }
+
+        const colon = trimmed.match(/^(.{1,42}?)\s*:\s*(.+)$/);
+        if (colon && looksLikeSongSectionLabel_(colon[1])) {
+          return { label: formatSongSectionLabel_(colon[1]), rest: String(colon[2] || '').trim() };
+        }
+
+        const prefix = trimmed.match(/^((?:intro|outro|tag|bridge|chorus|refrain|vers(?:e)?|strophe|pre[\s-]*chorus|prechorus|instrumental|zwischenspiel|ending|ende)(?:\s*\d+[a-z]?)?)\s+(.+)$/i);
+        if (prefix && looksLikeSongSectionLabel_(prefix[1]) && looksLikeSongChordContent_(prefix[2])) {
+          return { label: formatSongSectionLabel_(prefix[1]), rest: String(prefix[2] || '').trim() };
+        }
+
+        return null;
+      }
+
       function parseSongSectionHeading_(line) {
         const trimmed = String(line || '').trim();
         if (!trimmed) return '';
@@ -13073,11 +13121,12 @@
         };
 
         lines.forEach((line) => {
-          const heading = parseSongSectionHeading_(line);
-          if (heading) {
+          const sectionStart = parseSongSectionStart_(line);
+          if (sectionStart) {
             flush();
             sawHeading = true;
-            current = { label: heading, lines: [] };
+            current = { label: sectionStart.label, lines: [] };
+            if (sectionStart.rest) current.lines.push(sectionStart.rest);
             return;
           }
           if (!current && !sawHeading && isSongMetadataDirective_(line)) {
