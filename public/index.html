@@ -6645,14 +6645,6 @@
       margin-top: 8px;
     }
 
-    .calendar-agenda-empty-day {
-      padding: 3px 0 14px;
-      color: var(--text-muted);
-      font-size: 13px;
-      line-height: 1.25;
-      font-weight: 750;
-    }
-
     .calendar-agenda-today-btn {
       position: fixed;
       left: 50%;
@@ -9844,6 +9836,8 @@
       const CONTACT_PAGE_SIZE = 100;
 
       let allEvents = [];
+      let calendarLoadedStartIso = "";
+      let calendarLoadedEndIso = "";
       let activeCalendarFilters = [];
       let calLoadTimer = null;
       let calendarIsLoading = false;
@@ -10029,7 +10023,11 @@
         calendarLayoutMode = currentUserPreferences.calendarLayoutMode || calendarLayoutMode || 'list';
         renderCalendarLayoutSwitch_();
         if (previousCalendarLayout !== calendarLayoutMode && currentTab === 'calendar') {
-          filterCalendar({ allowWhileLoading: true });
+          if (!calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
+            loadCalendar(true);
+          } else {
+            filterCalendar({ allowWhileLoading: true });
+          }
         }
         renderUserPreferences_();
         loadBirthdayMessageTemplate_();
@@ -19511,7 +19509,11 @@ function updateBottomNavHighlight_() {
         calendarAgendaActiveDayKey = "";
         persistCalendarLayoutModeLocal_();
         renderCalendarLayoutSwitch_();
-        filterCalendar({ allowWhileLoading: true });
+        if (!calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
+          loadCalendar(true);
+        } else {
+          filterCalendar({ allowWhileLoading: true });
+        }
         saveCalendarLayoutPreference_();
       }
 
@@ -19621,8 +19623,11 @@ function updateBottomNavHighlight_() {
             return false;
           }
           setDefaultCalendarRange_();
-          const startIso = String(document.getElementById('cal-start')?.value || '').trim();
-          const endIso = String(document.getElementById('cal-end')?.value || '').trim();
+          const range = options.startIso && options.endIso
+            ? { startIso: String(options.startIso || '').trim(), endIso: String(options.endIso || '').trim() }
+            : getCalendarLoadRange_();
+          const startIso = range.startIso;
+          const endIso = range.endIso;
           const personId = String(contact?.id || '').trim();
           const rangeKey = `${personId}|${startIso}|${endIso}`;
           if (!options.force && calendarAssignedPersonFilter.personId === personId && calendarAssignedPersonFilter.rangeKey === rangeKey) {
@@ -23144,9 +23149,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
         try {
           setDefaultCalendarRange_();
 
-          const startIso = document.getElementById("cal-start").value;
-          const endIso = document.getElementById("cal-end").value;
-          await refreshCalendarMineAssignmentsIfNeeded_({ silent: true });
+          const loadRange = getCalendarLoadRange_();
+          const startIso = loadRange.startIso;
+          const endIso = loadRange.endIso;
+          await refreshCalendarMineAssignmentsIfNeeded_({ silent: true, startIso, endIso });
 
           const hadEventsBeforeLoad = Array.isArray(allEvents) && allEvents.length > 0;
           if (showLoading && !hadEventsBeforeLoad) {
@@ -23159,6 +23165,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           const data = await withGsRetry("getCalendarEventsRange", [startIso, endIso], { retries: 2, retryDelay: 700 });
           allEvents = data?.events || [];
+          calendarLoadedStartIso = startIso;
+          calendarLoadedEndIso = endIso;
           filteredCalendarEvents = allEvents.slice();
           renderCalendarChips(data?.categories || []);
           filterCalendar();
@@ -23199,6 +23207,59 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         startEl.value = toIsoDate_(start);
         endEl.value = toIsoDate_(end);
+      }
+
+      function getCalendarInputRange_() {
+        setDefaultCalendarRange_();
+        return {
+          startIso: String(document.getElementById("cal-start")?.value || "").trim(),
+          endIso: String(document.getElementById("cal-end")?.value || "").trim()
+        };
+      }
+
+      function getCalendarAgendaLoadRange_() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selected = parseIsoDateKey_(calendarAgendaActiveDayKey);
+        const base = selected || today;
+        const start = new Date(Math.min(
+          addCalendarAgendaDays_(today, -90).getTime(),
+          addCalendarAgendaDays_(base, -30).getTime()
+        ));
+        const end = new Date(Math.max(
+          addCalendarAgendaDays_(today, 365).getTime(),
+          addCalendarAgendaDays_(base, 180).getTime()
+        ));
+        return {
+          startIso: toIsoDate_(start),
+          endIso: toIsoDate_(end)
+        };
+      }
+
+      function getCalendarLoadRange_() {
+        return normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda'
+          ? getCalendarAgendaLoadRange_()
+          : getCalendarInputRange_();
+      }
+
+      function calendarLoadedRangeCovers_(range) {
+        const startIso = String(range?.startIso || '').trim();
+        const endIso = String(range?.endIso || '').trim();
+        if (!startIso || !endIso || !calendarLoadedStartIso || !calendarLoadedEndIso) return false;
+        return calendarLoadedStartIso <= startIso && calendarLoadedEndIso >= endIso;
+      }
+
+      function calendarEventOverlapsIsoRange_(ev, startIso, endIso) {
+        const start = parseGermanDate_(ev?.StartDatum || '');
+        if (!start) return true;
+        const end = parseGermanDate_(ev?.EndDatum || ev?.StartDatum || '') || start;
+        const eventStart = calendarDateKeyFromDate_(start);
+        const eventEnd = calendarDateKeyFromDate_(end);
+        const rangeStart = String(startIso || '').trim();
+        const rangeEnd = String(endIso || '').trim();
+        if (rangeEnd && eventStart > rangeEnd) return false;
+        if (rangeStart && eventEnd < rangeStart) return false;
+        return true;
       }
 
       function onCalendarRangeChanged() {
@@ -23260,6 +23321,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function shouldHidePastCalendarEvents_() {
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda') return false;
         const startIso = String(document.getElementById('cal-start')?.value || '').trim();
         if (!startIso) return true;
         const selectedStart = new Date(startIso + 'T00:00:00');
@@ -23284,8 +23346,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
 
         const hidePastEvents = shouldHidePastCalendarEvents_();
+        const inputRange = getCalendarInputRange_();
         const filtered = allEvents.filter(e => {
           const matchesSearch = String(e.Bezeichnung || "").toLowerCase().includes(q);
+          const matchesDateRange = isAgendaLayout || calendarEventOverlapsIsoRange_(e, inputRange.startIso, inputRange.endIso);
           const matchesCat = activeCalendarFilters.length === 0 || activeCalendarFilters.includes(e.Kategorie);
           const matchesFlow = !onlyCalendarServicesWithFlow || /^SERVICE-/i.test(String(e._elvantoId || e.ELVANTO_ID || '').trim());
           const eventServiceKey = String(e._elvantoId || e.ELVANTO_ID || '').trim();
@@ -23296,7 +23360,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const statusNorm = String(e.Status || '').trim().toLowerCase();
           const matchesRoleVisibility = !isGuestRole_() || statusNorm === 'public';
           const isPast = hidePastEvents && isCalendarEventPast_(e);
-          return matchesSearch && matchesCat && matchesFlow && matchesAssignedPerson && matchesRoleVisibility && !isPast;
+          return matchesSearch && matchesDateRange && matchesCat && matchesFlow && matchesAssignedPerson && matchesRoleVisibility && !isPast;
         });
 
         filteredCalendarEvents = filtered.slice();
@@ -23605,12 +23669,16 @@ function dashDynamicValueCard_(icon, prefix, item) {
           selectedDate,
           addCalendarAgendaDays_(today, -42)
         ]);
-        const rangeEnd = maxCalendarAgendaDate_([
+        let rangeEnd = maxCalendarAgendaDate_([
           addCalendarAgendaDays_(lastDate, 140),
           addCalendarAgendaDays_(selectedDate, 90),
           addCalendarAgendaDays_(today, 210)
         ]);
-        const rangeStart = getCalendarAgendaStartOfWeek_(rangeStartBase);
+        let rangeStart = getCalendarAgendaStartOfWeek_(rangeStartBase);
+        const loadedStart = parseIsoDateKey_(calendarLoadedStartIso);
+        const loadedEnd = parseIsoDateKey_(calendarLoadedEndIso);
+        if (loadedStart && loadedStart > rangeStart) rangeStart = getCalendarAgendaStartOfWeek_(loadedStart);
+        if (loadedEnd && loadedEnd < rangeEnd) rangeEnd = loadedEnd;
         const diffDays = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1;
         const maxDays = Math.min(540, Math.max(220, diffDays));
         const dayData = [];
@@ -23745,23 +23813,22 @@ function dashDynamicValueCard_(icon, prefix, item) {
           calendarAgendaActiveDayKey = eventDayKeys[0];
         }
         const agendaRange = getCalendarAgendaRangeData_(items, calendarAgendaActiveDayKey);
-        const rangeDayKeys = agendaRange.dayData.map(day => day.key).filter(Boolean);
-        if (!rangeDayKeys.length) {
+        if (!agendaRange.dayData.length) {
           renderCalendarAgendaStrip_([], '');
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
-        if (!rangeDayKeys.includes(calendarAgendaActiveDayKey)) {
-          calendarAgendaActiveDayKey = rangeDayKeys.find(key => groupedByDay.has(key)) || rangeDayKeys[0];
+        if (!eventDayKeys.includes(calendarAgendaActiveDayKey)) {
+          calendarAgendaActiveDayKey = eventDayKeys.find(key => key >= calendarAgendaActiveDayKey) || eventDayKeys[eventDayKeys.length - 1] || eventDayKeys[0];
         }
         renderCalendarAgendaStrip_(items, calendarAgendaActiveDayKey);
-        box.innerHTML = rangeDayKeys.map(key => {
+        box.innerHTML = eventDayKeys.map(key => {
           const label = getCalendarAgendaSectionLabel_(key);
           const rows = (groupedByDay.get(key) || []).map(buildCalendarAgendaEventHtml_).join('');
           return `
             <section class="calendar-agenda-section" id="calendar-agenda-day-${escapeAttr(key)}" data-calendar-day="${escapeAttr(key)}">
               <div class="calendar-agenda-date-heading"><strong>${escapeHtml(label.main)}</strong><span>${escapeHtml(label.weekday)}</span></div>
-              ${rows || `<div class="calendar-agenda-empty-day">Keine Termine</div>`}
+              ${rows}
             </section>`;
         }).join('');
         ensureCalendarAgendaScrollListener_();
@@ -25146,8 +25213,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         toast("Ich suche deine geplanten Einsätze...", 2200);
         setDefaultCalendarRange_();
-        const startIso = String(document.getElementById('cal-start')?.value || '').trim();
-        const endIso = String(document.getElementById('cal-end')?.value || '').trim();
+        const range = getCalendarLoadRange_();
+        const startIso = range.startIso;
+        const endIso = range.endIso;
         const personLabel = String(currentData?.displayName || '').trim();
 
         try {
