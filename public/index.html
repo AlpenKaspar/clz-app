@@ -9390,7 +9390,7 @@
           </div>
         </div>
 
-        <div class="tools-row tools-notification-row member-only">
+        <div id="tools-notification-row" class="tools-row tools-notification-row member-only" hidden>
           <div class="tools-left">
             <i class="fas fa-bell"></i>
             <div class="tools-notification-panel">
@@ -9991,7 +9991,9 @@
         const frequencyWeekly = document.getElementById('birthday-frequency-weekly');
         const status = document.getElementById('user-preferences-status');
         const pushBtn = document.getElementById('push-notification-btn');
+        const notificationRow = document.getElementById('tools-notification-row');
         const notificationToggleDisabled = !!pushNotificationStatus.loading;
+        if (notificationRow) notificationRow.hidden = !(pushNotificationStatus.supported && pushNotificationStatus.enabled);
         if (frequencyHost) frequencyHost.dataset.mode = birthdayFrequency;
         [
           [frequencyOff, 'off'],
@@ -10038,7 +10040,23 @@
       }
 
       function pushIsSupported_() {
-        return location.protocol === 'https:' && !!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+        if (location.protocol !== 'https:') return false;
+        if (!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window)) return false;
+        if (isIosDevice_() && !isStandalonePwa_()) return false;
+        return true;
+      }
+
+      function isIosDevice_() {
+        const ua = String(navigator.userAgent || '');
+        const platform = String(navigator.platform || '');
+        return /iPad|iPhone|iPod/i.test(ua) || (platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+      }
+
+      function isStandalonePwa_() {
+        try {
+          if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+        } catch (e) {}
+        return window.navigator && window.navigator.standalone === true;
       }
 
       function serviceWorkerReadyWithTimeout_(timeoutMs = 1600) {
