@@ -4570,6 +4570,33 @@
       background: rgba(2,6,23,0.25);
     }
 
+    .song-result-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 42px;
+      background: rgba(37,99,235,0.10);
+      border: 1px solid rgba(37,99,235,0.16);
+      color: var(--primary);
+      font-size: 15px;
+      font-weight: 950;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .song-result-badge i {
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    body.dark .song-result-badge {
+      background: rgba(37,99,235,0.18);
+      border-color: rgba(96,165,250,0.25);
+    }
+
     .event-dot {
       width: 14px;
       height: 14px;
@@ -11778,6 +11805,31 @@
         return score;
       }
 
+      function songResultKeyBadgeLabel_(item) {
+        const raw = String(item?.keyName || item?.key || '').trim();
+        if (!raw) return '';
+        const first = raw
+          .split(/[\/,;|]/)[0]
+          .replace(/\b(Dur|Moll|Major|Minor|maj|min)\b/ig, '')
+          .replace(/[-_:]+/g, ' ')
+          .trim()
+          .split(/\s+/)[0] || '';
+        if (!first) return '';
+        const normalized = first
+          .replace(/^cis$/i, 'C#')
+          .replace(/^des$/i, 'Db')
+          .replace(/^dis$/i, 'D#')
+          .replace(/^es$/i, 'Eb')
+          .replace(/^fis$/i, 'F#')
+          .replace(/^ges$/i, 'Gb')
+          .replace(/^gis$/i, 'G#')
+          .replace(/^as$/i, 'Ab')
+          .replace(/^ais$/i, 'A#')
+          .replace(/^b$/i, 'Bb')
+          .replace(/^h$/i, 'B');
+        return normalized.length <= 4 ? normalized : '';
+      }
+
       function toggleSongsCategoryFilter_(cat) {
         const value = String(cat || '').trim();
         if (!value) return;
@@ -11831,6 +11883,7 @@
         box.innerHTML = filteredSongs.map(item => {
           const songId = String(item.songId || item.id || '');
           const isActive = songId && songId === String(currentSongData?.songId || currentSongData?.id || '');
+          const keyBadge = songResultKeyBadgeLabel_(item);
           const meta = [item.artist, item.album].map(v => String(v || '').trim()).filter(Boolean);
           const info = [item.keyName, item.bpm ? `${item.bpm} BPM` : '', item.arrangementsCount > 1 ? `${item.arrangementsCount} Arrangements` : '']
             .map(v => String(v || '').trim())
@@ -11838,10 +11891,13 @@
             .join(' · ');
           return `
             <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(songId)}" onclick="openSongDetail_('${escapeAttr(songId)}')">
-              <div style="flex:1;min-width:0;">
-                <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(String(item.songTitle || item.arrangementName || 'Song'))}</div>
-                ${meta.length ? `<div class="result-sub">${escapeHtml(meta.join(' · '))}</div>` : ``}
-                ${info ? `<div class="result-sub">${escapeHtml(info)}</div>` : ``}
+              <div class="result-left">
+                <span class="song-result-badge" aria-hidden="true">${keyBadge ? escapeHtml(keyBadge) : '<i class="fas fa-music"></i>'}</span>
+                <div style="flex:1;min-width:0;">
+                  <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(String(item.songTitle || item.arrangementName || 'Song'))}</div>
+                  ${meta.length ? `<div class="result-sub">${escapeHtml(meta.join(' · '))}</div>` : ``}
+                  ${info ? `<div class="result-sub">${escapeHtml(info)}</div>` : ``}
+                </div>
               </div>
               <i class="fas fa-chevron-right"></i>
             </div>
