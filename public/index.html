@@ -6672,11 +6672,19 @@
       margin-top: 8px;
     }
 
+    .calendar-agenda-empty-day {
+      padding: 3px 0 14px;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
     .calendar-agenda-today-btn {
       position: fixed;
       left: 50%;
       bottom: calc(var(--nav-height) + 39px);
-      transform: translateX(-50%);
+      transform: translateX(-50%) translateY(8px);
       z-index: 92;
       border: 1px solid var(--border-color);
       border-radius: 16px;
@@ -6687,13 +6695,22 @@
       font-size: 15px;
       font-weight: 900;
       display: none;
+      opacity: 0;
       align-items: center;
       gap: 7px;
       cursor: pointer;
+      pointer-events: none;
+      transition: opacity .38s ease, transform .38s ease;
     }
 
     #view-calendar.calendar-layout-agenda .calendar-agenda-today-btn {
       display: inline-flex;
+    }
+
+    #view-calendar.calendar-layout-agenda .calendar-agenda-today-btn.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
     }
 
     #view-calendar.view-hidden .calendar-agenda-today-btn {
@@ -6750,7 +6767,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 12px 24px rgba(37,99,235,0.30);
+      box-shadow: none;
       cursor: pointer;
       z-index: 90;
     }
@@ -15070,7 +15087,18 @@ function updateBottomNavHighlight_() {
         if (tab === 'calendar') {
           renderCalendarViewSwitch_();
           renderCalendarLayoutSwitch_();
-          if (allEvents.length === 0) { showCalendarSkeleton_(); loadCalendar(); }
+          if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda') {
+            calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+            if (allEvents.length === 0 || !calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
+              showCalendarSkeleton_();
+              loadCalendar();
+            } else {
+              filterCalendar({ allowWhileLoading: true });
+            }
+          } else if (allEvents.length === 0) {
+            showCalendarSkeleton_();
+            loadCalendar();
+          }
         }
         if (tab === 'songs') {
           if (!songsReady) { showSongsSkeleton_(); ensureSongsLiteLoaded_(false); }
@@ -19541,6 +19569,7 @@ function updateBottomNavHighlight_() {
         if (host) host.dataset.mode = mode;
         if (listBtn) listBtn.setAttribute('aria-checked', mode === 'list' ? 'true' : 'false');
         if (agendaBtn) agendaBtn.setAttribute('aria-checked', mode === 'agenda' ? 'true' : 'false');
+        syncCalendarAgendaTodayButton_();
       }
 
       async function saveCalendarLayoutPreference_() {
@@ -19562,7 +19591,7 @@ function updateBottomNavHighlight_() {
         const next = normalizeCalendarLayoutMode_(mode);
         if (calendarLayoutMode === next) return;
         calendarLayoutMode = next;
-        calendarAgendaActiveDayKey = "";
+        calendarAgendaActiveDayKey = next === 'agenda' ? calendarDateKeyFromDate_(new Date()) : "";
         persistCalendarLayoutModeLocal_();
         renderCalendarLayoutSwitch_();
         if (!calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
@@ -23656,6 +23685,18 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const activeBtn = strip.querySelector(`[data-agenda-day-key="${CSS.escape(targetKey)}"]`);
         if (activeBtn) activeBtn.classList.add('is-active');
         if (options.center) centerCalendarAgendaStripKey_(targetKey, options.center);
+        syncCalendarAgendaTodayButton_();
+      }
+
+      function syncCalendarAgendaTodayButton_() {
+        const btn = document.getElementById('calendar-agenda-today-btn');
+        if (!btn) return;
+        const todayKey = calendarDateKeyFromDate_(new Date());
+        const shouldShow = currentTab === 'calendar'
+          && normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda'
+          && !!calendarAgendaActiveDayKey
+          && calendarAgendaActiveDayKey !== todayKey;
+        btn.classList.toggle('is-visible', shouldShow);
       }
 
       function getCalendarAgendaSpanLabel_(ev) {
@@ -23865,8 +23906,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
+        const todayKey = calendarDateKeyFromDate_(new Date());
         if (!calendarAgendaActiveDayKey) {
-          calendarAgendaActiveDayKey = eventDayKeys[0];
+          calendarAgendaActiveDayKey = todayKey;
         }
         const agendaRange = getCalendarAgendaRangeData_(items, calendarAgendaActiveDayKey);
         if (!agendaRange.dayData.length) {
@@ -23874,17 +23916,23 @@ function dashDynamicValueCard_(icon, prefix, item) {
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
-        if (!eventDayKeys.includes(calendarAgendaActiveDayKey)) {
+        const rangeDayKeys = agendaRange.dayData.map(day => day.key).filter(Boolean);
+        if (!rangeDayKeys.includes(calendarAgendaActiveDayKey)) {
           calendarAgendaActiveDayKey = eventDayKeys.find(key => key >= calendarAgendaActiveDayKey) || eventDayKeys[eventDayKeys.length - 1] || eventDayKeys[0];
         }
+        const renderDayKeys = eventDayKeys.slice();
+        if (calendarAgendaActiveDayKey && rangeDayKeys.includes(calendarAgendaActiveDayKey) && !renderDayKeys.includes(calendarAgendaActiveDayKey)) {
+          renderDayKeys.push(calendarAgendaActiveDayKey);
+          renderDayKeys.sort();
+        }
         renderCalendarAgendaStrip_(items, calendarAgendaActiveDayKey);
-        box.innerHTML = eventDayKeys.map(key => {
+        box.innerHTML = renderDayKeys.map(key => {
           const label = getCalendarAgendaSectionLabel_(key);
           const rows = (groupedByDay.get(key) || []).map(buildCalendarAgendaEventHtml_).join('');
           return `
             <section class="calendar-agenda-section" id="calendar-agenda-day-${escapeAttr(key)}" data-calendar-day="${escapeAttr(key)}">
               <div class="calendar-agenda-date-heading"><strong>${escapeHtml(label.main)}</strong><span>${escapeHtml(label.weekday)}</span></div>
-              ${rows}
+              ${rows || `<div class="calendar-agenda-empty-day">Keine Termine</div>`}
             </section>`;
         }).join('');
         ensureCalendarAgendaScrollListener_();
@@ -23926,6 +23974,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (active && active !== calendarAgendaActiveDayKey) {
           calendarAgendaActiveDayKey = active;
           syncCalendarAgendaStripActive_(active, { center: 'if-needed' });
+        } else {
+          syncCalendarAgendaTodayButton_();
         }
       }
 
@@ -23937,6 +23987,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const section = document.getElementById(`calendar-agenda-day-${targetKey}`);
         if (section) {
           section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          syncCalendarAgendaTodayButton_();
           return;
         }
         const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'))
@@ -23965,7 +24016,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
         const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'));
         const next = sections.find(section => String(section.dataset.calendarDay || '') >= todayKey) || sections[0];
-        if (next?.dataset?.calendarDay) scrollCalendarAgendaToDay_(next.dataset.calendarDay);
+        if (next?.dataset?.calendarDay) {
+          calendarAgendaActiveDayKey = todayKey;
+          syncCalendarAgendaStripActive_(todayKey, { center: 'if-needed' });
+          next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       }
 
       function parseCalendarDateTime_(dateStr, timeStr, endOfDayFallback = false) {
