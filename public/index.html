@@ -6637,6 +6637,14 @@
       margin-top: 8px;
     }
 
+    .calendar-agenda-empty-day {
+      padding: 3px 0 14px;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
     .calendar-agenda-today-btn {
       position: fixed;
       left: 50%;
@@ -23558,21 +23566,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return `${hours} Std. ${mins} Min.`;
       }
 
-      function renderCalendarAgendaStrip_(items, activeKey = '') {
-        const strip = document.getElementById('calendar-agenda-strip');
-        if (!strip) return;
-        if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
-          strip.hidden = true;
-          strip.innerHTML = '';
-          return;
-        }
-
+      function getCalendarAgendaRangeData_(items, activeKey = '') {
         const list = Array.isArray(items) ? items : buildCalendarResultItems_(filteredCalendarEvents || []);
         const events = list.map(getCalendarItemEvent_).filter(Boolean);
         if (!events.length) {
-          strip.hidden = true;
-          strip.innerHTML = '';
-          return;
+          return { list: list, events: events, eventKeys: new Set(), dayData: [] };
         }
 
         const eventKeyList = events.map(calendarDateKeyFromEvent_).filter(Boolean).sort();
@@ -23599,8 +23597,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const rangeStart = getCalendarAgendaStartOfWeek_(rangeStartBase);
         const diffDays = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1;
         const maxDays = Math.min(540, Math.max(220, diffDays));
-
         const dayData = [];
+
         for (let i = 0; i < maxDays; i += 1) {
           const d = new Date(rangeStart);
           d.setDate(rangeStart.getDate() + i);
@@ -23608,6 +23606,26 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const key = calendarDateKeyFromDate_(d);
           dayData.push({ date: d, key: key, hasEvents: eventKeys.has(key) });
         }
+
+        return { list: list, events: events, eventKeys: eventKeys, dayData: dayData };
+      }
+
+      function renderCalendarAgendaStrip_(items, activeKey = '') {
+        const strip = document.getElementById('calendar-agenda-strip');
+        if (!strip) return;
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
+          strip.hidden = true;
+          strip.innerHTML = '';
+          return;
+        }
+
+        const agendaRange = getCalendarAgendaRangeData_(items, activeKey);
+        if (!agendaRange.events.length || !agendaRange.dayData.length) {
+          strip.hidden = true;
+          strip.innerHTML = '';
+          return;
+        }
+        const dayData = agendaRange.dayData;
 
         const days = dayData.map(day => `
             <button type="button" class="calendar-agenda-day ${day.key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${day.hasEvents ? 'has-events' : ''}" data-agenda-day-key="${escapeAttr(day.key)}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(day.key)}')">
@@ -23701,27 +23719,43 @@ function dashDynamicValueCard_(icon, prefix, item) {
           if (!groupedByDay.has(key)) groupedByDay.set(key, []);
           groupedByDay.get(key).push(item);
         });
-        const dayKeys = Array.from(groupedByDay.keys()).sort();
-        if (!dayKeys.length) {
+        const eventDayKeys = Array.from(groupedByDay.keys()).sort();
+        if (!eventDayKeys.length) {
           renderCalendarAgendaStrip_([], '');
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
-        if (!calendarAgendaActiveDayKey || !groupedByDay.has(calendarAgendaActiveDayKey)) {
-          calendarAgendaActiveDayKey = dayKeys[0];
+        if (!calendarAgendaActiveDayKey) {
+          calendarAgendaActiveDayKey = eventDayKeys[0];
+        }
+        const agendaRange = getCalendarAgendaRangeData_(items, calendarAgendaActiveDayKey);
+        const rangeDayKeys = agendaRange.dayData.map(day => day.key).filter(Boolean);
+        if (!rangeDayKeys.length) {
+          renderCalendarAgendaStrip_([], '');
+          box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
+          return;
+        }
+        if (!rangeDayKeys.includes(calendarAgendaActiveDayKey)) {
+          calendarAgendaActiveDayKey = rangeDayKeys.find(key => groupedByDay.has(key)) || rangeDayKeys[0];
         }
         renderCalendarAgendaStrip_(items, calendarAgendaActiveDayKey);
-        box.innerHTML = dayKeys.map(key => {
+        box.innerHTML = rangeDayKeys.map(key => {
           const label = getCalendarAgendaSectionLabel_(key);
-          const rows = groupedByDay.get(key).map(buildCalendarAgendaEventHtml_).join('');
+          const rows = (groupedByDay.get(key) || []).map(buildCalendarAgendaEventHtml_).join('');
           return `
             <section class="calendar-agenda-section" id="calendar-agenda-day-${escapeAttr(key)}" data-calendar-day="${escapeAttr(key)}">
               <div class="calendar-agenda-date-heading"><strong>${escapeHtml(label.main)}</strong><span>${escapeHtml(label.weekday)}</span></div>
-              ${rows}
+              ${rows || `<div class="calendar-agenda-empty-day">Keine Termine</div>`}
             </section>`;
         }).join('');
         ensureCalendarAgendaScrollListener_();
-        requestAnimationFrame(() => updateCalendarAgendaActiveFromScroll_());
+        requestAnimationFrame(() => {
+          const activeSection = document.getElementById(`calendar-agenda-day-${calendarAgendaActiveDayKey}`);
+          if (activeSection) {
+            activeSection.scrollIntoView({ behavior: 'auto', block: 'start' });
+          }
+          updateCalendarAgendaActiveFromScroll_();
+        });
       }
 
       function ensureCalendarAgendaScrollListener_() {
