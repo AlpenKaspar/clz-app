@@ -15088,7 +15088,9 @@ function updateBottomNavHighlight_() {
           renderCalendarViewSwitch_();
           renderCalendarLayoutSwitch_();
           if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda') {
-            calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+            if (!calendarAgendaActiveDayKey) {
+              calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+            }
             if (allEvents.length === 0 || !calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
               showCalendarSkeleton_();
               loadCalendar();
@@ -19591,7 +19593,9 @@ function updateBottomNavHighlight_() {
         const next = normalizeCalendarLayoutMode_(mode);
         if (calendarLayoutMode === next) return;
         calendarLayoutMode = next;
-        calendarAgendaActiveDayKey = next === 'agenda' ? calendarDateKeyFromDate_(new Date()) : "";
+        if (next === 'agenda' && !calendarAgendaActiveDayKey) {
+          calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+        }
         persistCalendarLayoutModeLocal_();
         renderCalendarLayoutSwitch_();
         if (!calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
@@ -20159,10 +20163,12 @@ function updateBottomNavHighlight_() {
       }
 
       function setActiveListItem_(containerSel, id) {
-        document.querySelectorAll(containerSel + " .result-item").forEach(el => el.classList.remove("active"));
+        document.querySelectorAll(containerSel + " .result-item, " + containerSel + " .calendar-agenda-event").forEach(el => el.classList.remove("active"));
         const safeId = CSS.escape(String(id));
         let el = document.querySelector(containerSel + ` .result-item[data-id="${safeId}"]`);
         if (!el) el = document.querySelector(containerSel + ` .result-item[data-related-ids~="${safeId}"]`);
+        if (!el) el = document.querySelector(containerSel + ` .calendar-agenda-event[data-id="${safeId}"]`);
+        if (!el) el = document.querySelector(containerSel + ` .calendar-agenda-event[data-related-ids~="${safeId}"]`);
         if (el) el.classList.add("active");
       }
 
@@ -23947,14 +23953,17 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       function ensureCalendarAgendaScrollListener_() {
         if (calendarAgendaScrollListenerBound) return;
-        window.addEventListener('scroll', () => {
+        const onAgendaScroll = () => {
           if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') return;
           if (calendarAgendaScrollRaf) return;
           calendarAgendaScrollRaf = requestAnimationFrame(() => {
             calendarAgendaScrollRaf = null;
             updateCalendarAgendaActiveFromScroll_();
           });
-        }, { passive: true });
+        };
+        window.addEventListener('scroll', onAgendaScroll, { passive: true });
+        const appScroller = document.getElementById('app-container');
+        if (appScroller) appScroller.addEventListener('scroll', onAgendaScroll, { passive: true });
         calendarAgendaScrollListenerBound = true;
       }
 
@@ -24130,7 +24139,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         currentEventId = id;
         currentPersonId = null;
-        if (currentTab === 'calendar') filterCalendar();
+        if (currentTab === 'calendar' && normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
+          filterCalendar();
+        }
         setActiveListItem_("#cal-results", id);
 
         const zeitAnzeige = formatCalendarEventMetaLine_(ev);
