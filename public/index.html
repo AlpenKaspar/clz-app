@@ -9544,7 +9544,7 @@
                   <span class="birthday-style-switch-thumb"></span>
                 </div>
               </div>
-              <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Alles Liebe und Gottes Segen zum Geburtstag!"></textarea>
+              <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst."></textarea>
               <div class="tools-message-actions">
                 <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
                   <i class="fas fa-floppy-disk"></i><span>Speichern</span>
@@ -9945,6 +9945,7 @@
         const template = prefs && typeof prefs === 'object'
           ? String(prefs.birthdayMessageTemplate || '').slice(0, 2000)
           : '';
+        const normalizedTemplate = isLegacyBirthdayDefaultTemplate_(template) ? '' : template;
         const rawFrequency = prefs && typeof prefs === 'object' ? String(prefs.birthdayFrequency || '').trim().toLowerCase() : '';
         const birthdayFrequency = rawFrequency === 'daily' || rawFrequency === 'today'
           ? 'daily'
@@ -9964,7 +9965,7 @@
             servicesMine: !!notifications.servicesMine
           },
           birthdayFrequency,
-          birthdayMessageTemplate: template,
+          birthdayMessageTemplate: normalizedTemplate,
           birthdayGreetingStyle,
           calendarLayoutMode: calendarLayoutPref === 'agenda' ? 'agenda' : 'list'
         };
@@ -10255,7 +10256,11 @@
       }
 
       function defaultBirthdayMessageTemplate_() {
-        return 'Alles Liebe und Gottes Segen zum Geburtstag!';
+        return 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker – egal, was kommt. Lass dich feieren! 🎉🥂';
+      }
+
+      function isLegacyBirthdayDefaultTemplate_(value) {
+        return String(value || '').trim() === 'Alles Liebe und Gottes Segen zum Geburtstag!';
       }
 
       function currentBirthdayGreetingStyle_() {
@@ -10285,7 +10290,8 @@
       }
 
       function loadBirthdayMessageTemplate_() {
-        const savedInPreferences = String(currentUserPreferences?.birthdayMessageTemplate || '').trim();
+        const savedInPreferencesRaw = String(currentUserPreferences?.birthdayMessageTemplate || '').trim();
+        const savedInPreferences = isLegacyBirthdayDefaultTemplate_(savedInPreferencesRaw) ? '' : savedInPreferencesRaw;
         if (savedInPreferences) {
           birthdayMessageTemplate = savedInPreferences;
           syncBirthdayMessageTemplateUi_();
@@ -10294,7 +10300,7 @@
         try {
           const loginKey = String(currentLoginEmail || '').trim().toLowerCase();
           const saved = localStorage.getItem(loginKey ? `${BIRTHDAY_MESSAGE_TEMPLATE_KEY}_${loginKey}` : BIRTHDAY_MESSAGE_TEMPLATE_KEY);
-          birthdayMessageTemplate = saved != null ? String(saved) : defaultBirthdayMessageTemplate_();
+          birthdayMessageTemplate = saved != null && !isLegacyBirthdayDefaultTemplate_(saved) ? String(saved) : defaultBirthdayMessageTemplate_();
         } catch (e) {
           birthdayMessageTemplate = defaultBirthdayMessageTemplate_();
         }

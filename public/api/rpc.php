@@ -3060,6 +3060,9 @@ function rpc_normalize_user_preferences(mixed $payload): array
     if (strlen($birthdayMessageTemplate) > 2000) {
         $birthdayMessageTemplate = substr($birthdayMessageTemplate, 0, 2000);
     }
+    if ($birthdayMessageTemplate === 'Alles Liebe und Gottes Segen zum Geburtstag!') {
+        $birthdayMessageTemplate = $defaults['birthdayMessageTemplate'];
+    }
     $birthdayGreetingStyle = rpc_str($data['birthdayGreetingStyle'] ?? $defaults['birthdayGreetingStyle']);
     if (!in_array($birthdayGreetingStyle, ['personal', 'formal'], true)) {
         $birthdayGreetingStyle = $defaults['birthdayGreetingStyle'];
