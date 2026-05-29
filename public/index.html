@@ -6435,8 +6435,8 @@
       display: flex;
       width: max-content;
       min-width: 100%;
-      height: 20px;
-      margin-bottom: 2px;
+      height: 24px;
+      margin-bottom: 3px;
     }
 
     .calendar-agenda-month-segment {
@@ -6446,19 +6446,74 @@
     }
 
     .calendar-agenda-month-label {
+      appearance: none;
+      border: 0;
       position: sticky;
       left: 8px;
       display: inline-flex;
       align-items: center;
-      height: 20px;
-      padding: 0 4px;
+      gap: 5px;
+      height: 24px;
+      padding: 0 6px;
       color: var(--primary);
-      font-size: 13px;
+      font-size: 15px;
       line-height: 1;
       font-weight: 950;
       letter-spacing: 0;
       background: var(--bg);
       z-index: 1;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .calendar-agenda-month-label i {
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .calendar-agenda-month-menu {
+      position: fixed;
+      z-index: 120;
+      min-width: 188px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--card-bg);
+      box-shadow: 0 16px 40px rgba(15,23,42,.14);
+    }
+
+    .calendar-agenda-month-menu-title {
+      padding: 4px 8px 8px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .calendar-agenda-month-menu-btn {
+      appearance: none;
+      border: 0;
+      width: 100%;
+      min-height: 38px;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 9px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 850;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .calendar-agenda-month-menu-btn:hover,
+    .calendar-agenda-month-menu-btn.is-active {
+      background: color-mix(in srgb, var(--primary) 12%, transparent);
+      color: var(--primary);
     }
 
     .calendar-agenda-week {
@@ -6525,6 +6580,10 @@
 
     body.dark .calendar-agenda-month-label {
       background: var(--bg);
+    }
+
+    body.dark .calendar-agenda-month-menu {
+      box-shadow: none;
     }
 
     #cal-results.calendar-agenda-results {
@@ -9924,6 +9983,8 @@
       let calendarViewMode = "all";
       let calendarLayoutMode = "list";
       let calendarAgendaActiveDayKey = "";
+      let calendarAgendaStartAtActiveOnNextRender = false;
+      let calendarAgendaMonthMenuItems = [];
       let calendarAgendaScrollRaf = null;
       let calendarAgendaScrollListenerBound = false;
       let calendarViewThumbSyncRaf = null;
@@ -15090,6 +15151,7 @@ function updateBottomNavHighlight_() {
           if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda') {
             if (!calendarAgendaActiveDayKey) {
               calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+              calendarAgendaStartAtActiveOnNextRender = true;
             }
             if (allEvents.length === 0 || !calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
               showCalendarSkeleton_();
@@ -19595,6 +19657,7 @@ function updateBottomNavHighlight_() {
         calendarLayoutMode = next;
         if (next === 'agenda' && !calendarAgendaActiveDayKey) {
           calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
+          calendarAgendaStartAtActiveOnNextRender = true;
         }
         persistCalendarLayoutModeLocal_();
         renderCalendarLayoutSwitch_();
@@ -23773,20 +23836,23 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const lastDate = parseIsoDateKey_(lastKey) || selectedDate;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const rangeStartBase = minCalendarAgendaDate_([
-          firstDate,
-          selectedDate,
-          addCalendarAgendaDays_(today, -42)
-        ]);
+        const startAtSelected = !!calendarAgendaStartAtActiveOnNextRender;
+        const rangeStartBase = startAtSelected
+          ? selectedDate
+          : minCalendarAgendaDate_([
+              firstDate,
+              selectedDate,
+              addCalendarAgendaDays_(today, -42)
+            ]);
         let rangeEnd = maxCalendarAgendaDate_([
           addCalendarAgendaDays_(lastDate, 140),
           addCalendarAgendaDays_(selectedDate, 90),
           addCalendarAgendaDays_(today, 210)
         ]);
-        let rangeStart = getCalendarAgendaStartOfWeek_(rangeStartBase);
+        let rangeStart = startAtSelected ? rangeStartBase : getCalendarAgendaStartOfWeek_(rangeStartBase);
         const loadedStart = parseIsoDateKey_(calendarLoadedStartIso);
         const loadedEnd = parseIsoDateKey_(calendarLoadedEndIso);
-        if (loadedStart && loadedStart > rangeStart) rangeStart = getCalendarAgendaStartOfWeek_(loadedStart);
+        if (loadedStart && loadedStart > rangeStart) rangeStart = startAtSelected ? loadedStart : getCalendarAgendaStartOfWeek_(loadedStart);
         if (loadedEnd && loadedEnd < rangeEnd) rangeEnd = loadedEnd;
         const diffDays = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1;
         const maxDays = Math.min(540, Math.max(220, diffDays));
@@ -23806,9 +23872,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
       function renderCalendarAgendaStrip_(items, activeKey = '') {
         const strip = document.getElementById('calendar-agenda-strip');
         if (!strip) return;
+        closeCalendarAgendaMonthMenu_();
         if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
           strip.hidden = true;
           strip.innerHTML = '';
+          calendarAgendaMonthMenuItems = [];
           return;
         }
 
@@ -23816,6 +23884,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (!agendaRange.events.length || !agendaRange.dayData.length) {
           strip.hidden = true;
           strip.innerHTML = '';
+          calendarAgendaMonthMenuItems = [];
           return;
         }
         const dayData = agendaRange.dayData;
@@ -23832,22 +23901,30 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const monthKey = `${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, '0')}`;
           const current = monthSegments[monthSegments.length - 1];
           if (!current || current.key !== monthKey) {
-            monthSegments.push({ key: monthKey, date: day.date, count: 1 });
+            monthSegments.push({ key: monthKey, date: day.date, startKey: day.key, count: 1 });
           } else {
             current.count += 1;
           }
         });
+        calendarAgendaMonthMenuItems = monthSegments.map(segment => ({
+          key: segment.key,
+          startKey: segment.startKey,
+          label: getCalendarAgendaMonthHeaderLabel_(segment.date)
+        }));
         const monthHtml = monthSegments.map(segment => {
           const width = (segment.count * 52) + (Math.max(0, segment.count - 1) * 3);
           return `
             <div class="calendar-agenda-month-segment" style="flex-basis:${Number(width)}px;">
-              <span class="calendar-agenda-month-label">${escapeHtml(getCalendarAgendaMonthHeaderLabel_(segment.date))}</span>
+              <button type="button" class="calendar-agenda-month-label" data-agenda-month-key="${escapeAttr(segment.key)}" onclick="toggleCalendarAgendaMonthMenu_(event)">
+                <span>${escapeHtml(getCalendarAgendaMonthHeaderLabel_(segment.date))}</span><i class="fas fa-chevron-down" aria-hidden="true"></i>
+              </button>
             </div>`;
         }).join('');
 
         if (!days.length) {
           strip.hidden = true;
           strip.innerHTML = '';
+          calendarAgendaMonthMenuItems = [];
           return;
         }
 
@@ -23860,6 +23937,50 @@ function dashDynamicValueCard_(icon, prefix, item) {
         requestAnimationFrame(() => {
           syncCalendarAgendaStripActive_(calendarAgendaActiveDayKey, { center: 'left', behavior: 'auto' });
         });
+      }
+
+      function closeCalendarAgendaMonthMenu_() {
+        const menu = document.getElementById('calendar-agenda-month-menu');
+        if (menu) menu.remove();
+      }
+
+      function toggleCalendarAgendaMonthMenu_(ev) {
+        if (ev) ev.stopPropagation();
+        const trigger = ev?.currentTarget || null;
+        const existing = document.getElementById('calendar-agenda-month-menu');
+        if (existing) {
+          existing.remove();
+          return;
+        }
+        if (!trigger || !calendarAgendaMonthMenuItems.length) return;
+        const activeMonth = String(calendarAgendaActiveDayKey || calendarDateKeyFromDate_(new Date())).slice(0, 7);
+        const upcoming = calendarAgendaMonthMenuItems.filter(item => String(item.key || '') >= activeMonth);
+        const items = (upcoming.length ? upcoming : calendarAgendaMonthMenuItems).slice(0, 12);
+        if (!items.length) return;
+        const menu = document.createElement('div');
+        menu.id = 'calendar-agenda-month-menu';
+        menu.className = 'calendar-agenda-month-menu';
+        menu.innerHTML = `
+          <div class="calendar-agenda-month-menu-title">Monate</div>
+          ${items.map(item => `
+            <button type="button" class="calendar-agenda-month-menu-btn ${String(item.key || '') === activeMonth ? 'is-active' : ''}" onclick="scrollCalendarAgendaToMonth_('${escapeAttr(item.startKey)}')">
+              <span>${escapeHtml(item.label || '')}</span><i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </button>
+          `).join('')}`;
+        document.body.appendChild(menu);
+        const rect = trigger.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - menuRect.width - 8));
+        const top = Math.min(rect.bottom + 7, Math.max(8, window.innerHeight - menuRect.height - 8));
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+      }
+
+      function scrollCalendarAgendaToMonth_(key) {
+        const targetKey = String(key || '').trim();
+        closeCalendarAgendaMonthMenu_();
+        if (!targetKey) return;
+        scrollCalendarAgendaToDay_(targetKey);
       }
 
       function buildCalendarAgendaEventHtml_(item) {
@@ -23939,6 +24060,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const eventDayKeys = Array.from(groupedByDay.keys()).sort();
         if (!eventDayKeys.length) {
           renderCalendarAgendaStrip_([], '');
+          calendarAgendaStartAtActiveOnNextRender = false;
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
@@ -23949,6 +24071,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const agendaRange = getCalendarAgendaRangeData_(items, calendarAgendaActiveDayKey);
         if (!agendaRange.dayData.length) {
           renderCalendarAgendaStrip_([], '');
+          calendarAgendaStartAtActiveOnNextRender = false;
           box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
           return;
         }
@@ -23973,6 +24096,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }).join('');
         ensureCalendarAgendaScrollListener_();
         positionCalendarAgendaSection_(calendarAgendaActiveDayKey, 'auto');
+        calendarAgendaStartAtActiveOnNextRender = false;
         requestAnimationFrame(() => {
           updateCalendarAgendaActiveFromScroll_();
         });
@@ -26653,6 +26777,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
           if (!inside) closeShareMenus_();
           const insidePrayer = ev.target && ev.target.closest && ev.target.closest('.prayer-head-menu-wrap');
           if (!insidePrayer) closePrayerHeadMenu_();
+          const insideAgendaMonth = ev.target && ev.target.closest && ev.target.closest('.calendar-agenda-month-menu, .calendar-agenda-month-label');
+          if (!insideAgendaMonth) closeCalendarAgendaMonthMenu_();
         });
         document.addEventListener('fullscreenchange', () => {
           const overlay = document.getElementById('song-fullscreen-overlay');
