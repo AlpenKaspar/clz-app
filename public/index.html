@@ -6574,6 +6574,14 @@
       color: var(--text-muted);
     }
 
+    .calendar-agenda-time span span {
+      display: block;
+      margin-top: 0;
+      font: inherit;
+      line-height: inherit;
+      color: inherit;
+    }
+
     .calendar-agenda-bar {
       width: 4px;
       min-height: 48px;
@@ -23566,6 +23574,14 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return `${hours} Std. ${mins} Min.`;
       }
 
+      function renderCalendarAgendaDurationHtml_(duration) {
+        const raw = String(duration || '').trim();
+        if (!raw) return '';
+        const parts = raw.match(/^(\d+\s+Std\.)\s+(\d+\s+Min\.)$/);
+        if (!parts) return `<span>${escapeHtml(raw)}</span>`;
+        return `<span><span>${escapeHtml(parts[1])}</span><span>${escapeHtml(parts[2])}</span></span>`;
+      }
+
       function getCalendarAgendaRangeData_(items, activeKey = '') {
         const list = Array.isArray(items) ? items : buildCalendarResultItems_(filteredCalendarEvents || []);
         const events = list.map(getCalendarItemEvent_).filter(Boolean);
@@ -23692,7 +23708,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           <div class="calendar-agenda-event ${isActive ? 'active' : ''}" data-id="${escapeAttr(ev.id)}" data-related-ids="${escapeAttr(relatedIds)}" role="button" tabindex="0" onclick="${onclick}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${onclick}}">
             <div class="calendar-agenda-time">
               <strong>${escapeHtml(getCalendarAgendaTimeLabel_(ev))}</strong>
-              ${duration ? `<span>${escapeHtml(duration)}</span>` : ''}
+              ${renderCalendarAgendaDurationHtml_(duration)}
             </div>
             <div class="calendar-agenda-bar" style="background:${color}"></div>
             <div class="calendar-agenda-main">
