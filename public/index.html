@@ -5625,6 +5625,81 @@
       padding-top: 12px;
     }
 
+    .birthday-message-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .birthday-style-switch {
+      position: relative;
+      display: inline-grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: center;
+      width: 188px;
+      height: 38px;
+      padding: 4px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid rgba(148,163,184,0.34);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    body.dark .birthday-style-switch {
+      background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(30,41,59,0.86));
+      border-color: rgba(71,85,105,0.42);
+    }
+
+    .birthday-style-switch-thumb {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc((100% - 8px) / 2);
+      height: calc(100% - 8px);
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
+      transition: transform .22s ease;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    body.dark .birthday-style-switch-thumb {
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
+    }
+
+    .birthday-style-switch[data-mode="formal"] .birthday-style-switch-thumb { transform: translateX(100%); }
+
+    .birthday-style-switch-btn {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: color .18s ease, transform .18s ease;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .birthday-style-switch-btn[aria-checked="true"] {
+      color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    body.dark .birthday-style-switch-btn { color: #64748b; }
+    body.dark .birthday-style-switch-btn[aria-checked="true"] { color: var(--primary); }
+
     .tools-message-actions {
       display: flex;
       justify-content: flex-end;
@@ -5671,6 +5746,14 @@
       .tools-message-row .btn {
         justify-self: flex-start;
         margin-left: 42px;
+      }
+
+      .birthday-message-topbar {
+        align-items: flex-start;
+      }
+
+      .birthday-style-switch {
+        width: 100%;
       }
     }
 
@@ -9063,11 +9146,22 @@
           </div>
         </details>
 
-        <details class="settings-collapsible member-only">
+        <details class="settings-collapsible tools-import-panel member-only">
           <summary>Geburtstagsnachricht</summary>
           <div class="settings-collapsible-body">
             <div class="tools-import-note">Pro Login gespeichert. Wird beim Kuchen-Icon in Kontakte verwendet.</div>
             <div class="tools-message-collapsible">
+              <div class="birthday-message-topbar">
+                <div>
+                  <div class="tools-section-label">Anrede</div>
+                  <div id="birthday-style-preview" class="tools-sub">Liebe/Lieber Vorname</div>
+                </div>
+                <div id="birthday-style-switch" class="birthday-style-switch" data-mode="personal" role="radiogroup" aria-label="Geburtstags-Anrede">
+                  <button type="button" id="birthday-style-personal" class="birthday-style-switch-btn" onclick="setBirthdayGreetingStyle_('personal')" aria-checked="true">Persönlich</button>
+                  <button type="button" id="birthday-style-formal" class="birthday-style-switch-btn" onclick="setBirthdayGreetingStyle_('formal')" aria-checked="false">Höflich</button>
+                  <span class="birthday-style-switch-thumb"></span>
+                </div>
+              </div>
               <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Alles Liebe und Gottes Segen zum Geburtstag!"></textarea>
               <div class="tools-message-actions">
                 <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
@@ -9199,7 +9293,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
-      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayMessageTemplate: "" };
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayMessageTemplate: "", birthdayGreetingStyle: "personal" };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
@@ -9464,13 +9558,16 @@
         const template = prefs && typeof prefs === 'object'
           ? String(prefs.birthdayMessageTemplate || '').slice(0, 2000)
           : '';
+        const rawGreetingStyle = prefs && typeof prefs === 'object' ? String(prefs.birthdayGreetingStyle || '') : '';
+        const birthdayGreetingStyle = rawGreetingStyle === 'formal' ? 'formal' : 'personal';
         return {
           notifications: {
             birthdaysToday: !!notifications.birthdaysToday,
             birthdaysWeek: !!notifications.birthdaysWeek,
             servicesMine: !!notifications.servicesMine
           },
-          birthdayMessageTemplate: template
+          birthdayMessageTemplate: template,
+          birthdayGreetingStyle
         };
       }
 
@@ -9510,6 +9607,7 @@
             : (!pushNotificationStatus.enabled ? 'Push-Key fehlt' : (pushNotificationStatus.subscribed ? 'Push aktiv' : 'Push aus'));
           status.textContent = `${active.length ? `Aktiv: ${active.join(', ')}` : 'Pro Login gespeichert'} · ${pushText}`;
         }
+        syncBirthdayGreetingStyleUi_();
       }
 
       function urlBase64ToUint8Array_(base64String) {
@@ -9703,6 +9801,32 @@
         return 'Alles Liebe und Gottes Segen zum Geburtstag!';
       }
 
+      function currentBirthdayGreetingStyle_() {
+        return currentUserPreferences?.birthdayGreetingStyle === 'formal' ? 'formal' : 'personal';
+      }
+
+      function syncBirthdayGreetingStyleUi_() {
+        const mode = currentBirthdayGreetingStyle_();
+        const host = document.getElementById('birthday-style-switch');
+        const personal = document.getElementById('birthday-style-personal');
+        const formal = document.getElementById('birthday-style-formal');
+        const preview = document.getElementById('birthday-style-preview');
+        if (host) host.dataset.mode = mode;
+        if (personal) personal.setAttribute('aria-checked', mode === 'personal' ? 'true' : 'false');
+        if (formal) formal.setAttribute('aria-checked', mode === 'formal' ? 'true' : 'false');
+        if (preview) preview.textContent = mode === 'formal' ? 'Liebe Frau / Lieber Herr Nachname' : 'Liebe / Lieber Vorname';
+      }
+
+      async function setBirthdayGreetingStyle_(style) {
+        const next = String(style || '') === 'formal' ? 'formal' : 'personal';
+        currentUserPreferences = normalizeUserPreferences_({
+          ...currentUserPreferences,
+          birthdayGreetingStyle: next
+        });
+        syncBirthdayGreetingStyleUi_();
+        await saveUserPreferences_('Anrede gespeichert');
+      }
+
       function loadBirthdayMessageTemplate_() {
         const savedInPreferences = String(currentUserPreferences?.birthdayMessageTemplate || '').trim();
         if (savedInPreferences) {
@@ -9732,7 +9856,8 @@
         birthdayMessageTemplate = value || defaultBirthdayMessageTemplate_();
         currentUserPreferences = normalizeUserPreferences_({
           ...currentUserPreferences,
-          birthdayMessageTemplate
+          birthdayMessageTemplate,
+          birthdayGreetingStyle: currentBirthdayGreetingStyle_()
         });
         syncBirthdayMessageTemplateUi_();
         try {
@@ -9784,11 +9909,53 @@
         return raw.split(/\s+/).filter(Boolean)[0] || 'dir';
       }
 
+      function birthdayMessageRecipientNames_(data) {
+        const display = String(data?.displayName || '').trim();
+        const first = String(data?.meta?.preferredName || data?.meta?.firstName || '').trim() || display.split(/\s+/).filter(Boolean)[0] || '';
+        let last = String(data?.meta?.lastName || '').trim();
+        if (!last && display) {
+          const parts = display.split(/\s+/).filter(Boolean);
+          if (parts.length > 1) last = parts[parts.length - 1];
+        }
+        return {
+          first: first || 'dir',
+          last,
+          full: display || [first, last].filter(Boolean).join(' ')
+        };
+      }
+
+      function birthdayMessageRecipientGenderKind_(data) {
+        const explicit = String(data?.meta?.genderKind || '').trim().toLowerCase();
+        if (explicit === 'male' || explicit === 'female') return explicit;
+        const detailGender = (data?.details || []).find(d => String(d?.label || '').trim().toUpperCase() === 'GESCHLECHT');
+        const raw = String(data?.meta?.gender || detailGender?.value || '').trim().toLowerCase();
+        if (!raw) return '';
+        if (raw === 'm' || raw.includes('mann') || raw.includes('männ') || raw.includes('male')) return 'male';
+        if (raw === 'w' || raw === 'f' || raw.includes('frau') || raw.includes('weib') || raw.includes('female')) return 'female';
+        return '';
+      }
+
+      function birthdayMessageSalutation_(data) {
+        const names = birthdayMessageRecipientNames_(data);
+        const gender = birthdayMessageRecipientGenderKind_(data);
+        const style = currentBirthdayGreetingStyle_();
+        if (style === 'formal') {
+          if (gender === 'female' && names.last) return `Liebe Frau ${names.last}`;
+          if (gender === 'male' && names.last) return `Lieber Herr ${names.last}`;
+          if (gender === 'female') return `Liebe ${names.full || names.first}`;
+          if (gender === 'male') return `Lieber ${names.full || names.first}`;
+          return `Guten Tag ${names.full || names.first}`.trim();
+        }
+        if (gender === 'female') return `Liebe ${names.first}`;
+        if (gender === 'male') return `Lieber ${names.first}`;
+        return `Hallo ${names.first}`;
+      }
+
       function buildBirthdayGreetingText_(data, channel = '') {
-        const name = birthdayMessageRecipientName_(data);
+        const salutation = birthdayMessageSalutation_(data);
         const template = getBirthdayMessageTemplate_();
         const gap = String(channel || '') === 'whatsapp' ? '\n' : '\n\n';
-        return `Lieber ${name}${gap}${template}`.trim();
+        return `${salutation}${gap}${template}`.trim();
       }
 
       function normalizeBirthdayWhatsappNumber_(rawValue) {
@@ -13110,13 +13277,18 @@
         const text = normalizeSongSheetText_(rawText);
         const lines = text ? text.split('\n') : [];
         const meta = [];
+        const preamble = [];
         const sections = [];
         let current = null;
         let sawHeading = false;
         const flush = () => {
           if (!current) return;
           const cleanLines = trimSongSectionLines_(current.lines || []);
-          if (current.label || cleanLines.length) sections.push({ label: current.label || '', lines: cleanLines });
+          if (!current.label && !sawHeading) {
+            if (cleanLines.length) preamble.push(...cleanLines);
+          } else if (current.label || cleanLines.length) {
+            sections.push({ label: current.label || '', lines: cleanLines });
+          }
           current = null;
         };
 
@@ -13137,7 +13309,7 @@
           current.lines.push(line);
         });
         flush();
-        return { meta, sections };
+        return { meta, preamble, sections };
       }
 
       function resolveSongSequenceSection_(step, maps) {
@@ -13167,6 +13339,8 @@
         const output = [];
         const metaLines = collected.meta.filter(Boolean);
         if (metaLines.length) output.push(...metaLines, '');
+        const preambleLines = trimSongSectionLines_(collected.preamble || []);
+        if (preambleLines.length) output.push(...preambleLines, '');
         let matched = 0;
         steps.forEach((step) => {
           const section = resolveSongSequenceSection_(step, { exact, base });

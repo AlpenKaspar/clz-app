@@ -807,6 +807,9 @@ function rpc_person_main(string $personId, array $user = []): array
             'elvantoUrl' => rpc_elvanto_person_url($personId),
             'firstName' => $lite['firstName'],
             'preferredName' => $lite['preferredName'],
+            'lastName' => $lite['lastName'],
+            'gender' => $lite['gender'],
+            'genderKind' => $lite['genderKind'],
             'birthday' => $lite['birthday'],
             'birthdayToday' => (bool) ($lite['birthdayToday'] ?? false),
         ],
@@ -3028,6 +3031,7 @@ function rpc_default_user_preferences(): array
             'servicesMine' => false,
         ],
         'birthdayMessageTemplate' => '',
+        'birthdayGreetingStyle' => 'personal',
     ];
 }
 
@@ -3054,6 +3058,10 @@ function rpc_normalize_user_preferences(mixed $payload): array
     if (strlen($birthdayMessageTemplate) > 2000) {
         $birthdayMessageTemplate = substr($birthdayMessageTemplate, 0, 2000);
     }
+    $birthdayGreetingStyle = rpc_str($data['birthdayGreetingStyle'] ?? $defaults['birthdayGreetingStyle']);
+    if (!in_array($birthdayGreetingStyle, ['personal', 'formal'], true)) {
+        $birthdayGreetingStyle = $defaults['birthdayGreetingStyle'];
+    }
     return [
         'notifications' => [
             'birthdaysToday' => (bool) ($notifications['birthdaysToday'] ?? $defaults['notifications']['birthdaysToday']),
@@ -3061,6 +3069,7 @@ function rpc_normalize_user_preferences(mixed $payload): array
             'servicesMine' => (bool) ($notifications['servicesMine'] ?? $defaults['notifications']['servicesMine']),
         ],
         'birthdayMessageTemplate' => $birthdayMessageTemplate,
+        'birthdayGreetingStyle' => $birthdayGreetingStyle,
     ];
 }
 
