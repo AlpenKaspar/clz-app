@@ -23709,11 +23709,29 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return new Intl.DateTimeFormat('de-CH', { month: 'long' }).format(date);
       }
 
+      function getCalendarAgendaMonthMenuLabel_(date) {
+        return new Intl.DateTimeFormat('de-CH', { month: 'long', year: 'numeric' }).format(date);
+      }
+
       function addCalendarAgendaDays_(date, days) {
         const d = date instanceof Date && !isNaN(date.getTime()) ? new Date(date) : new Date();
         d.setHours(0, 0, 0, 0);
         d.setDate(d.getDate() + Number(days || 0));
         return d;
+      }
+
+      function addCalendarAgendaMonths_(date, months) {
+        const d = date instanceof Date && !isNaN(date.getTime()) ? new Date(date) : new Date();
+        d.setDate(1);
+        d.setHours(0, 0, 0, 0);
+        d.setMonth(d.getMonth() + Number(months || 0));
+        return d;
+      }
+
+      function getCalendarAgendaMonthEndKey_(startKey) {
+        const start = parseIsoDateKey_(startKey);
+        if (!start) return String(startKey || '').trim();
+        return calendarDateKeyFromDate_(new Date(start.getFullYear(), start.getMonth() + 1, 0));
       }
 
       function minCalendarAgendaDate_(dates) {
@@ -23939,6 +23957,23 @@ function dashDynamicValueCard_(icon, prefix, item) {
         });
       }
 
+      function buildCalendarAgendaMonthMenuItems_() {
+        const activeDate = parseIsoDateKey_(calendarAgendaActiveDayKey) || new Date();
+        activeDate.setHours(0, 0, 0, 0);
+        const startDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), 1);
+        const items = [];
+        for (let i = 0; i < 18; i += 1) {
+          const date = addCalendarAgendaMonths_(startDate, i);
+          const startKey = calendarDateKeyFromDate_(date);
+          items.push({
+            key: startKey.slice(0, 7),
+            startKey: startKey,
+            label: getCalendarAgendaMonthMenuLabel_(date)
+          });
+        }
+        return items;
+      }
+
       function closeCalendarAgendaMonthMenu_() {
         const menu = document.getElementById('calendar-agenda-month-menu');
         if (menu) menu.remove();
@@ -23954,8 +23989,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
         if (!trigger || !calendarAgendaMonthMenuItems.length) return;
         const activeMonth = String(calendarAgendaActiveDayKey || calendarDateKeyFromDate_(new Date())).slice(0, 7);
-        const upcoming = calendarAgendaMonthMenuItems.filter(item => String(item.key || '') >= activeMonth);
-        const items = (upcoming.length ? upcoming : calendarAgendaMonthMenuItems).slice(0, 12);
+        const dynamicItems = buildCalendarAgendaMonthMenuItems_();
+        const segmentKeys = new Set(calendarAgendaMonthMenuItems.map(item => String(item.key || '')));
+        const items = dynamicItems.map(item => ({ ...item, isLoaded: segmentKeys.has(String(item.key || '')) }));
         if (!items.length) return;
         const menu = document.createElement('div');
         menu.id = 'calendar-agenda-month-menu';
@@ -23964,7 +24000,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           <div class="calendar-agenda-month-menu-title">Monate</div>
           ${items.map(item => `
             <button type="button" class="calendar-agenda-month-menu-btn ${String(item.key || '') === activeMonth ? 'is-active' : ''}" onclick="scrollCalendarAgendaToMonth_('${escapeAttr(item.startKey)}')">
-              <span>${escapeHtml(item.label || '')}</span><i class="fas fa-arrow-right" aria-hidden="true"></i>
+              <span>${escapeHtml(item.label || '')}</span><i class="fas ${item.isLoaded ? 'fa-arrow-right' : 'fa-cloud-arrow-down'}" aria-hidden="true"></i>
             </button>
           `).join('')}`;
         document.body.appendChild(menu);
@@ -23976,10 +24012,17 @@ function dashDynamicValueCard_(icon, prefix, item) {
         menu.style.top = `${Math.round(top)}px`;
       }
 
-      function scrollCalendarAgendaToMonth_(key) {
+      async function scrollCalendarAgendaToMonth_(key) {
         const targetKey = String(key || '').trim();
         closeCalendarAgendaMonthMenu_();
         if (!targetKey) return;
+        const monthRange = { startIso: targetKey, endIso: getCalendarAgendaMonthEndKey_(targetKey) };
+        if (!calendarLoadedRangeCovers_(monthRange)) {
+          calendarAgendaActiveDayKey = targetKey;
+          calendarAgendaStartAtActiveOnNextRender = true;
+          await loadCalendar(true);
+          return;
+        }
         scrollCalendarAgendaToDay_(targetKey);
       }
 
