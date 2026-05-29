@@ -9918,7 +9918,7 @@
         if (host) host.dataset.mode = mode;
         if (personal) personal.setAttribute('aria-checked', mode === 'personal' ? 'true' : 'false');
         if (formal) formal.setAttribute('aria-checked', mode === 'formal' ? 'true' : 'false');
-        if (preview) preview.textContent = mode === 'formal' ? 'Liebe Frau / Lieber Herr Nachname' : 'Liebe / Lieber Vorname';
+        if (preview) preview.textContent = mode === 'formal' ? 'Liebe Frau / Lieber Herr Vorname Nachname' : 'Liebe / Lieber Vorname';
       }
 
       async function setBirthdayGreetingStyle_(style) {
@@ -10044,8 +10044,9 @@
         const gender = birthdayMessageRecipientGenderKind_(data);
         const style = currentBirthdayGreetingStyle_();
         if (style === 'formal') {
-          if (gender === 'female' && names.last) return `Liebe Frau ${names.last}`;
-          if (gender === 'male' && names.last) return `Lieber Herr ${names.last}`;
+          const formalName = [names.first === 'dir' ? '' : names.first, names.last].filter(Boolean).join(' ') || names.full || names.first;
+          if (gender === 'female' && formalName) return `Liebe Frau ${formalName}`;
+          if (gender === 'male' && formalName) return `Lieber Herr ${formalName}`;
           if (gender === 'female') return `Liebe ${names.full || names.first}`;
           if (gender === 'male') return `Lieber ${names.full || names.first}`;
           return `Guten Tag ${names.full || names.first}`.trim();
