@@ -6384,6 +6384,8 @@
     }
 
     .calendar-agenda-strip {
+      --calendar-agenda-day-size: 52px;
+      --calendar-agenda-day-gap: 3px;
       margin: 10px 12px 0 0;
       padding: 8px 2px 10px;
       border-bottom: 1px solid rgba(226,232,240,.82);
@@ -6397,10 +6399,45 @@
       display: none !important;
     }
 
+    .calendar-agenda-strip-inner {
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .calendar-agenda-month-row {
+      display: flex;
+      width: max-content;
+      min-width: 100%;
+      height: 20px;
+      margin-bottom: 2px;
+    }
+
+    .calendar-agenda-month-segment {
+      flex: 0 0 auto;
+      min-width: var(--calendar-agenda-day-size);
+      position: relative;
+    }
+
+    .calendar-agenda-month-label {
+      position: sticky;
+      left: 8px;
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 4px;
+      color: var(--primary);
+      font-size: 13px;
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: 0;
+      background: var(--bg);
+      z-index: 1;
+    }
+
     .calendar-agenda-week {
       display: flex;
       align-items: flex-start;
-      gap: 3px;
+      gap: var(--calendar-agenda-day-gap);
       width: max-content;
       min-width: 100%;
     }
@@ -6408,10 +6445,10 @@
     .calendar-agenda-day {
       appearance: none;
       border: 0;
-      flex: 0 0 52px;
-      min-width: 52px;
-      min-height: 58px;
-      padding: 4px 0 2px;
+      flex: 0 0 var(--calendar-agenda-day-size);
+      min-width: var(--calendar-agenda-day-size);
+      min-height: 50px;
+      padding: 2px 0;
       border-radius: 18px;
       background: transparent;
       color: var(--text-main);
@@ -6429,16 +6466,7 @@
       font-weight: 900;
       color: var(--text-muted);
       text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-
-    .calendar-agenda-month {
-      min-height: 11px;
-      font-size: 10px;
-      line-height: 1;
-      font-weight: 950;
-      color: var(--primary);
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
 
     .calendar-agenda-num {
@@ -6468,6 +6496,10 @@
       border-color: rgba(148,163,184,.2);
     }
 
+    body.dark .calendar-agenda-month-label {
+      background: var(--bg);
+    }
+
     #cal-results.calendar-agenda-results {
       border-bottom: 1px solid var(--border-color);
       overflow: visible;
@@ -6475,19 +6507,19 @@
     }
 
     .calendar-agenda-section {
-      padding: 22px 0 4px;
+      padding: 18px 0 2px;
       scroll-margin-top: 210px;
     }
 
     .calendar-agenda-date-heading {
       display: flex;
       align-items: baseline;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 7px;
+      margin-bottom: 10px;
     }
 
     .calendar-agenda-date-heading strong {
-      font-size: 24px;
+      font-size: 22px;
       line-height: 1.05;
       font-weight: 900;
       color: var(--text-main);
@@ -6495,7 +6527,7 @@
     }
 
     .calendar-agenda-date-heading span {
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1.05;
       font-weight: 650;
       color: var(--text-muted);
@@ -6509,9 +6541,9 @@
       background: transparent;
       color: var(--text-main);
       display: grid;
-      grid-template-columns: 62px 6px minmax(0, 1fr);
-      gap: 13px;
-      padding: 10px 0 18px;
+      grid-template-columns: 56px 5px minmax(0, 1fr);
+      gap: 11px;
+      padding: 8px 0 15px;
       text-align: left;
       cursor: pointer;
     }
@@ -6527,7 +6559,7 @@
 
     .calendar-agenda-time strong {
       display: block;
-      font-size: 17px;
+      font-size: 16px;
       line-height: 1;
       font-weight: 850;
       white-space: nowrap;
@@ -6535,16 +6567,16 @@
 
     .calendar-agenda-time span {
       display: block;
-      margin-top: 6px;
-      font-size: 12px;
+      margin-top: 5px;
+      font-size: 11px;
       line-height: 1.15;
       font-weight: 800;
       color: var(--text-muted);
     }
 
     .calendar-agenda-bar {
-      width: 5px;
-      min-height: 54px;
+      width: 4px;
+      min-height: 48px;
       border-radius: 999px;
       background: var(--primary);
     }
@@ -6552,9 +6584,9 @@
     .calendar-agenda-title {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       min-width: 0;
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1.18;
       font-weight: 850;
       color: var(--text-main);
@@ -6575,14 +6607,14 @@
     }
 
     .calendar-agenda-sub {
-      margin-top: 6px;
-      font-size: 14px;
+      margin-top: 5px;
+      font-size: 13px;
       line-height: 1.25;
       color: var(--text-muted);
     }
 
     .calendar-agenda-meta {
-      margin-top: 8px;
+      margin-top: 7px;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -6593,11 +6625,11 @@
       display: inline-flex;
       align-items: center;
       min-height: 22px;
-      padding: 3px 8px;
+      padding: 3px 7px;
       border-radius: 999px;
       background: rgba(226,232,240,.68);
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 900;
     }
 
@@ -23439,8 +23471,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return new Intl.DateTimeFormat('de-CH', { weekday: 'short' }).format(date).replace('.', '');
       }
 
-      function getCalendarAgendaMonthLabel_(date) {
-        return new Intl.DateTimeFormat('de-CH', { month: 'short' }).format(date).replace('.', '');
+      function getCalendarAgendaMonthHeaderLabel_(date) {
+        return new Intl.DateTimeFormat('de-CH', { month: 'long' }).format(date);
       }
 
       function addCalendarAgendaDays_(date, days) {
@@ -23568,24 +23600,52 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const diffDays = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1;
         const maxDays = Math.min(540, Math.max(220, diffDays));
 
-        const days = [];
+        const dayData = [];
         for (let i = 0; i < maxDays; i += 1) {
           const d = new Date(rangeStart);
           d.setDate(rangeStart.getDate() + i);
           if (d > rangeEnd) break;
           const key = calendarDateKeyFromDate_(d);
-          const showMonth = i === 0 || d.getDate() === 1;
-          days.push(`
-            <button type="button" class="calendar-agenda-day ${key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${eventKeys.has(key) ? 'has-events' : ''}" data-agenda-day-key="${escapeAttr(key)}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(key)}')">
-              <span class="calendar-agenda-dow">${escapeHtml(getCalendarAgendaWeekdayLabel_(d))}</span>
-              <span class="calendar-agenda-month">${showMonth ? escapeHtml(getCalendarAgendaMonthLabel_(d)) : '&nbsp;'}</span>
-              <span class="calendar-agenda-num">${escapeHtml(String(d.getDate()))}</span>
+          dayData.push({ date: d, key: key, hasEvents: eventKeys.has(key) });
+        }
+
+        const days = dayData.map(day => `
+            <button type="button" class="calendar-agenda-day ${day.key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${day.hasEvents ? 'has-events' : ''}" data-agenda-day-key="${escapeAttr(day.key)}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(day.key)}')">
+              <span class="calendar-agenda-dow">${escapeHtml(getCalendarAgendaWeekdayLabel_(day.date))}</span>
+              <span class="calendar-agenda-num">${escapeHtml(String(day.date.getDate()))}</span>
             </button>
-          `);
+        `);
+
+        const monthSegments = [];
+        dayData.forEach(day => {
+          const monthKey = `${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, '0')}`;
+          const current = monthSegments[monthSegments.length - 1];
+          if (!current || current.key !== monthKey) {
+            monthSegments.push({ key: monthKey, date: day.date, count: 1 });
+          } else {
+            current.count += 1;
+          }
+        });
+        const monthHtml = monthSegments.map(segment => {
+          const width = (segment.count * 52) + (Math.max(0, segment.count - 1) * 3);
+          return `
+            <div class="calendar-agenda-month-segment" style="flex-basis:${Number(width)}px;">
+              <span class="calendar-agenda-month-label">${escapeHtml(getCalendarAgendaMonthHeaderLabel_(segment.date))}</span>
+            </div>`;
+        }).join('');
+
+        if (!days.length) {
+          strip.hidden = true;
+          strip.innerHTML = '';
+          return;
         }
 
         strip.hidden = false;
-        strip.innerHTML = `<div class="calendar-agenda-week">${days.join('')}</div>`;
+        strip.innerHTML = `
+          <div class="calendar-agenda-strip-inner">
+            <div class="calendar-agenda-month-row">${monthHtml}</div>
+            <div class="calendar-agenda-week">${days.join('')}</div>
+          </div>`;
         requestAnimationFrame(() => {
           syncCalendarAgendaStripActive_(calendarAgendaActiveDayKey, { center: 'always' });
         });
