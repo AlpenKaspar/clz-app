@@ -3033,6 +3033,7 @@ function rpc_default_user_preferences(): array
         'birthdayFrequency' => 'off',
         'birthdayMessageTemplate' => '',
         'birthdayGreetingStyle' => 'personal',
+        'calendarLayoutMode' => 'list',
     ];
 }
 
@@ -3063,6 +3064,10 @@ function rpc_normalize_user_preferences(mixed $payload): array
     if (!in_array($birthdayGreetingStyle, ['personal', 'formal'], true)) {
         $birthdayGreetingStyle = $defaults['birthdayGreetingStyle'];
     }
+    $calendarLayoutMode = rpc_str($data['calendarLayoutMode'] ?? $defaults['calendarLayoutMode']);
+    if (!in_array($calendarLayoutMode, ['list', 'agenda'], true)) {
+        $calendarLayoutMode = $defaults['calendarLayoutMode'];
+    }
     $birthdayFrequency = rpc_str($data['birthdayFrequency'] ?? '');
     if ($birthdayFrequency === 'today') {
         $birthdayFrequency = 'daily';
@@ -3087,6 +3092,7 @@ function rpc_normalize_user_preferences(mixed $payload): array
         'birthdayFrequency' => $birthdayFrequency,
         'birthdayMessageTemplate' => $birthdayMessageTemplate,
         'birthdayGreetingStyle' => $birthdayGreetingStyle,
+        'calendarLayoutMode' => $calendarLayoutMode,
     ];
 }
 

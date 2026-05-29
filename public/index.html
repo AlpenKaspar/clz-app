@@ -4241,6 +4241,57 @@
       display: none !important;
     }
 
+    .calendar-title-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      flex: 0 0 auto;
+    }
+
+    .calendar-layout-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: rgba(226,232,240,.72);
+      box-shadow: 0 2px 8px rgba(15,23,42,.06);
+    }
+
+    .calendar-layout-btn {
+      appearance: none;
+      border: 0;
+      width: 34px;
+      height: 32px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background .16s ease, color .16s ease, box-shadow .16s ease;
+    }
+
+    .calendar-layout-btn i {
+      color: currentColor;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .calendar-layout-btn[aria-checked="true"] {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 6px 14px rgba(37,99,235,.24);
+    }
+
+    body.dark .calendar-layout-switch {
+      background: rgba(15,23,42,.64);
+      border-color: rgba(148,163,184,.24);
+    }
+
     .contacts-switch-status {
       margin-left: auto;
       text-align: right;
@@ -6325,6 +6376,261 @@
       justify-content: flex-end;
       gap: 8px;
       margin-left: auto;
+    }
+
+    #view-calendar.calendar-layout-agenda .calendar-date-range-inline,
+    #view-calendar.calendar-layout-agenda #cal-status {
+      display: none !important;
+    }
+
+    .calendar-agenda-strip {
+      margin: 10px 12px 0 0;
+      padding: 8px 2px 10px;
+      border-top: 1px solid rgba(226,232,240,.82);
+      border-bottom: 1px solid rgba(226,232,240,.82);
+    }
+
+    .calendar-agenda-strip[hidden] {
+      display: none !important;
+    }
+
+    .calendar-agenda-week {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 3px;
+    }
+
+    .calendar-agenda-day {
+      appearance: none;
+      border: 0;
+      min-width: 0;
+      min-height: 58px;
+      padding: 4px 0 2px;
+      border-radius: 18px;
+      background: transparent;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .calendar-agenda-dow {
+      font-size: 10px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .calendar-agenda-month {
+      min-height: 11px;
+      font-size: 10px;
+      line-height: 1;
+      font-weight: 800;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .calendar-agenda-num {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      font-weight: 900;
+      color: var(--text-main);
+    }
+
+    .calendar-agenda-day.is-active .calendar-agenda-num {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(37,99,235,.28);
+    }
+
+    .calendar-agenda-day.has-events::after {
+      content: "";
+      width: 18px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(100,116,139,.7);
+      margin-top: 5px;
+    }
+
+    body.dark .calendar-agenda-strip {
+      border-color: rgba(148,163,184,.2);
+    }
+
+    body.dark .calendar-agenda-day.has-events::after {
+      background: rgba(148,163,184,.78);
+    }
+
+    #cal-results.calendar-agenda-results {
+      border-bottom: 1px solid var(--border-color);
+      overflow: visible;
+      padding: 0 18px calc(var(--nav-height) + 88px);
+    }
+
+    .calendar-agenda-section {
+      padding: 22px 0 4px;
+      scroll-margin-top: 210px;
+    }
+
+    .calendar-agenda-date-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .calendar-agenda-date-heading strong {
+      font-size: 24px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: var(--text-main);
+      letter-spacing: 0;
+    }
+
+    .calendar-agenda-date-heading span {
+      font-size: 20px;
+      line-height: 1.05;
+      font-weight: 650;
+      color: var(--text-muted);
+    }
+
+    .calendar-agenda-event {
+      appearance: none;
+      width: 100%;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text-main);
+      display: grid;
+      grid-template-columns: 62px 6px minmax(0, 1fr);
+      gap: 13px;
+      padding: 10px 0 18px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .calendar-agenda-event.active .calendar-agenda-title {
+      color: var(--primary);
+    }
+
+    .calendar-agenda-time {
+      min-width: 0;
+      color: var(--text-main);
+    }
+
+    .calendar-agenda-time strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .calendar-agenda-time span {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: var(--text-muted);
+    }
+
+    .calendar-agenda-bar {
+      width: 5px;
+      min-height: 54px;
+      border-radius: 999px;
+      background: var(--primary);
+    }
+
+    .calendar-agenda-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-size: 20px;
+      line-height: 1.18;
+      font-weight: 850;
+      color: var(--text-main);
+      letter-spacing: 0;
+    }
+
+    .calendar-agenda-title-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .calendar-agenda-sub {
+      margin-top: 6px;
+      font-size: 14px;
+      line-height: 1.25;
+      color: var(--text-muted);
+    }
+
+    .calendar-agenda-meta {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .calendar-agenda-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(226,232,240,.68);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .calendar-agenda-event .service-time-bubbles {
+      margin-top: 8px;
+    }
+
+    .calendar-agenda-today-btn {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--nav-height) + 18px);
+      transform: translateX(-50%);
+      z-index: 92;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: var(--card-bg);
+      color: var(--primary);
+      box-shadow: 0 10px 24px rgba(15,23,42,.16);
+      padding: 10px 16px;
+      font-size: 15px;
+      font-weight: 900;
+      display: none;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+    }
+
+    #view-calendar.calendar-layout-agenda .calendar-agenda-today-btn {
+      display: inline-flex;
+    }
+
+    #view-calendar.view-hidden .calendar-agenda-today-btn {
+      display: none !important;
+    }
+
+    body.dark .calendar-agenda-chip {
+      background: rgba(30,41,59,.72);
     }
 
     .calendar-add-fab {
@@ -8747,17 +9053,27 @@
           <div class="tab-title-left">
             <i class="fas fa-calendar-alt"></i> Kalender
           </div>
-          <div class="share-menu-wrap">
-            <button class="icon-mini-btn share-trigger-btn" id="calendar-share-trigger" type="button" aria-expanded="false" onclick="event.stopPropagation(); toggleShareMenu_('calendar')">
-              <i class="fas fa-share-nodes"></i>
-            </button>
-            <div class="share-menu" id="calendar-share-menu" hidden>
-              <button class="share-menu-btn" type="button" onclick="downloadCalendarCsv_()">
-                <i class="fas fa-file-csv"></i><span>Excel</span>
+          <div class="calendar-title-actions">
+            <div id="calendar-layout-switch" class="calendar-layout-switch" role="radiogroup" aria-label="Kalender Darstellung" data-mode="list">
+              <button type="button" id="calendar-layout-list" class="calendar-layout-btn" onclick="setCalendarLayoutMode_('list')" aria-checked="true" title="Listenansicht" aria-label="Listenansicht">
+                <i class="fas fa-list"></i>
               </button>
-              <button class="share-menu-btn" type="button" onclick="printCurrentCalendar_()">
-                <i class="fas fa-print"></i><span>Druckansicht</span>
+              <button type="button" id="calendar-layout-agenda" class="calendar-layout-btn" onclick="setCalendarLayoutMode_('agenda')" aria-checked="false" title="Agendaansicht" aria-label="Agendaansicht">
+                <i class="fas fa-calendar-week"></i>
               </button>
+            </div>
+            <div class="share-menu-wrap">
+              <button class="icon-mini-btn share-trigger-btn" id="calendar-share-trigger" type="button" aria-expanded="false" onclick="event.stopPropagation(); toggleShareMenu_('calendar')">
+                <i class="fas fa-share-nodes"></i>
+              </button>
+              <div class="share-menu" id="calendar-share-menu" hidden>
+                <button class="share-menu-btn" type="button" onclick="downloadCalendarCsv_()">
+                  <i class="fas fa-file-csv"></i><span>Excel</span>
+                </button>
+                <button class="share-menu-btn" type="button" onclick="printCurrentCalendar_()">
+                  <i class="fas fa-print"></i><span>Druckansicht</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -8811,11 +9127,16 @@
           </div>
         </div>
 
+        <div id="calendar-agenda-strip" class="calendar-agenda-strip" hidden></div>
+
         <div id="cal-status"></div>
 
       </div>
 
       <div id="cal-results" class="results-list"></div>
+      <button id="calendar-agenda-today-btn" class="calendar-agenda-today-btn" type="button" onclick="scrollCalendarAgendaToday_()">
+        <i class="fas fa-arrow-up"></i><span>Heute</span>
+      </button>
       <button id="calendar-add-fab" class="calendar-add-fab" type="button" onclick="openElvantoNewEvent_()" title="Veranstaltung hinzufügen" aria-label="Veranstaltung hinzufügen">
         <i class="fas fa-plus"></i>
       </button>
@@ -9354,7 +9675,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
-      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal" };
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal", calendarLayoutMode: "list" };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
@@ -9505,11 +9826,16 @@
       const DARK_MODE_LIGHT = "light";
       const DARK_MODE_DARK = "dark";
       const CAL_FILTERS_KEY = "clz_calendar_filters_v1";
+      const CAL_LAYOUT_KEY = "clz_calendar_layout_v1";
       const ON_AIR_BANNER_KEY = "clz_on_air_banner_test_v1";
       const BIRTHDAY_MESSAGE_TEMPLATE_KEY = "clz_birthday_message_template_v1";
       const ON_AIR_TEST_VIDEO_ID = "ZmpfGd2BpOk";
       let birthdayMessageTemplate = "";
       let calendarViewMode = "all";
+      let calendarLayoutMode = "list";
+      let calendarAgendaActiveDayKey = "";
+      let calendarAgendaScrollRaf = null;
+      let calendarAgendaScrollListenerBound = false;
       let calendarViewThumbSyncRaf = null;
       let calendarViewThumbSyncTimer = null;
       let calendarMineAssignmentsLoading = false;
@@ -9629,6 +9955,8 @@
               : (!rawFrequency && notifications.birthdaysWeek ? 'weekly' : 'off')));
         const rawGreetingStyle = prefs && typeof prefs === 'object' ? String(prefs.birthdayGreetingStyle || '') : '';
         const birthdayGreetingStyle = rawGreetingStyle === 'formal' ? 'formal' : 'personal';
+        const rawCalendarLayout = prefs && typeof prefs === 'object' ? String(prefs.calendarLayoutMode || '').trim().toLowerCase() : '';
+        const calendarLayoutPref = rawCalendarLayout === 'agenda' ? 'agenda' : (rawCalendarLayout === 'list' ? 'list' : calendarLayoutMode);
         return {
           notifications: {
             birthdaysToday: birthdayFrequency === 'daily',
@@ -9637,12 +9965,19 @@
           },
           birthdayFrequency,
           birthdayMessageTemplate: template,
-          birthdayGreetingStyle
+          birthdayGreetingStyle,
+          calendarLayoutMode: calendarLayoutPref === 'agenda' ? 'agenda' : 'list'
         };
       }
 
       function applyUserPreferences_(prefs) {
+        const previousCalendarLayout = calendarLayoutMode;
         currentUserPreferences = normalizeUserPreferences_(prefs);
+        calendarLayoutMode = currentUserPreferences.calendarLayoutMode || calendarLayoutMode || 'list';
+        renderCalendarLayoutSwitch_();
+        if (previousCalendarLayout !== calendarLayoutMode && currentTab === 'calendar') {
+          filterCalendar({ allowWhileLoading: true });
+        }
         renderUserPreferences_();
         loadBirthdayMessageTemplate_();
       }
@@ -14604,6 +14939,7 @@ function updateBottomNavHighlight_() {
         if (tab === 'contacts') maybeRenderIdleContacts_();
         if (tab === 'calendar') {
           renderCalendarViewSwitch_();
+          renderCalendarLayoutSwitch_();
           if (allEvents.length === 0) { showCalendarSkeleton_(); loadCalendar(); }
         }
         if (tab === 'songs') {
@@ -19041,6 +19377,68 @@ function updateBottomNavHighlight_() {
         return String(contact?.displayName || contact?.listDisplayName || contact?.email || '').trim();
       }
 
+      function normalizeCalendarLayoutMode_(mode) {
+        return String(mode || '').trim().toLowerCase() === 'agenda' ? 'agenda' : 'list';
+      }
+
+      function calendarLayoutStorageKey_() {
+        const email = normalizeUserEmail_(currentLoginEmail || '');
+        return email ? `${CAL_LAYOUT_KEY}_${email}` : CAL_LAYOUT_KEY;
+      }
+
+      function restoreCalendarLayoutMode_() {
+        try {
+          const saved = localStorage.getItem(calendarLayoutStorageKey_());
+          if (saved) calendarLayoutMode = normalizeCalendarLayoutMode_(saved);
+        } catch (e) {}
+        renderCalendarLayoutSwitch_();
+      }
+
+      function persistCalendarLayoutModeLocal_() {
+        try {
+          localStorage.setItem(calendarLayoutStorageKey_(), normalizeCalendarLayoutMode_(calendarLayoutMode));
+        } catch (e) {}
+      }
+
+      function renderCalendarLayoutSwitch_() {
+        const mode = normalizeCalendarLayoutMode_(calendarLayoutMode);
+        calendarLayoutMode = mode;
+        const view = document.getElementById('view-calendar');
+        const host = document.getElementById('calendar-layout-switch');
+        const listBtn = document.getElementById('calendar-layout-list');
+        const agendaBtn = document.getElementById('calendar-layout-agenda');
+        if (view) view.classList.toggle('calendar-layout-agenda', mode === 'agenda');
+        if (host) host.dataset.mode = mode;
+        if (listBtn) listBtn.setAttribute('aria-checked', mode === 'list' ? 'true' : 'false');
+        if (agendaBtn) agendaBtn.setAttribute('aria-checked', mode === 'agenda' ? 'true' : 'false');
+      }
+
+      async function saveCalendarLayoutPreference_() {
+        let basePreferences = currentUserPreferences;
+        try {
+          const loaded = await withGsRetry('tools_loadUserPreferences', [], { retries: 1, retryDelay: 400 });
+          if (loaded?.preferences) basePreferences = loaded.preferences;
+        } catch (e) {}
+        currentUserPreferences = normalizeUserPreferences_({
+          ...basePreferences,
+          calendarLayoutMode: normalizeCalendarLayoutMode_(calendarLayoutMode)
+        });
+        try {
+          await withGsRetry('tools_saveUserPreferences', [currentUserPreferences], { retries: 1, retryDelay: 500 });
+        } catch (e) {}
+      }
+
+      function setCalendarLayoutMode_(mode) {
+        const next = normalizeCalendarLayoutMode_(mode);
+        if (calendarLayoutMode === next) return;
+        calendarLayoutMode = next;
+        calendarAgendaActiveDayKey = "";
+        persistCalendarLayoutModeLocal_();
+        renderCalendarLayoutSwitch_();
+        filterCalendar({ allowWhileLoading: true });
+        saveCalendarLayoutPreference_();
+      }
+
       async function ensureCalendarContactsReady_() {
         if (contactsReady) return;
         await ensureContactsLiteLoaded_(false, false);
@@ -22800,6 +23198,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const q = String(document.getElementById('cal-q').value || "").toLowerCase();
         updateClearButtons_();
         const box = document.getElementById('cal-results');
+        const isAgendaLayout = normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda';
+        renderCalendarLayoutSwitch_();
+        if (box) box.classList.toggle('calendar-agenda-results', isAgendaLayout);
 
         if (calendarIsLoading && !allowWhileLoading) {
           if (box && !box.innerHTML.trim()) showCalendarSkeleton_();
@@ -22827,6 +23228,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         setStatus("cal-status", `${filtered.length} Termine`, "");
 
         if (!allEvents.length) {
+          renderCalendarAgendaStrip_([], '');
           box.innerHTML = `
             <div class="empty-box">
               <div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Termine geladen</div>
@@ -22841,6 +23243,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
 
         if (!filtered.length) {
+          renderCalendarAgendaStrip_([], '');
           box.innerHTML = `
             <div class="empty-box">
               <div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div>
@@ -22849,6 +23252,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return;
         }
 
+        if (isAgendaLayout) {
+          renderCalendarAgendaResults_(filtered);
+          return;
+        }
+
+        renderCalendarAgendaStrip_([], '');
         box.innerHTML = buildCalendarResultItems_(filtered).map(e => {
           if (e && e.kind === 'service-group') {
             const first = e.items[e.activeIndex || 0] || e.items[0];
@@ -22956,6 +23365,253 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const eb = b.kind === 'service-group' ? b.items[0] : b;
           return compareCalendarEvents_(ea, eb);
         });
+      }
+
+      function getCalendarItemEvent_(item) {
+        if (item && item.kind === 'service-group') {
+          return item.items?.[item.activeIndex || 0] || item.items?.[0] || null;
+        }
+        return item || null;
+      }
+
+      function parseIsoDateKey_(key) {
+        const m = String(key || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+      }
+
+      function calendarDateKeyFromDate_(date) {
+        if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+        return toIsoDate_(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
+      }
+
+      function calendarDateKeyFromEvent_(ev) {
+        const d = parseGermanDate_(ev?.StartDatum || '');
+        return d ? calendarDateKeyFromDate_(d) : '';
+      }
+
+      function getCalendarAgendaStartOfWeek_(date) {
+        const d = date instanceof Date && !isNaN(date.getTime()) ? new Date(date) : new Date();
+        d.setHours(0, 0, 0, 0);
+        const dayOffset = (d.getDay() + 6) % 7;
+        d.setDate(d.getDate() - dayOffset);
+        return d;
+      }
+
+      function getCalendarAgendaSectionLabel_(key) {
+        const d = parseIsoDateKey_(key);
+        if (!d) return { main: key, weekday: '' };
+        return {
+          main: new Intl.DateTimeFormat('de-CH', { day: 'numeric', month: 'long' }).format(d),
+          weekday: new Intl.DateTimeFormat('de-CH', { weekday: 'long' }).format(d)
+        };
+      }
+
+      function getCalendarAgendaWeekdayLabel_(date) {
+        return new Intl.DateTimeFormat('de-CH', { weekday: 'short' }).format(date).replace('.', '');
+      }
+
+      function getCalendarAgendaMonthLabel_(date) {
+        return new Intl.DateTimeFormat('de-CH', { month: 'short' }).format(date).replace('.', '');
+      }
+
+      function getCalendarAgendaTimeLabel_(ev) {
+        const start = String(ev?.StartZeit || '').trim();
+        const end = String(ev?.EndZeit || '').trim();
+        if (start === '00:00' && end === '23:59') return 'Ganztag';
+        return start || 'Zeit';
+      }
+
+      function getCalendarAgendaDurationLabel_(ev) {
+        const dayDuration = getDurationLabel_(ev?.StartDatum || '', ev?.EndDatum || ev?.StartDatum || '');
+        if (dayDuration) return dayDuration;
+        const start = String(ev?.StartZeit || '').trim();
+        const end = String(ev?.EndZeit || '').trim();
+        if (start === '00:00' && end === '23:59') return 'Ganzer Tag';
+        const sm = start.match(/^(\d{2}):(\d{2})$/);
+        const em = end.match(/^(\d{2}):(\d{2})$/);
+        if (!sm || !em) return '';
+        const startMin = Number(sm[1]) * 60 + Number(sm[2]);
+        const endMin = Number(em[1]) * 60 + Number(em[2]);
+        const diff = endMin - startMin;
+        if (!Number.isFinite(diff) || diff <= 0) return '';
+        if (diff < 60) return `${diff} Min.`;
+        const hours = Math.floor(diff / 60);
+        const mins = diff % 60;
+        if (!mins) return hours === 1 ? '1 Std.' : `${hours} Std.`;
+        return `${hours} Std. ${mins} Min.`;
+      }
+
+      function renderCalendarAgendaStrip_(items, activeKey = '') {
+        const strip = document.getElementById('calendar-agenda-strip');
+        if (!strip) return;
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
+          strip.hidden = true;
+          strip.innerHTML = '';
+          return;
+        }
+
+        const list = Array.isArray(items) ? items : buildCalendarResultItems_(filteredCalendarEvents || []);
+        const events = list.map(getCalendarItemEvent_).filter(Boolean);
+        if (!events.length) {
+          strip.hidden = true;
+          strip.innerHTML = '';
+          return;
+        }
+
+        const eventKeys = new Set(events.map(calendarDateKeyFromEvent_).filter(Boolean));
+        const firstKey = calendarDateKeyFromEvent_(events[0]);
+        const selectedKey = activeKey || calendarAgendaActiveDayKey || firstKey;
+        const selectedDate = parseIsoDateKey_(selectedKey) || parseIsoDateKey_(firstKey) || new Date();
+        calendarAgendaActiveDayKey = calendarDateKeyFromDate_(selectedDate);
+        const weekStart = getCalendarAgendaStartOfWeek_(selectedDate);
+
+        const days = [];
+        for (let i = 0; i < 7; i += 1) {
+          const d = new Date(weekStart);
+          d.setDate(weekStart.getDate() + i);
+          const key = calendarDateKeyFromDate_(d);
+          const showMonth = i === 0 || d.getDate() === 1;
+          days.push(`
+            <button type="button" class="calendar-agenda-day ${key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${eventKeys.has(key) ? 'has-events' : ''}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(key)}')">
+              <span class="calendar-agenda-dow">${escapeHtml(getCalendarAgendaWeekdayLabel_(d))}</span>
+              <span class="calendar-agenda-month">${showMonth ? escapeHtml(getCalendarAgendaMonthLabel_(d)) : '&nbsp;'}</span>
+              <span class="calendar-agenda-num">${escapeHtml(String(d.getDate()))}</span>
+            </button>
+          `);
+        }
+
+        strip.hidden = false;
+        strip.innerHTML = `<div class="calendar-agenda-week">${days.join('')}</div>`;
+      }
+
+      function buildCalendarAgendaEventHtml_(item) {
+        const ev = getCalendarItemEvent_(item);
+        if (!ev) return '';
+        const isGroup = item && item.kind === 'service-group';
+        const ids = isGroup ? item.items.map(member => String(member?.id || '').trim()).filter(Boolean) : [String(ev.id || '').trim()];
+        const isActive = ids.some(id => String(id || '') === String(currentEventId || ''));
+        const color = escapeAttr(ev.displayColorSolid || ev.displayColor || '#94a3b8');
+        const duration = getCalendarAgendaDurationLabel_(ev);
+        const location = String(ev.Ort || '').trim();
+        const category = String(ev.Kategorie || '').trim();
+        const onclick = isGroup
+          ? `showGroupedServiceDetails('${escapeAttr(item.groupKey)}', ${Number(item.activeIndex || 0)})`
+          : `showEventDetails('${escapeAttr(ev.id)}')`;
+        const relatedIds = ids.filter(Boolean).join(' ');
+        const titleIcon = isGroup ? '<i class="fas fa-repeat" aria-hidden="true"></i>' : '';
+        const bubbles = isGroup
+          ? `<div class="service-time-bubbles service-time-bubbles-search">${item.items.map((member, idx) => `<button type="button" class="service-time-bubble service-time-bubble-search ${idx === (item.activeIndex || 0) ? 'is-active' : ''}" onclick="event.stopPropagation(); showGroupedServiceDetails('${escapeAttr(item.groupKey)}', ${idx})">${escapeHtml(buildServiceBubbleLabel_(member, idx, item.items))}</button>`).join('')}</div>`
+          : '';
+
+        return `
+          <div class="calendar-agenda-event ${isActive ? 'active' : ''}" data-id="${escapeAttr(ev.id)}" data-related-ids="${escapeAttr(relatedIds)}" role="button" tabindex="0" onclick="${onclick}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${onclick}}">
+            <div class="calendar-agenda-time">
+              <strong>${escapeHtml(getCalendarAgendaTimeLabel_(ev))}</strong>
+              ${duration ? `<span>${escapeHtml(duration)}</span>` : ''}
+            </div>
+            <div class="calendar-agenda-bar" style="background:${color}"></div>
+            <div class="calendar-agenda-main">
+              <div class="calendar-agenda-title"><span class="calendar-agenda-title-text">${escapeHtml(ev.Bezeichnung || '')}</span>${titleIcon}</div>
+              ${location ? `<div class="calendar-agenda-sub">${escapeHtml(location)}</div>` : ''}
+              <div class="calendar-agenda-meta">
+                ${category ? `<span class="calendar-agenda-chip">${escapeHtml(category)}</span>` : ''}
+                ${normalizeCalendarViewMode_(calendarViewMode) === 'mine' ? `<span class="calendar-agenda-chip">Meine Eins&auml;tze</span>` : ''}
+              </div>
+              ${bubbles}
+            </div>
+          </div>`;
+      }
+
+      function renderCalendarAgendaResults_(events) {
+        const box = document.getElementById('cal-results');
+        if (!box) return;
+        const items = buildCalendarResultItems_(events);
+        const groupedByDay = new Map();
+        items.forEach(item => {
+          const ev = getCalendarItemEvent_(item);
+          const key = calendarDateKeyFromEvent_(ev);
+          if (!key) return;
+          if (!groupedByDay.has(key)) groupedByDay.set(key, []);
+          groupedByDay.get(key).push(item);
+        });
+        const dayKeys = Array.from(groupedByDay.keys()).sort();
+        if (!dayKeys.length) {
+          renderCalendarAgendaStrip_([], '');
+          box.innerHTML = `<div class="empty-box"><div style="font-weight:900;color:var(--text-main);margin-bottom:4px;">Keine Treffer</div><div>F&uuml;r diese Suche oder diese Filter gibt es keine Termine.</div></div>`;
+          return;
+        }
+        if (!calendarAgendaActiveDayKey || !groupedByDay.has(calendarAgendaActiveDayKey)) {
+          calendarAgendaActiveDayKey = dayKeys[0];
+        }
+        renderCalendarAgendaStrip_(items, calendarAgendaActiveDayKey);
+        box.innerHTML = dayKeys.map(key => {
+          const label = getCalendarAgendaSectionLabel_(key);
+          const rows = groupedByDay.get(key).map(buildCalendarAgendaEventHtml_).join('');
+          return `
+            <section class="calendar-agenda-section" id="calendar-agenda-day-${escapeAttr(key)}" data-calendar-day="${escapeAttr(key)}">
+              <div class="calendar-agenda-date-heading"><strong>${escapeHtml(label.main)}</strong><span>${escapeHtml(label.weekday)}</span></div>
+              ${rows}
+            </section>`;
+        }).join('');
+        ensureCalendarAgendaScrollListener_();
+        requestAnimationFrame(() => updateCalendarAgendaActiveFromScroll_());
+      }
+
+      function ensureCalendarAgendaScrollListener_() {
+        if (calendarAgendaScrollListenerBound) return;
+        window.addEventListener('scroll', () => {
+          if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') return;
+          if (calendarAgendaScrollRaf) return;
+          calendarAgendaScrollRaf = requestAnimationFrame(() => {
+            calendarAgendaScrollRaf = null;
+            updateCalendarAgendaActiveFromScroll_();
+          });
+        }, { passive: true });
+        calendarAgendaScrollListenerBound = true;
+      }
+
+      function updateCalendarAgendaActiveFromScroll_() {
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') return;
+        const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'));
+        if (!sections.length) return;
+        const header = document.querySelector('#view-calendar .search-container');
+        const boundary = (header?.getBoundingClientRect?.().bottom || 0) + 8;
+        let active = sections[0].dataset.calendarDay || '';
+        sections.forEach(section => {
+          if (section.getBoundingClientRect().top <= boundary) {
+            active = section.dataset.calendarDay || active;
+          }
+        });
+        if (active && active !== calendarAgendaActiveDayKey) {
+          calendarAgendaActiveDayKey = active;
+          renderCalendarAgendaStrip_(buildCalendarResultItems_(filteredCalendarEvents || []), active);
+        }
+      }
+
+      function scrollCalendarAgendaToDay_(key) {
+        const targetKey = String(key || '').trim();
+        if (!targetKey) return;
+        calendarAgendaActiveDayKey = targetKey;
+        renderCalendarAgendaStrip_(buildCalendarResultItems_(filteredCalendarEvents || []), targetKey);
+        const section = document.getElementById(`calendar-agenda-day-${targetKey}`);
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        toast('Keine Termine an diesem Tag', 1100);
+      }
+
+      function scrollCalendarAgendaToday_() {
+        const todayKey = calendarDateKeyFromDate_(new Date());
+        const todaySection = document.getElementById(`calendar-agenda-day-${todayKey}`);
+        if (todaySection) {
+          scrollCalendarAgendaToDay_(todayKey);
+          return;
+        }
+        const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'));
+        const next = sections.find(section => String(section.dataset.calendarDay || '') >= todayKey) || sections[0];
+        if (next?.dataset?.calendarDay) scrollCalendarAgendaToDay_(next.dataset.calendarDay);
       }
 
       function parseCalendarDateTime_(dateStr, timeStr, endOfDayFallback = false) {
@@ -24542,6 +25198,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       function showCalendarSkeleton_() {
         const box = document.getElementById("cal-results");
+        renderCalendarAgendaStrip_([], '');
+        if (box) box.classList.toggle('calendar-agenda-results', normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda');
         box.innerHTML = Array.from({ length: 6 }).map(() => `
           <div class="skeleton-list-item">
             <div class="skeleton" style="width:10px;height:10px;border-radius:50%;"></div>
@@ -25513,7 +26171,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         persistPermissionsCache_(initialAuth.user || {});
         applyAccessControlUi_();
 
+        restoreCalendarLayoutMode_();
         restoreCalendarFilterState_();
+        loadUserPreferences_().catch(() => {});
         loadPrintTitleOverrides_();
         loadSmartFilterHistory_();
         loadBirthdayMessageTemplate_();
@@ -25538,6 +26198,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         setPrayerDeckMode_('alphabetical');
         renderContactsViewSwitch_();
         renderCalendarViewSwitch_();
+        renderCalendarLayoutSwitch_();
         prefetchPrayerDeckData_().catch(() => {});
         document.addEventListener('click', (ev) => {
           const inside = ev.target && ev.target.closest && ev.target.closest('.share-menu-wrap');
@@ -25552,6 +26213,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         window.addEventListener("resize", updateBottomNavHighlight_);
         window.addEventListener("resize", scheduleContactsViewThumbSync_);
         window.addEventListener("resize", scheduleCalendarViewThumbSync_);
+        window.addEventListener("resize", () => {
+          if (calendarLayoutMode === 'agenda') updateCalendarAgendaActiveFromScroll_();
+        });
         try {
           if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(() => {
