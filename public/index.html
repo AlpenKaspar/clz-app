@@ -6386,8 +6386,11 @@
     .calendar-agenda-strip {
       margin: 10px 12px 0 0;
       padding: 8px 2px 10px;
-      border-top: 1px solid rgba(226,232,240,.82);
       border-bottom: 1px solid rgba(226,232,240,.82);
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
     }
 
     .calendar-agenda-strip[hidden] {
@@ -6395,15 +6398,18 @@
     }
 
     .calendar-agenda-week {
-      display: grid;
-      grid-template-columns: repeat(7, minmax(0, 1fr));
+      display: flex;
+      align-items: flex-start;
       gap: 3px;
+      width: max-content;
+      min-width: 100%;
     }
 
     .calendar-agenda-day {
       appearance: none;
       border: 0;
-      min-width: 0;
+      flex: 0 0 52px;
+      min-width: 52px;
       min-height: 58px;
       padding: 4px 0 2px;
       border-radius: 18px;
@@ -6455,20 +6461,11 @@
     }
 
     .calendar-agenda-day.has-events::after {
-      content: "";
-      width: 18px;
-      height: 4px;
-      border-radius: 999px;
-      background: rgba(100,116,139,.7);
-      margin-top: 5px;
+      content: none;
     }
 
     body.dark .calendar-agenda-strip {
       border-color: rgba(148,163,184,.2);
-    }
-
-    body.dark .calendar-agenda-day.has-events::after {
-      background: rgba(148,163,184,.78);
     }
 
     #cal-results.calendar-agenda-results {
@@ -6604,7 +6601,7 @@
     .calendar-agenda-today-btn {
       position: fixed;
       left: 50%;
-      bottom: calc(var(--nav-height) + 18px);
+      bottom: calc(var(--nav-height) + 39px);
       transform: translateX(-50%);
       z-index: 92;
       border: 1px solid var(--border-color);
@@ -23439,19 +23436,28 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return new Intl.DateTimeFormat('de-CH', { month: 'short' }).format(date).replace('.', '');
       }
 
-      function getCalendarAgendaTimeLabel_(ev) {
+      function getCalendarAgendaSpanLabel_(ev) {
+        const dayDuration = getDurationLabel_(ev?.StartDatum || '', ev?.EndDatum || ev?.StartDatum || '');
+        if (dayDuration === '1 Woche') return 'Woche';
+        if (dayDuration === '1 Monat') return 'Monat';
+        if (dayDuration) return dayDuration;
         const start = String(ev?.StartZeit || '').trim();
         const end = String(ev?.EndZeit || '').trim();
-        if (start === '00:00' && end === '23:59') return 'Ganztag';
+        if (start === '00:00' && end === '23:59') return 'Tag';
+        return '';
+      }
+
+      function getCalendarAgendaTimeLabel_(ev) {
+        const spanLabel = getCalendarAgendaSpanLabel_(ev);
+        if (spanLabel) return spanLabel;
+        const start = String(ev?.StartZeit || '').trim();
         return start || 'Zeit';
       }
 
       function getCalendarAgendaDurationLabel_(ev) {
-        const dayDuration = getDurationLabel_(ev?.StartDatum || '', ev?.EndDatum || ev?.StartDatum || '');
-        if (dayDuration) return dayDuration;
+        if (getCalendarAgendaSpanLabel_(ev)) return '';
         const start = String(ev?.StartZeit || '').trim();
         const end = String(ev?.EndZeit || '').trim();
-        if (start === '00:00' && end === '23:59') return 'Ganzer Tag';
         const sm = start.match(/^(\d{2}):(\d{2})$/);
         const em = end.match(/^(\d{2}):(\d{2})$/);
         if (!sm || !em) return '';
@@ -23483,21 +23489,29 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return;
         }
 
-        const eventKeys = new Set(events.map(calendarDateKeyFromEvent_).filter(Boolean));
-        const firstKey = calendarDateKeyFromEvent_(events[0]);
+        const eventKeyList = events.map(calendarDateKeyFromEvent_).filter(Boolean).sort();
+        const eventKeys = new Set(eventKeyList);
+        const firstKey = eventKeyList[0] || calendarDateKeyFromEvent_(events[0]);
+        const lastKey = eventKeyList[eventKeyList.length - 1] || firstKey;
         const selectedKey = activeKey || calendarAgendaActiveDayKey || firstKey;
         const selectedDate = parseIsoDateKey_(selectedKey) || parseIsoDateKey_(firstKey) || new Date();
         calendarAgendaActiveDayKey = calendarDateKeyFromDate_(selectedDate);
-        const weekStart = getCalendarAgendaStartOfWeek_(selectedDate);
+        const firstDate = parseIsoDateKey_(firstKey) || selectedDate;
+        const lastDate = parseIsoDateKey_(lastKey) || selectedDate;
+        const rangeStart = getCalendarAgendaStartOfWeek_(firstDate < selectedDate ? firstDate : selectedDate);
+        const rangeEnd = new Date(lastDate > selectedDate ? lastDate : selectedDate);
+        rangeEnd.setDate(rangeEnd.getDate() + 35);
+        const maxDays = 140;
 
         const days = [];
-        for (let i = 0; i < 7; i += 1) {
-          const d = new Date(weekStart);
-          d.setDate(weekStart.getDate() + i);
+        for (let i = 0; i < maxDays; i += 1) {
+          const d = new Date(rangeStart);
+          d.setDate(rangeStart.getDate() + i);
+          if (d > rangeEnd) break;
           const key = calendarDateKeyFromDate_(d);
           const showMonth = i === 0 || d.getDate() === 1;
           days.push(`
-            <button type="button" class="calendar-agenda-day ${key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${eventKeys.has(key) ? 'has-events' : ''}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(key)}')">
+            <button type="button" class="calendar-agenda-day ${key === calendarAgendaActiveDayKey ? 'is-active' : ''} ${eventKeys.has(key) ? 'has-events' : ''}" data-agenda-day-key="${escapeAttr(key)}" onclick="scrollCalendarAgendaToDay_('${escapeAttr(key)}')">
               <span class="calendar-agenda-dow">${escapeHtml(getCalendarAgendaWeekdayLabel_(d))}</span>
               <span class="calendar-agenda-month">${showMonth ? escapeHtml(getCalendarAgendaMonthLabel_(d)) : '&nbsp;'}</span>
               <span class="calendar-agenda-num">${escapeHtml(String(d.getDate()))}</span>
@@ -23507,6 +23521,16 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         strip.hidden = false;
         strip.innerHTML = `<div class="calendar-agenda-week">${days.join('')}</div>`;
+        requestAnimationFrame(() => {
+          const activeBtn = strip.querySelector(`[data-agenda-day-key="${CSS.escape(calendarAgendaActiveDayKey)}"]`);
+          if (!activeBtn) return;
+          const targetLeft = Math.max(0, activeBtn.offsetLeft - ((strip.clientWidth - activeBtn.offsetWidth) / 2));
+          try {
+            strip.scrollTo({ left: targetLeft, behavior: 'smooth' });
+          } catch (e) {
+            strip.scrollLeft = targetLeft;
+          }
+        });
       }
 
       function buildCalendarAgendaEventHtml_(item) {
@@ -23600,7 +23624,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'));
         if (!sections.length) return;
         const header = document.querySelector('#view-calendar .search-container');
-        const boundary = (header?.getBoundingClientRect?.().bottom || 0) + 8;
+        const boundary = (header?.getBoundingClientRect?.().bottom || 0) + 96;
         let active = sections[0].dataset.calendarDay || '';
         sections.forEach(section => {
           if (section.getBoundingClientRect().top <= boundary) {
