@@ -4252,19 +4252,19 @@
     .calendar-layout-switch {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px;
+      gap: 2px;
+      padding: 2px;
       border: 1px solid var(--border-color);
       border-radius: 999px;
       background: rgba(226,232,240,.72);
-      box-shadow: 0 2px 8px rgba(15,23,42,.06);
+      box-shadow: none;
     }
 
     .calendar-layout-btn {
       appearance: none;
       border: 0;
-      width: 34px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
       background: transparent;
       color: var(--text-muted);
@@ -4277,14 +4277,14 @@
 
     .calendar-layout-btn i {
       color: currentColor;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1;
     }
 
     .calendar-layout-btn[aria-checked="true"] {
       background: var(--primary);
       color: #fff;
-      box-shadow: 0 6px 14px rgba(37,99,235,.24);
+      box-shadow: none;
     }
 
     body.dark .calendar-layout-switch {
@@ -6457,7 +6457,7 @@
     .calendar-agenda-day.is-active .calendar-agenda-num {
       background: var(--primary);
       color: #fff;
-      box-shadow: 0 8px 18px rgba(37,99,235,.28);
+      box-shadow: none;
     }
 
     .calendar-agenda-day.has-events::after {
@@ -6615,7 +6615,7 @@
       border-radius: 16px;
       background: var(--card-bg);
       color: var(--primary);
-      box-shadow: 0 10px 24px rgba(15,23,42,.16);
+      box-shadow: none;
       padding: 10px 16px;
       font-size: 15px;
       font-weight: 900;
@@ -6650,7 +6650,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 12px 24px rgba(37,99,235,0.30);
+      box-shadow: none;
       cursor: pointer;
       z-index: 90;
     }
@@ -23443,6 +23443,53 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return new Intl.DateTimeFormat('de-CH', { month: 'short' }).format(date).replace('.', '');
       }
 
+      function addCalendarAgendaDays_(date, days) {
+        const d = date instanceof Date && !isNaN(date.getTime()) ? new Date(date) : new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + Number(days || 0));
+        return d;
+      }
+
+      function minCalendarAgendaDate_(dates) {
+        const valid = (Array.isArray(dates) ? dates : []).filter(d => d instanceof Date && !isNaN(d.getTime()));
+        if (!valid.length) return new Date();
+        return new Date(Math.min.apply(null, valid.map(d => d.getTime())));
+      }
+
+      function maxCalendarAgendaDate_(dates) {
+        const valid = (Array.isArray(dates) ? dates : []).filter(d => d instanceof Date && !isNaN(d.getTime()));
+        if (!valid.length) return new Date();
+        return new Date(Math.max.apply(null, valid.map(d => d.getTime())));
+      }
+
+      function centerCalendarAgendaStripKey_(key, mode = 'always') {
+        const strip = document.getElementById('calendar-agenda-strip');
+        if (!strip || !key) return;
+        const activeBtn = strip.querySelector(`[data-agenda-day-key="${CSS.escape(String(key))}"]`);
+        if (!activeBtn) return;
+        const visibleLeft = strip.scrollLeft;
+        const visibleRight = visibleLeft + strip.clientWidth;
+        const btnLeft = activeBtn.offsetLeft;
+        const btnRight = btnLeft + activeBtn.offsetWidth;
+        if (mode === 'if-needed' && btnLeft >= visibleLeft + 10 && btnRight <= visibleRight - 10) return;
+        const targetLeft = Math.max(0, btnLeft - ((strip.clientWidth - activeBtn.offsetWidth) / 2));
+        try {
+          strip.scrollTo({ left: targetLeft, behavior: 'smooth' });
+        } catch (e) {
+          strip.scrollLeft = targetLeft;
+        }
+      }
+
+      function syncCalendarAgendaStripActive_(key, options = {}) {
+        const strip = document.getElementById('calendar-agenda-strip');
+        const targetKey = String(key || '').trim();
+        if (!strip || !targetKey) return;
+        strip.querySelectorAll('.calendar-agenda-day.is-active').forEach(btn => btn.classList.remove('is-active'));
+        const activeBtn = strip.querySelector(`[data-agenda-day-key="${CSS.escape(targetKey)}"]`);
+        if (activeBtn) activeBtn.classList.add('is-active');
+        if (options.center) centerCalendarAgendaStripKey_(targetKey, options.center);
+      }
+
       function getCalendarAgendaSpanLabel_(ev) {
         const dayDuration = getDurationLabel_(ev?.StartDatum || '', ev?.EndDatum || ev?.StartDatum || '');
         if (dayDuration === '1 Woche') return 'Woche';
@@ -23505,10 +23552,21 @@ function dashDynamicValueCard_(icon, prefix, item) {
         calendarAgendaActiveDayKey = calendarDateKeyFromDate_(selectedDate);
         const firstDate = parseIsoDateKey_(firstKey) || selectedDate;
         const lastDate = parseIsoDateKey_(lastKey) || selectedDate;
-        const rangeStart = getCalendarAgendaStartOfWeek_(firstDate < selectedDate ? firstDate : selectedDate);
-        const rangeEnd = new Date(lastDate > selectedDate ? lastDate : selectedDate);
-        rangeEnd.setDate(rangeEnd.getDate() + 35);
-        const maxDays = 140;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const rangeStartBase = minCalendarAgendaDate_([
+          firstDate,
+          selectedDate,
+          addCalendarAgendaDays_(today, -42)
+        ]);
+        const rangeEnd = maxCalendarAgendaDate_([
+          addCalendarAgendaDays_(lastDate, 140),
+          addCalendarAgendaDays_(selectedDate, 90),
+          addCalendarAgendaDays_(today, 210)
+        ]);
+        const rangeStart = getCalendarAgendaStartOfWeek_(rangeStartBase);
+        const diffDays = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1;
+        const maxDays = Math.min(540, Math.max(220, diffDays));
 
         const days = [];
         for (let i = 0; i < maxDays; i += 1) {
@@ -23529,14 +23587,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         strip.hidden = false;
         strip.innerHTML = `<div class="calendar-agenda-week">${days.join('')}</div>`;
         requestAnimationFrame(() => {
-          const activeBtn = strip.querySelector(`[data-agenda-day-key="${CSS.escape(calendarAgendaActiveDayKey)}"]`);
-          if (!activeBtn) return;
-          const targetLeft = Math.max(0, activeBtn.offsetLeft - ((strip.clientWidth - activeBtn.offsetWidth) / 2));
-          try {
-            strip.scrollTo({ left: targetLeft, behavior: 'smooth' });
-          } catch (e) {
-            strip.scrollLeft = targetLeft;
-          }
+          syncCalendarAgendaStripActive_(calendarAgendaActiveDayKey, { center: 'always' });
         });
       }
 
@@ -23630,8 +23681,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') return;
         const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'));
         if (!sections.length) return;
+        const strip = document.getElementById('calendar-agenda-strip');
         const header = document.querySelector('#view-calendar .search-container');
-        const boundary = (header?.getBoundingClientRect?.().bottom || 0) + 96;
+        const boundary = (strip?.getBoundingClientRect?.().bottom || header?.getBoundingClientRect?.().bottom || 0) + 18;
         let active = sections[0].dataset.calendarDay || '';
         sections.forEach(section => {
           if (section.getBoundingClientRect().top <= boundary) {
@@ -23640,7 +23692,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         });
         if (active && active !== calendarAgendaActiveDayKey) {
           calendarAgendaActiveDayKey = active;
-          renderCalendarAgendaStrip_(buildCalendarResultItems_(filteredCalendarEvents || []), active);
+          syncCalendarAgendaStripActive_(active, { center: 'if-needed' });
         }
       }
 
@@ -23648,13 +23700,27 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const targetKey = String(key || '').trim();
         if (!targetKey) return;
         calendarAgendaActiveDayKey = targetKey;
-        renderCalendarAgendaStrip_(buildCalendarResultItems_(filteredCalendarEvents || []), targetKey);
+        syncCalendarAgendaStripActive_(targetKey, { center: 'if-needed' });
         const section = document.getElementById(`calendar-agenda-day-${targetKey}`);
         if (section) {
           section.scrollIntoView({ behavior: 'smooth', block: 'start' });
           return;
         }
-        toast('Keine Termine an diesem Tag', 1100);
+        const sections = Array.from(document.querySelectorAll('#cal-results .calendar-agenda-section'))
+          .map(section => String(section.dataset.calendarDay || '').trim())
+          .filter(Boolean)
+          .sort();
+        const nextKey = sections.find(sectionKey => sectionKey >= targetKey) || sections[sections.length - 1] || '';
+        if (nextKey) {
+          if (nextKey !== targetKey) {
+            toast(nextKey > targetKey ? 'Nächster Termin wird angezeigt' : 'Keine späteren Termine geladen', 1200);
+          }
+          calendarAgendaActiveDayKey = nextKey;
+          syncCalendarAgendaStripActive_(nextKey, { center: 'if-needed' });
+          document.getElementById(`calendar-agenda-day-${nextKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        toast('Keine Termine geladen', 1100);
       }
 
       function scrollCalendarAgendaToday_() {
