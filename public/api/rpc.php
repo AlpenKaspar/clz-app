@@ -3030,6 +3030,7 @@ function rpc_default_user_preferences(): array
             'birthdaysWeek' => false,
             'servicesMine' => false,
         ],
+        'birthdayFrequency' => 'off',
         'birthdayMessageTemplate' => '',
         'birthdayGreetingStyle' => 'personal',
     ];
@@ -3062,12 +3063,28 @@ function rpc_normalize_user_preferences(mixed $payload): array
     if (!in_array($birthdayGreetingStyle, ['personal', 'formal'], true)) {
         $birthdayGreetingStyle = $defaults['birthdayGreetingStyle'];
     }
+    $birthdayFrequency = rpc_str($data['birthdayFrequency'] ?? '');
+    if ($birthdayFrequency === 'today') {
+        $birthdayFrequency = 'daily';
+    } elseif ($birthdayFrequency === 'week') {
+        $birthdayFrequency = 'weekly';
+    }
+    if (!in_array($birthdayFrequency, ['off', 'daily', 'weekly'], true)) {
+        if (!empty($notifications['birthdaysToday'])) {
+            $birthdayFrequency = 'daily';
+        } elseif (!empty($notifications['birthdaysWeek'])) {
+            $birthdayFrequency = 'weekly';
+        } else {
+            $birthdayFrequency = $defaults['birthdayFrequency'];
+        }
+    }
     return [
         'notifications' => [
-            'birthdaysToday' => (bool) ($notifications['birthdaysToday'] ?? $defaults['notifications']['birthdaysToday']),
-            'birthdaysWeek' => (bool) ($notifications['birthdaysWeek'] ?? $defaults['notifications']['birthdaysWeek']),
+            'birthdaysToday' => $birthdayFrequency === 'daily',
+            'birthdaysWeek' => $birthdayFrequency === 'weekly',
             'servicesMine' => (bool) ($notifications['servicesMine'] ?? $defaults['notifications']['servicesMine']),
         ],
+        'birthdayFrequency' => $birthdayFrequency,
         'birthdayMessageTemplate' => $birthdayMessageTemplate,
         'birthdayGreetingStyle' => $birthdayGreetingStyle,
     ];

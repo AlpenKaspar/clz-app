@@ -99,6 +99,26 @@ function birthday_push_body(array $items, bool $withDayLabel): string
     return implode(', ', $names);
 }
 
+function birthday_push_frequency(array $notifications, array $prefs = []): string
+{
+    $raw = strtolower(trim((string) ($prefs['birthdayFrequency'] ?? '')));
+    if ($raw === 'today') {
+        $raw = 'daily';
+    } elseif ($raw === 'week') {
+        $raw = 'weekly';
+    }
+    if (in_array($raw, ['daily', 'weekly', 'off'], true)) {
+        return $raw;
+    }
+    if (!empty($notifications['birthdaysToday'])) {
+        return 'daily';
+    }
+    if (!empty($notifications['birthdaysWeek'])) {
+        return 'weekly';
+    }
+    return 'off';
+}
+
 try {
     $user = current_user();
     if (!$user || empty($user['isAuthenticated'])) {
@@ -113,11 +133,12 @@ try {
     $today = new DateTimeImmutable('today');
     $weekItems = birthday_push_items($today);
     $todayItems = array_values(array_filter($weekItems, static fn(array $item): bool => (int) ($item['days'] ?? -1) === 0));
+    $frequency = birthday_push_frequency($notifications, is_array($prefs) ? $prefs : []);
 
     $mode = '';
-    if (!empty($notifications['birthdaysToday']) && count($todayItems) > 0) {
+    if ($frequency === 'daily' && count($todayItems) > 0) {
         $mode = 'today';
-    } elseif (!empty($notifications['birthdaysWeek']) && count($weekItems) > 0) {
+    } elseif ($frequency === 'weekly' && count($weekItems) > 0) {
         $mode = 'week';
     } elseif (count($todayItems) > 0) {
         $mode = 'today';

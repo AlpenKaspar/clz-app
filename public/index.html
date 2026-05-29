@@ -5578,6 +5578,73 @@
       white-space: nowrap;
     }
 
+    .birthday-frequency-switch {
+      position: relative;
+      display: inline-grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: center;
+      width: min(100%, 274px);
+      height: 38px;
+      padding: 4px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid rgba(148,163,184,0.34);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    body.dark .birthday-frequency-switch {
+      background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(30,41,59,0.86));
+      border-color: rgba(71,85,105,0.42);
+    }
+
+    .birthday-frequency-switch-thumb {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc((100% - 8px) / 3);
+      height: calc(100% - 8px);
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
+      transition: transform .22s ease;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    body.dark .birthday-frequency-switch-thumb {
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
+    }
+
+    .birthday-frequency-switch[data-mode="daily"] .birthday-frequency-switch-thumb { transform: translateX(100%); }
+    .birthday-frequency-switch[data-mode="weekly"] .birthday-frequency-switch-thumb { transform: translateX(200%); }
+
+    .birthday-frequency-switch-btn {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: color .18s ease, transform .18s ease;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .birthday-frequency-switch-btn[aria-checked="true"] {
+      color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    body.dark .birthday-frequency-switch-btn { color: #64748b; }
+    body.dark .birthday-frequency-switch-btn[aria-checked="true"] { color: var(--primary); }
+
     .tools-message-row {
       align-items: flex-start;
     }
@@ -5753,6 +5820,10 @@
       }
 
       .birthday-style-switch {
+        width: 100%;
+      }
+
+      .birthday-frequency-switch {
         width: 100%;
       }
     }
@@ -9010,21 +9081,11 @@
               </div>
               <div>
                 <div class="tools-section-label">Geburtstage</div>
-                <div class="tools-toggle-list">
-                  <div class="tools-toggle-row">
-                    <span class="tools-toggle-label">Heute</span>
-                    <label class="switch" aria-label="Geburtstage heute">
-                      <input id="pref-birthday-today" type="checkbox" onchange="setUserNotificationPreference_('birthdaysToday', this.checked)">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                  <div class="tools-toggle-row">
-                    <span class="tools-toggle-label">Diese Woche</span>
-                    <label class="switch" aria-label="Geburtstage diese Woche">
-                      <input id="pref-birthday-week" type="checkbox" onchange="setUserNotificationPreference_('birthdaysWeek', this.checked)">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
+                <div id="birthday-frequency-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="Geburtstags-Benachrichtigung">
+                  <button type="button" id="birthday-frequency-off" class="birthday-frequency-switch-btn" onclick="setBirthdayNotificationFrequency_('off')" aria-checked="true">Aus</button>
+                  <button type="button" id="birthday-frequency-daily" class="birthday-frequency-switch-btn" onclick="setBirthdayNotificationFrequency_('daily')" aria-checked="false">Täglich</button>
+                  <button type="button" id="birthday-frequency-weekly" class="birthday-frequency-switch-btn" onclick="setBirthdayNotificationFrequency_('weekly')" aria-checked="false">Wöchentlich</button>
+                  <span class="birthday-frequency-switch-thumb"></span>
                 </div>
               </div>
             </div>
@@ -9293,7 +9354,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
-      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayMessageTemplate: "", birthdayGreetingStyle: "personal" };
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal" };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
@@ -9558,14 +9619,23 @@
         const template = prefs && typeof prefs === 'object'
           ? String(prefs.birthdayMessageTemplate || '').slice(0, 2000)
           : '';
+        const rawFrequency = prefs && typeof prefs === 'object' ? String(prefs.birthdayFrequency || '').trim().toLowerCase() : '';
+        const birthdayFrequency = rawFrequency === 'daily' || rawFrequency === 'today'
+          ? 'daily'
+          : (rawFrequency === 'weekly' || rawFrequency === 'week'
+            ? 'weekly'
+            : (!rawFrequency && notifications.birthdaysToday
+              ? 'daily'
+              : (!rawFrequency && notifications.birthdaysWeek ? 'weekly' : 'off')));
         const rawGreetingStyle = prefs && typeof prefs === 'object' ? String(prefs.birthdayGreetingStyle || '') : '';
         const birthdayGreetingStyle = rawGreetingStyle === 'formal' ? 'formal' : 'personal';
         return {
           notifications: {
-            birthdaysToday: !!notifications.birthdaysToday,
-            birthdaysWeek: !!notifications.birthdaysWeek,
+            birthdaysToday: birthdayFrequency === 'daily',
+            birthdaysWeek: birthdayFrequency === 'weekly',
             servicesMine: !!notifications.servicesMine
           },
+          birthdayFrequency,
           birthdayMessageTemplate: template,
           birthdayGreetingStyle
         };
@@ -9579,18 +9649,29 @@
 
       function renderUserPreferences_() {
         const n = currentUserPreferences?.notifications || {};
-        const today = document.getElementById('pref-birthday-today');
-        const week = document.getElementById('pref-birthday-week');
+        const birthdayFrequency = currentUserPreferences?.birthdayFrequency || (n.birthdaysToday ? 'daily' : (n.birthdaysWeek ? 'weekly' : 'off'));
+        const frequencyHost = document.getElementById('birthday-frequency-switch');
+        const frequencyOff = document.getElementById('birthday-frequency-off');
+        const frequencyDaily = document.getElementById('birthday-frequency-daily');
+        const frequencyWeekly = document.getElementById('birthday-frequency-weekly');
         const status = document.getElementById('user-preferences-status');
         const pushBtn = document.getElementById('push-notification-btn');
         const notificationToggleDisabled = !!pushNotificationStatus.loading;
-        if (today) {
-          today.checked = !!n.birthdaysToday;
-          today.disabled = notificationToggleDisabled;
+        if (frequencyHost) frequencyHost.dataset.mode = birthdayFrequency;
+        [
+          [frequencyOff, 'off'],
+          [frequencyDaily, 'daily'],
+          [frequencyWeekly, 'weekly']
+        ].forEach(([btn, mode]) => {
+          if (!btn) return;
+          btn.setAttribute('aria-checked', birthdayFrequency === mode ? 'true' : 'false');
+          btn.disabled = notificationToggleDisabled;
+        });
+        if (frequencyDaily) {
+          frequencyDaily.title = 'Täglicher Cron: zeigt Geburtstage heute';
         }
-        if (week) {
-          week.checked = !!n.birthdaysWeek;
-          week.disabled = notificationToggleDisabled;
+        if (frequencyWeekly) {
+          frequencyWeekly.title = 'Wöchentlicher Cron: zeigt Geburtstage diese Woche';
         }
         if (pushBtn) {
           const icon = pushNotificationStatus.subscribed ? 'fa-bell-slash' : 'fa-bell';
@@ -9601,11 +9682,13 @@
           pushBtn.innerHTML = `<i class="fas ${icon}"></i><span>${text}</span>`;
         }
         if (status) {
-          const active = [n.birthdaysToday ? 'heute' : '', n.birthdaysWeek ? 'Woche' : ''].filter(Boolean);
+          const active = birthdayFrequency === 'daily'
+            ? 'Täglich'
+            : (birthdayFrequency === 'weekly' ? 'Wöchentlich' : '');
           const pushText = !pushNotificationStatus.supported
             ? 'Push nicht verfügbar'
             : (!pushNotificationStatus.enabled ? 'Push-Key fehlt' : (pushNotificationStatus.subscribed ? 'Push aktiv' : 'Push aus'));
-          status.textContent = `${active.length ? `Aktiv: ${active.join(', ')}` : 'Pro Login gespeichert'} · ${pushText}`;
+          status.textContent = `${active ? `Aktiv: ${active}` : 'Pro Login gespeichert'} · ${pushText}`;
         }
         syncBirthdayGreetingStyleUi_();
       }
@@ -9784,11 +9867,32 @@
       async function setUserNotificationPreference_(key, value) {
         const prefKey = String(key || '');
         const prefs = normalizeUserPreferences_(currentUserPreferences);
+        if (prefKey === 'birthdaysToday' || prefKey === 'birthdaysWeek') {
+          const next = !value ? 'off' : (prefKey === 'birthdaysToday' ? 'daily' : 'weekly');
+          await setBirthdayNotificationFrequency_(next);
+          return;
+        }
         prefs.notifications[prefKey] = !!value;
         currentUserPreferences = normalizeUserPreferences_(prefs);
         renderUserPreferences_();
         saveUserPreferences_();
-        if (value && (prefKey === 'birthdaysToday' || prefKey === 'birthdaysWeek')) {
+      }
+
+      async function setBirthdayNotificationFrequency_(frequency) {
+        const next = ['daily', 'weekly'].includes(String(frequency || '').trim()) ? String(frequency || '').trim() : 'off';
+        const prefs = normalizeUserPreferences_({
+          ...currentUserPreferences,
+          birthdayFrequency: next,
+          notifications: {
+            ...(currentUserPreferences?.notifications || {}),
+            birthdaysToday: next === 'daily',
+            birthdaysWeek: next === 'weekly'
+          }
+        });
+        currentUserPreferences = prefs;
+        renderUserPreferences_();
+        await saveUserPreferences_('Benachrichtigungen gespeichert');
+        if (next !== 'off') {
           const pushOk = await ensurePushNotificationsActive_();
           if (!pushOk) {
             toast('Wunsch gespeichert, Push noch nicht aktiv', 2200);

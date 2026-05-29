@@ -6,6 +6,28 @@ require __DIR__ . '/../src/bootstrap.php';
 require __DIR__ . '/../src/web_push.php';
 
 $dryRun = in_array('--dry-run', $argv, true);
+$mode = 'today';
+foreach ($argv as $arg) {
+    $value = trim((string) $arg);
+    if (str_starts_with($value, '--mode=')) {
+        $mode = strtolower(substr($value, 7));
+    } elseif (in_array($value, ['--today', '--daily'], true)) {
+        $mode = 'today';
+    } elseif (in_array($value, ['--week', '--weekly'], true)) {
+        $mode = 'week';
+    } elseif ($value === '--auto') {
+        $mode = 'auto';
+    }
+}
+if ($mode === 'daily') {
+    $mode = 'today';
+} elseif ($mode === 'weekly') {
+    $mode = 'week';
+}
+if (!in_array($mode, ['today', 'week', 'auto'], true)) {
+    fwrite(STDERR, "Invalid --mode. Use today, week or auto.\n");
+    exit(2);
+}
 
 function ensure_push_notification_schema(): void
 {
@@ -100,6 +122,26 @@ function mark_notification_sent(int $userId, string $key): void
     $stmt->execute([$userId, $key]);
 }
 
+function birthday_notification_frequency(array $notifications, array $prefs): string
+{
+    $raw = strtolower(trim((string) ($prefs['birthdayFrequency'] ?? '')));
+    if ($raw === 'today') {
+        $raw = 'daily';
+    } elseif ($raw === 'week') {
+        $raw = 'weekly';
+    }
+    if (in_array($raw, ['daily', 'weekly', 'off'], true)) {
+        return $raw;
+    }
+    if (!empty($notifications['birthdaysToday'])) {
+        return 'daily';
+    }
+    if (!empty($notifications['birthdaysWeek'])) {
+        return 'weekly';
+    }
+    return 'off';
+}
+
 ensure_push_notification_schema();
 
 $today = new DateTimeImmutable('today');
@@ -121,12 +163,24 @@ $errors = [];
 foreach ($users as $user) {
     $userId = (int) ($user['id'] ?? 0);
     $prefs = json_decode((string) ($user['payload_json'] ?? '{}'), true);
+    if (!is_array($prefs)) {
+        $prefs = [];
+    }
     $notifications = is_array($prefs['notifications'] ?? null) ? $prefs['notifications'] : [];
+    $frequency = birthday_notification_frequency($notifications, $prefs);
+    if ($mode === 'today' && $frequency !== 'daily') {
+        $skipped++;
+        continue;
+    }
+    if ($mode === 'week' && $frequency !== 'weekly') {
+        $skipped++;
+        continue;
+    }
 
     $key = '';
-    if (!empty($notifications['birthdaysToday']) && $counts['today'] > 0 && !user_has_notification_log($userId, $todayKey)) {
+    if (($mode === 'today' || ($mode === 'auto' && $frequency === 'daily')) && $counts['today'] > 0 && !user_has_notification_log($userId, $todayKey)) {
         $key = $todayKey;
-    } elseif (!empty($notifications['birthdaysWeek']) && $counts['week'] > 0 && !user_has_notification_log($userId, $weekKey)) {
+    } elseif (($mode === 'week' || ($mode === 'auto' && $frequency === 'weekly')) && $counts['week'] > 0 && !user_has_notification_log($userId, $weekKey)) {
         $key = $weekKey;
     }
     if ($key === '') {
@@ -174,6 +228,7 @@ foreach ($users as $user) {
 echo json_encode([
     'ok' => !$errors,
     'dryRun' => $dryRun,
+    'mode' => $mode,
     'date' => $today->format('Y-m-d'),
     'birthdays' => $counts,
     'sentUsers' => $sent,
