@@ -6475,19 +6475,27 @@
       position: fixed;
       z-index: 120;
       min-width: 188px;
+      max-height: min(430px, calc(100vh - 96px));
       padding: 8px;
       border: 1px solid var(--border-color);
       border-radius: 14px;
       background: var(--card-bg);
       box-shadow: 0 16px 40px rgba(15,23,42,.14);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
 
     .calendar-agenda-month-menu-title {
+      position: sticky;
+      top: -8px;
       padding: 4px 8px 8px;
+      background: var(--card-bg);
       color: var(--text-muted);
       font-size: 11px;
       font-weight: 900;
       text-transform: uppercase;
+      z-index: 1;
     }
 
     .calendar-agenda-month-menu-btn {
@@ -23961,12 +23969,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function buildCalendarAgendaMonthMenuItems_() {
-        const activeDate = parseIsoDateKey_(calendarAgendaActiveDayKey) || new Date();
-        activeDate.setHours(0, 0, 0, 0);
-        const startDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), 1);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startDate = new Date(today.getFullYear(), 0, 1);
+        const endDate = addCalendarAgendaMonths_(new Date(today.getFullYear(), today.getMonth(), 1), 13);
         const items = [];
-        for (let i = 0; i < 18; i += 1) {
-          const date = addCalendarAgendaMonths_(startDate, i);
+        for (let date = new Date(startDate); date <= endDate; date = addCalendarAgendaMonths_(date, 1)) {
           const startKey = calendarDateKeyFromDate_(date);
           items.push({
             key: startKey.slice(0, 7),
@@ -24030,7 +24038,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         menu.innerHTML = `
           <div class="calendar-agenda-month-menu-title">Monate</div>
           ${items.map(item => `
-            <button type="button" class="calendar-agenda-month-menu-btn ${String(item.key || '') === activeMonth ? 'is-active' : ''}" onclick="scrollCalendarAgendaToMonth_('${escapeAttr(item.startKey)}')">
+            <button type="button" class="calendar-agenda-month-menu-btn ${String(item.key || '') === activeMonth ? 'is-active' : ''}" data-agenda-menu-month="${escapeAttr(item.key || '')}" onclick="scrollCalendarAgendaToMonth_('${escapeAttr(item.startKey)}')">
               <span>${escapeHtml(item.label || '')}</span><i class="fas ${item.isLoaded ? 'fa-arrow-right' : 'fa-cloud-arrow-down'}" aria-hidden="true"></i>
             </button>
           `).join('')}`;
@@ -24041,6 +24049,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const top = Math.min(rect.bottom + 7, Math.max(8, window.innerHeight - menuRect.height - 8));
         menu.style.left = `${Math.round(left)}px`;
         menu.style.top = `${Math.round(top)}px`;
+        const activeBtn = menu.querySelector(`[data-agenda-menu-month="${CSS.escape(activeMonth)}"]`);
+        if (activeBtn) activeBtn.scrollIntoView({ block: 'nearest' });
       }
 
       async function scrollCalendarAgendaToMonth_(key) {
