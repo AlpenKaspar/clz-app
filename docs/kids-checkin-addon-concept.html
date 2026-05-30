@@ -290,7 +290,7 @@
 
     .footer-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 10px;
       padding-top: 8px;
     }
@@ -316,6 +316,25 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+    }
+
+    .session-stamp {
+      margin-bottom: 12px;
+      padding: 11px 12px;
+      border: 1px solid #c7d8ff;
+      border-radius: 14px;
+      background: var(--blue-soft);
+      color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    .session-stamp b {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 13px;
+      color: var(--blue);
     }
 
     code {
@@ -351,8 +370,9 @@
           A Chaeferli, B Pingu, C Haesli, D Loewen und F Promiseland.
         </p>
         <div class="note">
-          Add-on-Prinzip: eigene Tabellen, eigene API-Funktionen, eigener UI-Block. Wenn man es spaeter entfernt,
-          bleiben Kalender, Kontakte und Services unveraendert.
+          Kern fuer Version 1: pro Gottesdienst-Zeit gibt es eine eigene Check-in-Session. Ein Kind kann in dieser
+          Session genau einmal eingecheckt werden. Der Tages-/Gottesdienst-Stempel bleibt gespeichert, damit spaeter
+          sauber gezaehlt werden kann, wie oft ein Kind gekommen ist.
         </div>
         <div class="grid">
           <div class="tile">
@@ -361,28 +381,28 @@
           </div>
           <div class="tile">
             <strong>Einordnung</strong>
-            <span>Check-in pro Service-Zeit und Gruppe</span>
+            <span>Ein Check-in pro Kind, pro Ablauf-/Service-Zeit</span>
           </div>
           <div class="tile">
             <strong>Auswertung</strong>
-            <span>Besuche pro Kind, Gruppe und Datum</span>
+            <span>Besuche ueber Tages- und Gottesdienststempel zaehlen</span>
           </div>
         </div>
         <div class="schema">
           <div class="tile">
             <strong>Neue Tabellen</strong>
             <ul>
-              <li><code>addon_kids_checkin_sessions</code>: Service-Zeit, Datum, Status</li>
-              <li><code>addon_kids_checkin_records</code>: Kind, Gruppe, checked_in/out</li>
-              <li><code>addon_kids_checkin_notes</code>: optionale Notiz/Sonderinfo</li>
+              <li><code>addon_kids_checkin_sessions</code>: Service-ID, Datum, Zeit, Titel-Snapshot, Stempel</li>
+              <li><code>addon_kids_checkin_records</code>: Session, Kind, Gruppe, checked_in_at, checked_in_by</li>
+              <li><code>addon_kids_checkin_notes</code>: optionale Notiz/Sonderinfo spaeter</li>
             </ul>
           </div>
           <div class="tile">
-            <strong>Wichtig fuer robustes Loeschen</strong>
+            <strong>Zaehllogik</strong>
             <ul>
-              <li>Alle Funktionen mit Prefix <code>kidsCheckin_</code></li>
-              <li>Keine Veraenderung an Elvanto-Importdaten</li>
-              <li>Soft-delete bei Check-ins statt hartem Loeschen</li>
+              <li>Unique: <code>session_id + person_id</code>, damit ein Kind nicht doppelt zaehlt</li>
+              <li>Stempel: <code>service_date + service_time + service_elvanto_id</code></li>
+              <li>Besuche: Anzahl Records pro Kind ueber gueltige Sessions</li>
             </ul>
           </div>
         </div>
@@ -393,7 +413,7 @@
           <div class="title-row">
             <div>
               <div class="service-title">Gottesdienst</div>
-              <div class="child-meta">So, 31. Mai · 09:30</div>
+              <div class="child-meta">So, 31. Mai - 09:30</div>
             </div>
             <span class="pill">Service</span>
           </div>
@@ -404,10 +424,15 @@
           </div>
         </div>
         <div class="phone-body">
+          <div class="session-stamp">
+            <b>Check-in Session</b>
+            2026-05-31 - 09:30 - Gottesdienst<br>
+            Stempel: SERVICE-9f3... / 09:30
+          </div>
           <div class="stats">
             <div class="stat"><b>37</b><span>Checked-in</span></div>
             <div class="stat"><b>203</b><span>Kinder</span></div>
-            <div class="stat"><b>5</b><span>Gruppen</span></div>
+            <div class="stat"><b>09:30</b><span>Zeit</span></div>
           </div>
           <div class="search">Kind suchen...</div>
           <div class="group-strip">
@@ -420,7 +445,7 @@
             <div class="avatar">LM</div>
             <div>
               <div class="child-name">Lea Muster</div>
-              <div class="child-meta">C Haesli · 8 Besuche</div>
+              <div class="child-meta">C Haesli - 8 Besuche total</div>
             </div>
             <div class="check on">✓</div>
           </div>
@@ -428,7 +453,7 @@
             <div class="avatar">NB</div>
             <div>
               <div class="child-name">Noah Berger</div>
-              <div class="child-meta">B Pingu · 4 Besuche · Allergie</div>
+              <div class="child-meta">B Pingu - 4 Besuche total - Allergie</div>
             </div>
             <div class="check"></div>
           </div>
@@ -436,12 +461,11 @@
             <div class="avatar">SW</div>
             <div>
               <div class="child-name">Sina Waelti</div>
-              <div class="child-meta">A Chaeferli · heute neu</div>
+              <div class="child-meta">A Chaeferli - heute neu</div>
             </div>
             <div class="check on">✓</div>
           </div>
           <div class="footer-actions">
-            <div class="btn">Export</div>
             <div class="btn primary">Speichern</div>
           </div>
         </div>
