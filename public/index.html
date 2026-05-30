@@ -14732,7 +14732,7 @@
           try { document.exitFullscreen().catch(() => {}); } catch (e) {}
         }
         songFullscreenState.open = false;
-        if (currentDetailOverlayView !== "calendar-flow-view") releaseWakeLock_();
+        updateWakeLockState_();
       }
 
       function pauseSongFullscreenScroll_(resetSpeed = false) {
@@ -15965,7 +15965,7 @@ function updateBottomNavHighlight_() {
           prayerTimerConfigOpen = false;
           endPrayerPointSession_();
           closePrayerOverlay_();
-          releaseWakeLock_();
+          updateWakeLockState_();
         }
         updatePrayerViewUi_();
         renderPrayerTimerUi_();
@@ -17313,7 +17313,7 @@ function updateBottomNavHighlight_() {
         renderPrayerDeck_();
         updatePrayerViewUi_();
         endPrayerPointSession_();
-        releaseWakeLock_();
+        updateWakeLockState_();
       }
 
       function showPrayerSwipeHand_() {
@@ -20544,6 +20544,7 @@ function updateBottomNavHighlight_() {
         if (overlay) overlay.setAttribute("data-active-view", currentDetailOverlayView);
         const scroll = overlay ? overlay.querySelector(".detail-overlay-scroll") : null;
         if (scroll) scroll.scrollTop = 0;
+        updateWakeLockState_();
       }
 
       function onDetailBack() {
@@ -20599,6 +20600,23 @@ function updateBottomNavHighlight_() {
         currentSongDetailReturnView = '';
         currentSongDetailReturnFlowIndex = -1;
         resumeContactWarmupQueue_();
+        updateWakeLockState_();
+      }
+
+      function shouldKeepWakeLock_() {
+        const serviceKeepAwakeViews = new Set(["calendar-staff-view", "calendar-flow-view", "calendar-kids-checkin-view"]);
+        const prayerOverlay = document.getElementById('prayer-overlay-backdrop');
+        const prayerOverlayOpen = !!(prayerOverlay && prayerOverlay.hidden === false);
+        return !!(
+          serviceKeepAwakeViews.has(String(currentDetailOverlayView || "")) ||
+          songFullscreenState?.open ||
+          prayerOverlayOpen
+        );
+      }
+
+      function updateWakeLockState_() {
+        if (shouldKeepWakeLock_()) enableWakeLockIfNeeded_();
+        else releaseWakeLock_();
       }
 
       async function enableWakeLockIfNeeded_() {
@@ -20632,7 +20650,7 @@ function updateBottomNavHighlight_() {
         currentFlowManualActiveIndex = -1;
         currentFlowManualStartedAt = 0;
         currentFlowLastAutoScrollIndex = -1;
-        releaseWakeLock_();
+        updateWakeLockState_();
       }
 
       function getFlowLiveRefreshMs_() {
