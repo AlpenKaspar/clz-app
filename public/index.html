@@ -7679,13 +7679,54 @@
       gap: 6px;
     }
 
+    .kids-checkin-family-card {
+      gap: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: var(--card-bg);
+      overflow: hidden;
+    }
+
     .kids-checkin-family-title {
-      padding: 4px 2px 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 12px 9px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(148,163,184,0.07);
+    }
+
+    .kids-checkin-family-title-main {
       color: var(--text-muted);
       font-size: 11px;
       font-weight: 950;
       letter-spacing: .04em;
       text-transform: uppercase;
+    }
+
+    .kids-checkin-family-title-sub {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .kids-checkin-family-count {
+      flex: 0 0 auto;
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: rgba(37,99,235,0.10);
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 950;
+      white-space: nowrap;
     }
 
     .kids-checkin-row {
@@ -7697,6 +7738,17 @@
       border: 1px solid var(--border-color);
       border-radius: 14px;
       background: var(--card-bg);
+    }
+
+    .kids-checkin-family-card .kids-checkin-row {
+      border: 0;
+      border-top: 1px solid var(--border-color);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .kids-checkin-family-card .kids-checkin-family-title + .kids-checkin-row {
+      border-top: 0;
     }
 
     .kids-checkin-row.is-checked {
@@ -7811,6 +7863,14 @@
     body.dark .kids-checkin-row.is-checked {
       background: rgba(59,130,246,0.14);
       border-color: rgba(59,130,246,0.30);
+    }
+
+    body.dark .kids-checkin-family-card {
+      background: rgba(15,23,42,0.72);
+    }
+
+    body.dark .kids-checkin-family-title {
+      background: rgba(148,163,184,0.10);
     }
 
     body.dark .kids-checkin-search {
@@ -26015,7 +26075,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
         (Array.isArray(rows) ? rows : []).forEach(row => {
           const key = String(row?.familyKey || row?.id || '').trim();
           if (!byKey[key]) {
-            byKey[key] = { key, title: row?.familyTitle || '', rows: [] };
+            byKey[key] = {
+              key,
+              title: row?.familyTitle || '',
+              parentNames: Array.isArray(row?.parentNames) ? row.parentNames.slice() : [],
+              place: row?.place || '',
+              rows: []
+            };
             groups.push(byKey[key]);
           }
           byKey[key].rows.push(row);
@@ -26055,14 +26121,26 @@ function dashDynamicValueCard_(icon, prefix, item) {
           : (!rows.length
             ? `<div class="kids-checkin-empty">Keine Kinder gefunden.</div>`
             : `<div class="kids-checkin-list">${groupKidsCheckinRowsByFamily_(rows).map(group => {
-              const showFamilyHeader = Array.isArray(group.rows) && group.rows.length > 1;
+              const isRealFamily = !String(group.key || '').startsWith('person_');
+              const showFamilyCard = isRealFamily;
+              const familyMeta = (Array.isArray(group.parentNames) && group.parentNames.length)
+                ? `Eltern: ${group.parentNames.slice(0, 3).join(' · ')}`
+                : (group.place || '');
               return `
-                <div class="kids-checkin-family-group">
-                  ${showFamilyHeader ? `<div class="kids-checkin-family-title">${escapeHtml(group.title || 'Familie')}</div>` : ``}
+                <div class="kids-checkin-family-group ${showFamilyCard ? 'kids-checkin-family-card' : ''}">
+                  ${showFamilyCard ? `
+                    <div class="kids-checkin-family-title">
+                      <div>
+                        <div class="kids-checkin-family-title-main">${escapeHtml(group.title || 'Familie')}</div>
+                        ${familyMeta ? `<div class="kids-checkin-family-title-sub">${escapeHtml(familyMeta)}</div>` : ``}
+                      </div>
+                      <span class="kids-checkin-family-count">${group.rows.length === 1 ? '1 Kind' : `${group.rows.length} Kinder`}</span>
+                    </div>
+                  ` : ``}
                   ${group.rows.map(row => {
                 const isChecked = !!checked[row.id];
                 const visits = Number(visitCounts[row.id] || 0);
-                const parents = row.parentNames.length ? `Eltern: ${row.parentNames.slice(0, 3).join(' · ')}` : (row.place || '');
+                const parents = showFamilyCard ? (row.place || '') : (row.parentNames.length ? `Eltern: ${row.parentNames.slice(0, 3).join(' · ')}` : (row.place || ''));
                 const extraGroups = row.groupLabels.length > 1 ? `+${row.groupLabels.length - 1}` : '';
                 return `
                   <div class="kids-checkin-row ${isChecked ? 'is-checked' : ''}">
