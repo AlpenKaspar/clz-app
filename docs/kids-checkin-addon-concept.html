@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kids Check-in Add-on Konzept</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe4ef;
+      --blue: #2563eb;
+      --blue-soft: #e8f0ff;
+      --green: #16a34a;
+      --orange: #f59e0b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 26px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 430px);
+      gap: 22px;
+      align-items: start;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--blue-soft);
+      color: #1e3a8a;
+      font-weight: 760;
+      line-height: 1.35;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .tile {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px;
+    }
+
+    .tile strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .tile span {
+      display: block;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+
+    .phone {
+      width: 390px;
+      max-width: 100%;
+      margin-left: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(15,23,42,.10);
+    }
+
+    .phone-head {
+      padding: 20px 18px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .service-title {
+      font-weight: 950;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #edf2f7;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .tab {
+      min-height: 38px;
+      border-radius: 999px;
+      background: #edf2f7;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .tab.active {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .phone-body {
+      padding: 14px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+
+    .stat b {
+      display: block;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .search {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 12px;
+      background: #f8fafc;
+    }
+
+    .group-strip {
+      display: flex;
+      gap: 7px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .group-chip {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: #edf2f7;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .group-chip.active {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .check-row {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 11px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      margin-bottom: 8px;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 15px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 950;
+    }
+
+    .child-name {
+      font-weight: 900;
+      line-height: 1.1;
+    }
+
+    .child-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .check {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 2px solid #b7c8e5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 950;
+      color: transparent;
+    }
+
+    .check.on {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .footer-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-top: 8px;
+    }
+
+    .btn {
+      min-height: 44px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      background: #edf2f7;
+      color: var(--text);
+    }
+
+    .btn.primary {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .schema {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    code {
+      background: #eef2f7;
+      padding: 2px 5px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    @media (max-width: 880px) {
+      .page { padding: 16px; }
+      .hero { grid-template-columns: 1fr; }
+      .grid, .schema { grid-template-columns: 1fr; }
+      .phone { margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="panel">
+        <h1>Kinder Check-in als entkoppeltes Add-on</h1>
+        <p>
+          Ziel: Im Gottesdienst-Service gibt es neben Mitarbeitende und Ablauf einen dritten Bereich
+          <strong>Kinder Check-in</strong>. Die Kinder kommen aus der bestehenden Kids &amp; Promiseland-Logik:
+          A Chaeferli, B Pingu, C Haesli, D Loewen und F Promiseland.
+        </p>
+        <div class="note">
+          Add-on-Prinzip: eigene Tabellen, eigene API-Funktionen, eigener UI-Block. Wenn man es spaeter entfernt,
+          bleiben Kalender, Kontakte und Services unveraendert.
+        </div>
+        <div class="grid">
+          <div class="tile">
+            <strong>Datenquelle</strong>
+            <span>Kids &amp; Youth Filter aus Kontakte/Smartfilter</span>
+          </div>
+          <div class="tile">
+            <strong>Einordnung</strong>
+            <span>Check-in pro Service-Zeit und Gruppe</span>
+          </div>
+          <div class="tile">
+            <strong>Auswertung</strong>
+            <span>Besuche pro Kind, Gruppe und Datum</span>
+          </div>
+        </div>
+        <div class="schema">
+          <div class="tile">
+            <strong>Neue Tabellen</strong>
+            <ul>
+              <li><code>addon_kids_checkin_sessions</code>: Service-Zeit, Datum, Status</li>
+              <li><code>addon_kids_checkin_records</code>: Kind, Gruppe, checked_in/out</li>
+              <li><code>addon_kids_checkin_notes</code>: optionale Notiz/Sonderinfo</li>
+            </ul>
+          </div>
+          <div class="tile">
+            <strong>Wichtig fuer robustes Loeschen</strong>
+            <ul>
+              <li>Alle Funktionen mit Prefix <code>kidsCheckin_</code></li>
+              <li>Keine Veraenderung an Elvanto-Importdaten</li>
+              <li>Soft-delete bei Check-ins statt hartem Loeschen</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone" aria-label="Mockup Kinder Check-in">
+        <div class="phone-head">
+          <div class="title-row">
+            <div>
+              <div class="service-title">Gottesdienst</div>
+              <div class="child-meta">So, 31. Mai · 09:30</div>
+            </div>
+            <span class="pill">Service</span>
+          </div>
+          <div class="tabs">
+            <div class="tab">Mitarbeitende</div>
+            <div class="tab">Ablauf</div>
+            <div class="tab active">Kinder</div>
+          </div>
+        </div>
+        <div class="phone-body">
+          <div class="stats">
+            <div class="stat"><b>37</b><span>Checked-in</span></div>
+            <div class="stat"><b>203</b><span>Kinder</span></div>
+            <div class="stat"><b>5</b><span>Gruppen</span></div>
+          </div>
+          <div class="search">Kind suchen...</div>
+          <div class="group-strip">
+            <span class="group-chip active">Alle</span>
+            <span class="group-chip">A Chaeferli</span>
+            <span class="group-chip">B Pingu</span>
+            <span class="group-chip">C Haesli</span>
+          </div>
+          <div class="check-row">
+            <div class="avatar">LM</div>
+            <div>
+              <div class="child-name">Lea Muster</div>
+              <div class="child-meta">C Haesli · 8 Besuche</div>
+            </div>
+            <div class="check on">✓</div>
+          </div>
+          <div class="check-row">
+            <div class="avatar">NB</div>
+            <div>
+              <div class="child-name">Noah Berger</div>
+              <div class="child-meta">B Pingu · 4 Besuche · Allergie</div>
+            </div>
+            <div class="check"></div>
+          </div>
+          <div class="check-row">
+            <div class="avatar">SW</div>
+            <div>
+              <div class="child-name">Sina Waelti</div>
+              <div class="child-meta">A Chaeferli · heute neu</div>
+            </div>
+            <div class="check on">✓</div>
+          </div>
+          <div class="footer-actions">
+            <div class="btn">Export</div>
+            <div class="btn primary">Speichern</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
