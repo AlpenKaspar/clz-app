@@ -285,6 +285,27 @@ CREATE TABLE IF NOT EXISTS import_runs (
   KEY idx_import_runs_type_started (import_type, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS service_media_resources (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  resource_type varchar(40) NOT NULL,
+  resource_key varchar(190) NOT NULL,
+  service_date date NOT NULL,
+  service_time time NULL,
+  title varchar(255) NOT NULL DEFAULT '',
+  speaker varchar(190) NOT NULL DEFAULT '',
+  url text NOT NULL,
+  video_id varchar(40) NULL,
+  thumbnail_url text NULL,
+  scheduled_at datetime NULL,
+  source varchar(120) NOT NULL DEFAULT '',
+  raw_json longtext NULL,
+  imported_at datetime NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_service_media_resource (resource_type, resource_key),
+  KEY idx_service_media_date (service_date, service_time),
+  KEY idx_service_media_video (video_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS user_smart_filters (
   user_id bigint unsigned NOT NULL,
   filter_key varchar(120) NOT NULL,

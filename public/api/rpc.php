@@ -35,6 +35,8 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
         'kalenderUi_getServiceFlow' => rpc_service_flow($args[0] ?? []),
         'kalenderUi_getServiceDetails', 'kalenderUi_refreshServiceDetails' => rpc_service_details($args[0] ?? []),
+        'kalenderUi_getServiceMedia' => rpc_service_media_for_event($args[0] ?? []),
+        'serviceMedia_getAll' => rpc_service_media_all(),
         'kidsCheckin_getSession' => rpc_kids_checkin_session($args[0] ?? [], $user),
         'kidsCheckin_set' => rpc_kids_checkin_set($args[0] ?? [], $user),
         'kalenderUi_getPersonServiceAssignments' => rpc_person_service_assignments(
@@ -62,6 +64,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_importGruppen' => rpc_run_import('gruppen', $user),
         'tools_importKalender' => rpc_run_import('kalender', $user),
         'tools_importServiceDetails' => rpc_run_import('service_details', $user),
+        'tools_importServiceMedia' => rpc_run_import('service_media', $user),
         'tools_importSongs' => rpc_run_import('songs', $user),
         'tools_importAlles' => rpc_run_import('alles', $user),
         'tools_adminUsersList' => rpc_admin_users_list($user),
@@ -288,15 +291,24 @@ function rpc_data_version(): string
     }
 
     try {
+        try {
+            rpc_ensure_service_media_schema();
+        } catch (Throwable) {
+        }
         $row = db()->query(
             "SELECT GREATEST(
                 COALESCE((SELECT MAX(imported_at) FROM people), '1970-01-01 00:00:00'),
                 COALESCE((SELECT MAX(imported_at) FROM calendar_events), '1970-01-01 00:00:00'),
-                COALESCE((SELECT MAX(imported_at) FROM services), '1970-01-01 00:00:00')
+                COALESCE((SELECT MAX(imported_at) FROM services), '1970-01-01 00:00:00'),
+                COALESCE((SELECT MAX(imported_at) FROM service_media_resources), '1970-01-01 00:00:00')
             ) AS version_value"
         )->fetch();
         $dataVersion = preg_replace('/\D+/', '', (string) ($row['version_value'] ?? '')) ?: '1';
-        $codeVersion = max((int) (@filemtime(__FILE__) ?: 0), (int) (@filemtime(__DIR__ . '/../../src/import_people.php') ?: 0));
+        $codeVersion = max(
+            (int) (@filemtime(__FILE__) ?: 0),
+            (int) (@filemtime(__DIR__ . '/../../src/import_people.php') ?: 0),
+            (int) (@filemtime(__DIR__ . '/../../src/import_service_media.php') ?: 0)
+        );
         $version = $dataVersion . '-' . $codeVersion;
     } catch (Throwable) {
         $version = '1';
@@ -1761,6 +1773,111 @@ function rpc_service_details(mixed $meta): array
         rpc_service_staff($meta),
         rpc_service_flow($meta)
     );
+}
+
+function rpc_ensure_service_media_schema(): void
+{
+    require_once __DIR__ . '/../../src/import_service_media.php';
+    ensure_service_media_schema();
+}
+
+function rpc_service_media_for_event(mixed $meta): array
+{
+    rpc_ensure_service_media_schema();
+
+    $data = is_array($meta) ? $meta : [];
+    $date = rpc_normalize_dashboard_date(rpc_str($data['startDate'] ?? ($data['StartDatum'] ?? '')));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        return ['ok' => true, 'resources' => [], 'all' => []];
+    }
+
+    $rows = fetch_all_prepared_legacy(
+        'SELECT *
+         FROM service_media_resources
+         WHERE service_date = ?
+         ORDER BY resource_type, service_time IS NULL, service_time, title',
+        [$date]
+    );
+    $resources = [
+        'youtube' => rpc_pick_service_media_resource($rows, 'youtube', rpc_time($data['startTime'] ?? ($data['StartZeit'] ?? ''))),
+        'predigtscript' => rpc_pick_service_media_resource($rows, 'predigtscript', ''),
+    ];
+
+    return [
+        'ok' => true,
+        'date' => $date,
+        'resources' => array_filter($resources),
+        'all' => array_map('rpc_service_media_row', $rows),
+    ];
+}
+
+function rpc_service_media_all(): array
+{
+    rpc_ensure_service_media_schema();
+    $rows = fetch_all_prepared_legacy(
+        'SELECT *
+         FROM service_media_resources
+         WHERE service_date >= DATE_SUB(CURDATE(), INTERVAL 540 DAY)
+         ORDER BY service_date DESC, service_time DESC, resource_type, title',
+        []
+    );
+    return [
+        'ok' => true,
+        'resources' => array_map('rpc_service_media_row', $rows),
+        'count' => count($rows),
+    ];
+}
+
+function rpc_pick_service_media_resource(array $rows, string $type, string $eventTime): ?array
+{
+    $candidates = array_values(array_filter($rows, static fn(array $row): bool => rpc_str($row['resource_type'] ?? '') === $type));
+    if (!$candidates) {
+        return null;
+    }
+    if ($type !== 'youtube' || $eventTime === '') {
+        return rpc_service_media_row($candidates[0]);
+    }
+
+    $eventSeconds = rpc_service_media_time_seconds($eventTime);
+    usort($candidates, static function (array $a, array $b) use ($eventSeconds): int {
+        $aSeconds = rpc_service_media_time_seconds(rpc_time($a['service_time'] ?? ''));
+        $bSeconds = rpc_service_media_time_seconds(rpc_time($b['service_time'] ?? ''));
+        $aDiff = $aSeconds >= 0 && $eventSeconds >= 0 ? abs($aSeconds - $eventSeconds) : PHP_INT_MAX;
+        $bDiff = $bSeconds >= 0 && $eventSeconds >= 0 ? abs($bSeconds - $eventSeconds) : PHP_INT_MAX;
+        if ($aDiff !== $bDiff) {
+            return $aDiff <=> $bDiff;
+        }
+        return strcmp(rpc_time($a['service_time'] ?? ''), rpc_time($b['service_time'] ?? ''));
+    });
+
+    return rpc_service_media_row($candidates[0]);
+}
+
+function rpc_service_media_time_seconds(string $time): int
+{
+    if (!preg_match('/^(\d{1,2}):(\d{2})/', trim($time), $match)) {
+        return -1;
+    }
+    return ((int) $match[1]) * 3600 + ((int) $match[2]) * 60;
+}
+
+function rpc_service_media_row(array $row): array
+{
+    return [
+        'type' => rpc_str($row['resource_type'] ?? ''),
+        'key' => rpc_str($row['resource_key'] ?? ''),
+        'date' => rpc_str($row['service_date'] ?? ''),
+        'dateLabel' => rpc_ui_date($row['service_date'] ?? ''),
+        'time' => rpc_time($row['service_time'] ?? ''),
+        'title' => rpc_str($row['title'] ?? ''),
+        'speaker' => rpc_str($row['speaker'] ?? ''),
+        'url' => rpc_str($row['url'] ?? ''),
+        'videoId' => rpc_str($row['video_id'] ?? ''),
+        'thumbnailUrl' => rpc_str($row['thumbnail_url'] ?? ''),
+        'scheduledAt' => rpc_str($row['scheduled_at'] ?? ''),
+        'source' => rpc_str($row['source'] ?? ''),
+        'importedAt' => rpc_str($row['imported_at'] ?? ''),
+    ];
 }
 
 function rpc_ensure_kids_checkin_schema(): void
@@ -3795,8 +3912,9 @@ function rpc_import_steps(string $type): array
         'gruppen' => ['groups'],
         'kalender' => ['calendar'],
         'service_details' => ['service_details'],
+        'service_media' => ['service_media'],
         'songs' => ['songs'],
-        'alles' => ['people', 'families', 'groups', 'calendar', 'service_details', 'songs'],
+        'alles' => ['people', 'families', 'groups', 'calendar', 'service_details', 'service_media', 'songs'],
         default => throw new InvalidArgumentException('Unbekannter Import: ' . $type),
     };
 }
@@ -3809,6 +3927,7 @@ function rpc_run_import_step(string $step): array
         'groups' => rpc_import_groups_step(),
         'calendar' => rpc_import_calendar_step(),
         'service_details' => rpc_import_service_details_step(),
+        'service_media' => rpc_import_service_media_step(),
         'songs' => rpc_import_songs_step(),
         default => throw new InvalidArgumentException('Unbekannter Importschritt: ' . $step),
     };
@@ -3844,6 +3963,12 @@ function rpc_import_service_details_step(): array
     return import_service_details();
 }
 
+function rpc_import_service_media_step(): array
+{
+    require_once __DIR__ . '/../../src/import_service_media.php';
+    return import_service_media();
+}
+
 function rpc_import_songs_step(): array
 {
     require_once __DIR__ . '/../../src/import_songs.php';
@@ -3866,6 +3991,7 @@ function rpc_sync_status(array $user): array
         'personen' => $personenStatus,
         'kalender' => rpc_import_status_group(['calendar']),
         'serviceDetails' => rpc_import_status_group(['service_details']),
+        'serviceMedia' => rpc_import_status_group(['service_media']),
         'songs' => rpc_import_status_group(['songs']),
         'songDiagnostics' => rpc_song_diagnostics(),
         'counts' => $counts,
@@ -3945,6 +4071,7 @@ function rpc_data_counts(): array
         'serviceTimes' => 'service_times',
         'serviceVolunteers' => 'service_volunteers',
         'servicePlanItems' => 'service_plan_items',
+        'serviceMedia' => 'service_media_resources',
         'songs' => 'songs',
     ];
     $counts = [];

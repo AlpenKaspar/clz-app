@@ -6961,6 +6961,19 @@
       margin-bottom: 10px;
       min-height: 16px;
     }
+    .songs-player-now-predigt {
+      display: none;
+      margin: -2px 0 9px;
+    }
+    .songs-player-now-predigt.is-visible {
+      display: flex;
+    }
+    .songs-player-now-predigt .btn {
+      min-height: 32px;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 999px;
+    }
     .songs-player-mode {
       display: flex;
       width: max-content;
@@ -7589,6 +7602,74 @@
       grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
       gap: 10px;
       padding: 14px 16px 14px;
+    }
+
+    .service-media-actions {
+      display: grid;
+      gap: 10px;
+      padding: 0 16px 10px;
+    }
+
+    .service-media-actions .action-grid {
+      padding: 0;
+    }
+
+    .service-media-preview {
+      padding: 0 16px 12px;
+    }
+
+    .service-media-preview-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      margin: 0 0 8px;
+    }
+
+    .service-pdf-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1800;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .service-pdf-overlay[hidden] {
+      display: none !important;
+    }
+
+    .service-pdf-head {
+      min-height: 62px;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) 42px;
+      gap: 8px;
+      align-items: center;
+      padding: max(12px, env(safe-area-inset-top)) 14px 10px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg);
+    }
+
+    .service-pdf-title {
+      min-width: 0;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 950;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .service-pdf-frame {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 0;
+      background: #fff;
     }
 
     .kids-checkin-controls {
@@ -9677,6 +9758,7 @@
             <i class="fas fa-wave-square"></i>
           </button>
           <div id="songs-player-now-meta" class="songs-player-now-meta"></div>
+          <div id="songs-player-now-predigt" class="songs-player-now-predigt"></div>
           <div id="songs-player-pitch" class="songs-player-pitch" hidden>
             <button class="songs-player-pitch-step" type="button" onclick="stepSongsPlayerPitch_(-1)" aria-label="Einen Halbton tiefer">
               <i class="fas fa-minus"></i>
@@ -9940,6 +10022,11 @@
               <span>Services</span>
             </button>
 
+            <button class="btn btn-secondary" type="button" onclick="runImport('service_media')">
+              <i class="fab fa-youtube"></i>
+              <span>Media</span>
+            </button>
+
             <button class="btn btn-secondary" type="button" onclick="runImport('songs')">
               <i class="fas fa-music"></i>
               <span>Songs</span>
@@ -10105,6 +10192,7 @@
       let currentServiceOverview = null;
       let currentServiceStaffBundle = null;
       let currentServiceFlowBundle = null;
+      let currentServiceMediaBundle = null;
       let currentFlowManualActiveIndex = -1;
       let currentFlowManualStartedAt = 0;
       let currentFlowLastAutoScrollIndex = -1;
@@ -10114,7 +10202,7 @@
       let currentKidsCheckinGroup = "all";
       let currentKidsCheckinBundle = null;
       let currentKidsCheckinLoading = false;
-      let currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
+      let currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null, media: null };
       let currentServiceSeries = [];
       let currentServiceSeriesIndex = 0;
       let flowLiveRefreshTimer = null;
@@ -10321,6 +10409,7 @@
       let versionCheckInFlight = false;
       let lastVersionCheckAt = 0;
       let lastNavAccessSignature = "";
+      const mainTabScrollPositions_ = {};
       let periodicCacheCheckTimer = null;
       let serverRebuildInFlight = false;
       let backgroundAutoRebuildEnabled = true;
@@ -10342,7 +10431,8 @@
         personExtraPrefix: "clz_person_extra_v193_",
         groupSectionPrefix: "clz_group_section_v192_",
         familyPrefix: "clz_family_v192_",
-        serviceDetailsPrefix: "clz_service_details_v186_"
+        serviceDetailsPrefix: "clz_service_details_v186_",
+        serviceMediaPrefix: "clz_service_media_v1_"
       };
       const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
       const CALENDAR_WARMUP_DELAY_MS = 1400;
@@ -12481,6 +12571,8 @@
       const SONGS_LIVESTREAM_URL_ = `https://www.youtube.com/watch?v=${SONGS_LIVESTREAM_VIDEO_ID_}&list=${SONGS_LIVESTREAM_PLAYLIST_ID_}`;
       let songsLivestreamItemsCache_ = null;
       let songsLivestreamItemsPromise_ = null;
+      let serviceMediaResourcesCache_ = null;
+      let serviceMediaResourcesPromise_ = null;
       const songsPlayerState = {
         items: [],
         filtered: [],
@@ -12618,15 +12710,84 @@
         return items;
       }
 
+      function loadServiceMediaResources_() {
+        if (Array.isArray(serviceMediaResourcesCache_)) return Promise.resolve(serviceMediaResourcesCache_);
+        if (serviceMediaResourcesPromise_) return serviceMediaResourcesPromise_;
+        serviceMediaResourcesPromise_ = withGsRetry('serviceMedia_getAll', [], { retries: 1, retryDelay: 500 })
+          .then(bundle => {
+            serviceMediaResourcesCache_ = Array.isArray(bundle?.resources) ? bundle.resources : [];
+            return serviceMediaResourcesCache_;
+          })
+          .catch(() => {
+            serviceMediaResourcesCache_ = [];
+            return serviceMediaResourcesCache_;
+          })
+          .finally(() => {
+            serviceMediaResourcesPromise_ = null;
+          });
+        return serviceMediaResourcesPromise_;
+      }
+
+      function attachServiceMediaToLivestreamItems_(items, resources) {
+        const rows = Array.isArray(resources) ? resources : [];
+        if (!Array.isArray(items) || !items.length || !rows.length) return items || [];
+        const youtubeByVideo = new Map();
+        const predigtByDate = new Map();
+        const predigtRows = [];
+        rows.forEach(row => {
+          const type = String(row?.type || '').trim();
+          const date = String(row?.date || '').trim();
+          if (type === 'youtube' && row?.videoId) {
+            youtubeByVideo.set(String(row.videoId).trim(), row);
+          } else if (type === 'predigtscript' && date && row?.url && !predigtByDate.has(date)) {
+            predigtByDate.set(date, row);
+            predigtRows.push(row);
+          }
+        });
+        const normTitle = (value) => String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/clz\s*spiez/g, '')
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+        const findPredigtByTitle = (item) => {
+          const itemTitle = normTitle(item?.songTitle || item?.fullTitle || item?.name || '');
+          if (!itemTitle) return null;
+          return predigtRows.find(row => {
+            const title = normTitle(row?.title || '');
+            if (title.length < 6) return false;
+            if (itemTitle.includes(title) || title.includes(itemTitle)) return true;
+            const words = title.split(' ').filter(word => word.length >= 4);
+            const hits = words.filter(word => itemTitle.includes(word)).length;
+            return words.length >= 2 && hits >= Math.min(3, words.length);
+          }) || null;
+        };
+        return items.map(item => {
+          const videoId = String(item?.videoId || '').trim();
+          const youtube = videoId ? youtubeByVideo.get(videoId) : null;
+          const predigt = (youtube?.date ? predigtByDate.get(youtube.date) : null) || findPredigtByTitle(item);
+          if (!youtube && !predigt) return item;
+          return Object.assign({}, item, {
+            serviceDate: youtube?.date || item.serviceDate || '',
+            scheduledAt: youtube?.scheduledAt || item.scheduledAt || '',
+            predigtscriptUrl: predigt?.url || '',
+            predigtscriptTitle: predigt?.title || ''
+          });
+        });
+      }
+
       function loadSongsLivestreamItems_() {
         if (Array.isArray(songsLivestreamItemsCache_)) return Promise.resolve(songsLivestreamItemsCache_);
         if (songsLivestreamItemsPromise_) return songsLivestreamItemsPromise_;
         const url = `/api/youtube-playlist.php?list=${encodeURIComponent(SONGS_LIVESTREAM_PLAYLIST_ID_)}&v=${encodeURIComponent(SONGS_LIVESTREAM_VIDEO_ID_)}`;
         songsLivestreamItemsPromise_ = fetch(url, { credentials: 'same-origin', cache: 'no-store' })
           .then((response) => response.ok ? response.json() : Promise.reject(new Error('Playlist konnte nicht geladen werden.')))
-          .then((data) => {
+          .then(async (data) => {
             const items = normalizeSongsLivestreamItems_(data);
-            songsLivestreamItemsCache_ = items.length ? items : [buildSongsLivestreamFallbackItem_()];
+            const resources = await loadServiceMediaResources_().catch(() => []);
+            const enrichedItems = attachServiceMediaToLivestreamItems_(items, resources);
+            songsLivestreamItemsCache_ = enrichedItems.length ? enrichedItems : [buildSongsLivestreamFallbackItem_()];
             return songsLivestreamItemsCache_;
           })
           .catch(() => {
@@ -13168,10 +13329,26 @@
         const now = document.getElementById('songs-player-now');
         const title = document.getElementById('songs-player-now-title');
         const meta = document.getElementById('songs-player-now-meta');
+        const predigt = document.getElementById('songs-player-now-predigt');
         if (now) now.classList.toggle('is-video', isSongsPlayerVideoItem_(item));
         if (title) title.textContent = item?.songTitle || item?.name || 'Titel';
         if (meta) meta.textContent = songsPlayerMetaText_(item);
+        if (predigt) {
+          const url = String(item?.predigtscriptUrl || '').trim();
+          predigt.classList.toggle('is-visible', !!url);
+          predigt.innerHTML = url ? `<button class="btn btn-secondary" type="button" onclick="openSongsPlayerCurrentPredigtScript_()"><i class="fas fa-file-pdf"></i><span>Predigtscript</span></button>` : '';
+        }
         updateSongsPlayerPitchControls_();
+      }
+
+      function openSongsPlayerCurrentPredigtScript_() {
+        const item = songsPlayerState.currentItem || {};
+        const url = String(item.predigtscriptUrl || '').trim();
+        if (!url) {
+          toast('Kein Predigtscript verknuepft', 1400);
+          return;
+        }
+        openServicePdfViewer_(url, item.predigtscriptTitle || 'Predigtscript');
       }
 
       function syncSongsPlayerListSelection_() {
@@ -13411,6 +13588,9 @@
           <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
           <button type="button" onclick="openSongsPlayerSongDetail_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Zum Song</span></button>
         `;
+        if (item.kind === 'livestream') {
+          menu.innerHTML = `<button type="button" onclick="${queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${queued ? 'Aus NÃ¤chstes entfernen' : 'Als NÃ¤chstes abspielen'}</span></button>`;
+        }
         const useSheet = !!asSheet || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 680px)').matches);
         menu.hidden = false;
         menu.classList.toggle('as-sheet', useSheet);
@@ -15442,11 +15622,45 @@ function updateBottomNavHighlight_() {
         }, 280);
       }
 
+      function getMainScrollRoot_() {
+        return document.getElementById('app-container') || document.scrollingElement || document.documentElement;
+      }
+
+      function saveMainTabScroll_() {
+        const tab = String(currentTab || '').trim();
+        const root = getMainScrollRoot_();
+        if (!tab || !root) return;
+        mainTabScrollPositions_[tab] = Math.max(0, Number(root.scrollTop || 0));
+      }
+
+      function savedMainTabScroll_(tab) {
+        const value = Number(mainTabScrollPositions_[String(tab || '')]);
+        return Number.isFinite(value) && value > 0 ? value : 0;
+      }
+
+      function prepareMainTabScroll_(tab) {
+        const root = getMainScrollRoot_();
+        if (root) root.scrollTop = savedMainTabScroll_(tab);
+      }
+
+      function restoreMainTabScroll_(tab) {
+        const root = getMainScrollRoot_();
+        if (!root) return;
+        const target = savedMainTabScroll_(tab);
+        const apply = () => { root.scrollTop = target; };
+        requestAnimationFrame(() => {
+          apply();
+          setTimeout(apply, 80);
+        });
+      }
+
       function switchTab(tab) {
+        saveMainTabScroll_();
         if (!canUseTab_(tab)) {
           toast("Für diese Rolle nicht freigeschaltet", 1500);
           return;
         }
+        closeServicePdfViewer_();
         if (currentDetailOverlayView) {
           closeDetailOverlay();
         }
@@ -15468,6 +15682,7 @@ function updateBottomNavHighlight_() {
         document.getElementById('view-songs').className = (tab === 'songs') ? 'view-active' : 'view-hidden';
         document.getElementById('view-dashboard').className = (tab === 'dashboard') ? 'view-active' : 'view-hidden';
         document.getElementById('view-tools').className = (tab === 'tools') ? 'view-active' : 'view-hidden';
+        prepareMainTabScroll_(tab);
 
         if (tab === 'contacts') maybeRenderIdleContacts_();
         if (tab === 'calendar') {
@@ -15503,6 +15718,7 @@ function updateBottomNavHighlight_() {
           setTimeout(() => refreshSyncStatus_().catch(() => {}), 80);
           setTimeout(() => loadAdminUsers_({ silent: true }).catch(() => {}), 120);
         }
+        restoreMainTabScroll_(tab);
       }
 
       function onContactsNavClick_(ev) {
@@ -20644,11 +20860,12 @@ function updateBottomNavHighlight_() {
         currentServiceOverview = null;
         currentServiceStaffBundle = null;
         currentServiceFlowBundle = null;
+        currentServiceMediaBundle = null;
         currentKidsCheckinBundle = null;
         currentKidsCheckinLoading = false;
         currentSongData = null;
         closeStaffSubFilterOverlay_();
-        currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
+        currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null, media: null };
         stopFlowLiveMode_();
         currentSongDetailReturnView = '';
         currentSongDetailReturnFlowIndex = -1;
@@ -21915,12 +22132,16 @@ function updateBottomNavHighlight_() {
         );
       }
 
-      function openEventDetailPrintPreview_() {
+      async function openEventDetailPrintPreview_() {
         if (!canPrintEventDetail_()) {
           toast('Für diese Rolle nicht freigeschaltet');
           return;
         }
         if (!currentData || currentData.type !== "event") return;
+
+        if (currentData?.meta?.isService && !currentServiceMediaBundle) {
+          await loadCurrentServiceMedia_().catch(() => null);
+        }
 
         const rows = (currentData.details || []).map(function(item) {
           return [
@@ -21930,7 +22151,7 @@ function updateBottomNavHighlight_() {
           ];
         }).filter(function(row) {
           return row[1] && row[2];
-        });
+        }).concat(serviceMediaPrintRows_());
 
         if (!rows.length) {
           toast('Keine Termindaten für die Druckansicht');
@@ -24514,7 +24735,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
             </section>`;
         }).join('');
         ensureCalendarAgendaScrollListener_();
-        positionCalendarAgendaSection_(calendarAgendaActiveDayKey, 'auto');
+        if (currentTab === 'calendar') {
+          positionCalendarAgendaSection_(calendarAgendaActiveDayKey, 'auto');
+        }
         calendarAgendaStartAtActiveOnNextRender = false;
         requestAnimationFrame(() => {
           updateCalendarAgendaActiveFromScroll_();
@@ -24538,6 +24761,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function updateCalendarAgendaActiveFromScroll_() {
+        if (currentTab !== 'calendar') return;
         if (normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') return;
         if (isCalendarAgendaProgrammaticScrollLocked_()) {
           syncCalendarAgendaTodayButton_();
@@ -24679,6 +24903,152 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return CACHE_KEYS.serviceDetailsPrefix + key;
       }
 
+      function getServiceMediaCacheKey_(eventMeta) {
+        const meta = eventMeta && typeof eventMeta === "object" ? eventMeta : {};
+        const key = [
+          String(meta.elvantoId || "").trim(),
+          String(meta.startDate || "").trim(),
+          String(meta.startTime || "").trim(),
+          String(meta.title || "").trim()
+        ].join("|");
+        return CACHE_KEYS.serviceMediaPrefix + key;
+      }
+
+      function getServiceMediaResource_(type) {
+        const resources = currentServiceMediaBundle?.resources || {};
+        return resources && resources[type] ? resources[type] : null;
+      }
+
+      async function loadCurrentServiceMedia_(force = false) {
+        if (!currentData?.meta?.isService) return null;
+        if (currentServiceMediaBundle && !force) {
+          renderServiceMediaActions_();
+          return currentServiceMediaBundle;
+        }
+        if (currentServicePrefetch.media && !force) return currentServicePrefetch.media;
+
+        const cacheKey = getServiceMediaCacheKey_(currentData.meta);
+        const version = String(currentServerDataVersion || "").trim();
+        if (!force) {
+          const cached = cacheGet_(cacheKey, CACHE_TTL_MS);
+          if (cached && (!version || cacheMetaVersionMatches_(cacheKey, version, CACHE_TTL_MS))) {
+            currentServiceMediaBundle = cached;
+            renderServiceMediaActions_();
+            return cached;
+          }
+        }
+
+        const host = document.getElementById('calendar-service-media-actions');
+        if (host) {
+          host.innerHTML = '<div class="service-inline-loader"><i class="fas fa-spinner fa-spin"></i> Lade Livestream & Predigtscript...</div>';
+        }
+
+        currentServicePrefetch.media = withGsRetry('kalenderUi_getServiceMedia', [currentData.meta], { retries: 1, retryDelay: 500 })
+          .then(bundle => {
+            currentServiceMediaBundle = bundle || { ok: true, resources: {} };
+            if (currentServiceMediaBundle && currentServiceMediaBundle.ok !== false) {
+              cacheSet_(cacheKey, currentServiceMediaBundle, { dataVersion: version, source: 'service-media' });
+            }
+            renderServiceMediaActions_();
+            return currentServiceMediaBundle;
+          })
+          .catch(() => {
+            currentServiceMediaBundle = { ok: true, resources: {} };
+            renderServiceMediaActions_();
+            return currentServiceMediaBundle;
+          })
+          .finally(() => {
+            currentServicePrefetch.media = null;
+          });
+
+        return currentServicePrefetch.media;
+      }
+
+      function renderServiceMediaActions_() {
+        const host = document.getElementById('calendar-service-media-actions');
+        const preview = document.getElementById('calendar-service-media-preview');
+        if (!host || !currentData?.meta?.isService) return;
+
+        const youtube = getServiceMediaResource_('youtube');
+        const predigt = getServiceMediaResource_('predigtscript');
+        const buttons = [];
+        if (youtube?.url) {
+          buttons.push(`<a class="btn btn-secondary" href="${escapeAttr(youtube.url)}" target="_blank" rel="noopener"><i class="fab fa-youtube"></i><span>Livestream</span></a>`);
+        }
+        if (predigt?.url) {
+          buttons.push(`<button class="btn btn-secondary" type="button" onclick="openCurrentServicePredigtScript_()"><i class="fas fa-file-pdf"></i><span>Predigtscript</span></button>`);
+        }
+        host.innerHTML = buttons.length ? `<div class="action-grid">${buttons.join('')}</div>` : '';
+
+        if (preview) {
+          const embed = youtube?.url ? buildYoutubeEmbedUrl_(youtube.url) : '';
+          const hasExistingLiveEmbed = !!buildYoutubeEmbedUrl_(currentData?.meta?.liveUrl || '');
+          preview.innerHTML = embed && !hasExistingLiveEmbed ? `
+            <div class="service-media-preview-title"><i class="fab fa-youtube"></i><span>Geplanter Livestream</span></div>
+            <div style="position:relative;width:100%;padding-top:56.25%;border-radius:16px;overflow:hidden;background:#000;">
+              <iframe src="${escapeAttr(embed)}" title="Livestream" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>
+            </div>
+          ` : '';
+        }
+      }
+
+      function openCurrentServicePredigtScript_() {
+        const predigt = getServiceMediaResource_('predigtscript');
+        if (!predigt?.url) {
+          toast('Kein Predigtscript verknuepft', 1400);
+          return;
+        }
+        openServicePdfViewer_(predigt.url, predigt.title || 'Predigtscript');
+      }
+
+      function openServicePdfViewer_(url, title) {
+        const cleanUrl = String(url || '').trim();
+        if (!cleanUrl) return;
+        let overlay = document.getElementById('service-pdf-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'service-pdf-overlay';
+          overlay.className = 'service-pdf-overlay';
+          overlay.hidden = true;
+          document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `
+          <div class="service-pdf-head">
+            <button class="icon-btn" type="button" onclick="closeServicePdfViewer_()" aria-label="Schliessen" title="Schliessen"><i class="fas fa-xmark"></i></button>
+            <div class="service-pdf-title">${escapeHtml(title || 'PDF')}</div>
+            <a class="icon-btn" href="${escapeAttr(cleanUrl)}" target="_blank" rel="noopener" aria-label="Extern oeffnen" title="Extern oeffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>
+          </div>
+          <iframe class="service-pdf-frame" src="${escapeAttr(cleanUrl)}" title="${escapeAttr(title || 'PDF')}"></iframe>
+        `;
+        overlay.hidden = false;
+        document.body.classList.add('detail-open');
+      }
+
+      function closeServicePdfViewer_() {
+        const overlay = document.getElementById('service-pdf-overlay');
+        if (overlay) {
+          overlay.hidden = true;
+          overlay.innerHTML = '';
+        }
+        if (!document.getElementById('detail-overlay')?.classList.contains('open')) {
+          document.body.classList.remove('detail-open');
+        }
+      }
+
+      function serviceMediaPrintRows_() {
+        if (!currentData?.meta?.isService || !currentServiceMediaBundle?.resources) return [];
+        const rows = [];
+        const youtube = getServiceMediaResource_('youtube');
+        const predigt = getServiceMediaResource_('predigtscript');
+        if (youtube?.url) {
+          rows.push([currentData.displayName || 'Termin', 'Livestream', [youtube.title, youtube.url].filter(Boolean).join('\n')]);
+        }
+        if (predigt?.url) {
+          rows.push([currentData.displayName || 'Termin', 'Predigtscript', [predigt.title, predigt.speaker, predigt.url].filter(Boolean).join('\n')]);
+        }
+        return rows;
+      }
+
       async function prewarmNextTwoServiceDetails_() {
         try {
           const events = (Array.isArray(allEvents) ? allEvents : [])
@@ -24812,6 +25182,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
               <button class="btn btn-secondary" onclick="openCalendarKidsCheckinView()"><i class="fas fa-child-reaching"></i><span>Kinder</span></button>
             </div>
           ` : ``}
+          ${isService ? `<div id="calendar-service-media-actions" class="service-media-actions"></div>` : ``}
           <div class="action-grid">
             ${elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
             ${liveUrl ? `<a class="btn btn-secondary" href="${escapeAttr(liveUrl)}" target="_blank" rel="noopener"><i class="fab fa-youtube"></i><span>Livestream</span></a>` : ``}
@@ -24826,6 +25197,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
               </div>
             </div>
           ` : ``}
+          ${isService ? `<div id="calendar-service-media-preview" class="service-media-preview"></div>` : ``}
           <div style="height:12px;"></div>
         `;
 
@@ -24853,11 +25225,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentServiceOverview = null;
           currentServiceStaffBundle = null;
           currentServiceFlowBundle = null;
+          currentServiceMediaBundle = null;
           currentKidsCheckinBundle = null;
           currentKidsCheckinLoading = false;
-          currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
+          currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null, media: null };
           prefetchCurrentServiceStaff_().catch(() => {});
           prefetchCurrentServiceFlow_().catch(() => {});
+          loadCurrentServiceMedia_().catch(() => {});
         }
       }
 
@@ -24872,9 +25246,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
         currentServiceOverview = null;
         currentServiceStaffBundle = null;
         currentServiceFlowBundle = null;
+        currentServiceMediaBundle = null;
         currentKidsCheckinBundle = null;
         currentKidsCheckinLoading = false;
-        currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
+        currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null, media: null };
         showEventDetails(String(item.id));
         if (activeSubView === 'calendar-staff-view') {
           setTimeout(() => openCalendarStaffView(), 0);
@@ -26908,7 +27283,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
               k.startsWith(CACHE_KEYS.personMainPrefix) ||
               k.startsWith(CACHE_KEYS.personExtraPrefix) ||
               k.startsWith(CACHE_KEYS.groupSectionPrefix) ||
-              k.startsWith(CACHE_KEYS.familyPrefix)
+              k.startsWith(CACHE_KEYS.familyPrefix) ||
+              k.startsWith(CACHE_KEYS.serviceMediaPrefix)
             ) {
               localStorage.removeItem(k);
             }
@@ -26933,6 +27309,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           gruppen: "Gruppen",
           kalender: "Kalender",
           service_details: "Gottesdienst-Details",
+          service_media: "Livestreams & Predigtscripte",
           songs: "Songs",
           alles: "Alle Daten"
         };
@@ -26946,6 +27323,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             gruppen: "tools_importGruppen",
             kalender: "tools_importKalender",
             service_details: "tools_importServiceDetails",
+            service_media: "tools_importServiceMedia",
             songs: "tools_importSongs",
             alles: "tools_importAlles"
           };
@@ -26955,7 +27333,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           await refreshSyncStatus_();
           await forceRefreshAppData(false);
-          if ((type === "kalender" || type === "service_details" || type === "alles") && currentTab === "calendar") await refreshCalendarView(false);
+          if (type === "service_media" || type === "alles") {
+            serviceMediaResourcesCache_ = null;
+            songsLivestreamItemsCache_ = null;
+            currentServiceMediaBundle = null;
+            if (currentData?.meta?.isService) loadCurrentServiceMedia_(true).catch(() => {});
+          }
+          if ((type === "kalender" || type === "service_details" || type === "service_media" || type === "alles") && currentTab === "calendar") await refreshCalendarView(false);
           if ((type === "songs" || type === "alles") && currentTab === "songs") {
             songsReady = false;
             await ensureSongsLiteLoaded_(true);
@@ -26996,6 +27380,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const p = data?.personen || {};
           const k = data?.kalender || {};
           const s = data?.serviceDetails || {};
+          const m = data?.serviceMedia || {};
           const songsStatus = data?.songs || {};
           const songDiag = data?.songDiagnostics || {};
           const counts = data?.counts || data?.cache?.counts || {};
@@ -27045,6 +27430,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
                       <div id="sync-service-text"></div>
                     </div>
                     <div>
+                      <div style="font-weight:800;color:var(--text-color);margin-bottom:4px;">Livestreams & Predigtscripte</div>
+                      <div id="sync-service-media-text"></div>
+                    </div>
+                    <div>
                       <div style="font-weight:800;color:var(--text-color);margin-bottom:4px;">Songs</div>
                       <div id="sync-songs-text"></div>
                     </div>
@@ -27063,6 +27452,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const personenText = box.querySelector('#sync-personen-text');
           const kalenderText = box.querySelector('#sync-kalender-text');
           const serviceText = box.querySelector('#sync-service-text');
+          const serviceMediaText = box.querySelector('#sync-service-media-text');
           const songsText = box.querySelector('#sync-songs-text');
           const cacheWrap = box.querySelector('#sync-cache-wrap');
           const perfWrap = box.querySelector('#sync-perf-wrap');
@@ -27072,6 +27462,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
           if (personenText) personenText.innerHTML = `Status: <strong>${escapeHtml(p.status || "-")}</strong>${pIso ? ` · ${escapeHtml(pIso)}` : ""}${p.count ? `<br>Anzahl: <strong>${escapeHtml(String(p.count))}</strong>` : ""}`;
           if (kalenderText) kalenderText.innerHTML = `Status: <strong>${escapeHtml(k.status || "-")}</strong>${kIso ? ` · ${escapeHtml(kIso)}` : ""}${k.count ? `<br>Anzahl: <strong>${escapeHtml(String(k.count))}</strong>` : ""}${k.lastImportReason ? `<br>Grund: <strong>${escapeHtml(String(k.lastImportReason || ""))}</strong>` : ""}${kCheckIso ? `<br>Letzter Check: <strong>${escapeHtml(kCheckIso)}</strong>` : ""}${kFullIso ? `<br>Letzter Vollimport: <strong>${escapeHtml(kFullIso)}</strong>` : ""}${k.lastTriggerSource ? `<br>Quelle: <strong>${escapeHtml(String(k.lastTriggerSource || ""))}</strong>` : ""}`;
           if (serviceText) serviceText.innerHTML = `Status: <strong>${escapeHtml(s.status || "-")}</strong>${s.iso ? ` · ${escapeHtml(formatIsoShort_(s.iso) || s.iso)}` : ""}<br>Services: <strong>${escapeHtml(String(counts.services || 0))}</strong> · Ablaufpunkte: <strong>${escapeHtml(String(counts.servicePlanItems || 0))}</strong> · Mitarbeitende: <strong>${escapeHtml(String(counts.serviceVolunteers || 0))}</strong>`;
+          if (serviceMediaText) serviceMediaText.innerHTML = `Status: <strong>${escapeHtml(m.status || "-")}</strong>${m.iso ? ` - ${escapeHtml(formatIsoShort_(m.iso) || m.iso)}` : ""}<br>Anzahl: <strong>${escapeHtml(String(counts.serviceMedia || 0))}</strong>`;
           if (songsText) {
             const diagLine = songDiag?.ok ? `<br>Mit Tonart: <strong>${escapeHtml(String(songDiag.withKey || 0))}</strong> · URLs: <strong>${escapeHtml(String(songDiag.withAnyUrl || 0))}</strong> · PDFs: <strong>${escapeHtml(String(songDiag.withPdf || 0))}</strong> · Audio: <strong>${escapeHtml(String(songDiag.withAudio || 0))}</strong> · YouTube: <strong>${escapeHtml(String(songDiag.withYoutube || 0))}</strong>` : '';
             const sampleLine = Array.isArray(songDiag?.samples) && songDiag.samples.length ? `<br>Beispiel: ${escapeHtml(String(songDiag.samples[0]?.title || ''))} · Felder: ${escapeHtml((songDiag.samples[0]?.rawKeys || []).slice(0, 8).join(', '))}` : '';
