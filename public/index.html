@@ -7586,9 +7586,252 @@
 
 .service-view-nav {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
       gap: 10px;
       padding: 14px 16px 14px;
+    }
+
+    .kids-checkin-session {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(37,99,235,0.22);
+      border-radius: 14px;
+      background: rgba(37,99,235,0.09);
+      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .kids-checkin-session-title {
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    .kids-checkin-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .kids-checkin-search {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: var(--input-bg);
+      color: var(--text-main);
+      padding: 0 14px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+    }
+
+    .kids-checkin-search:focus {
+      border-color: rgba(37,99,235,0.45);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.10);
+    }
+
+    .kids-checkin-counter {
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(37,99,235,0.10);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .kids-checkin-groups {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 0 0 10px;
+      scrollbar-width: none;
+    }
+
+    .kids-checkin-groups::-webkit-scrollbar {
+      display: none;
+    }
+
+    .kids-checkin-chip {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--border-color);
+      background: rgba(148,163,184,0.10);
+      color: var(--text-muted);
+      border-radius: 999px;
+      min-height: 32px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .kids-checkin-chip.is-active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .kids-checkin-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .kids-checkin-row {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: var(--card-bg);
+    }
+
+    .kids-checkin-row.is-checked {
+      border-color: rgba(37,99,235,0.32);
+      background: rgba(37,99,235,0.08);
+    }
+
+    .kids-checkin-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(37,99,235,0.12);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .kids-checkin-main {
+      min-width: 0;
+    }
+
+    .kids-checkin-name {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      color: var(--text-main);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 950;
+      text-align: left;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .kids-checkin-meta {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .kids-checkin-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 6px;
+    }
+
+    .kids-checkin-tag,
+    .kids-checkin-visits {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: rgba(148,163,184,0.12);
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .kids-checkin-tag {
+      color: var(--primary);
+      background: rgba(37,99,235,0.10);
+    }
+
+    .kids-checkin-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      border: 2px solid rgba(37,99,235,0.28);
+      background: rgba(37,99,235,0.06);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .kids-checkin-toggle.is-checked {
+      border-color: var(--primary);
+      background: var(--primary);
+    }
+
+    .kids-checkin-empty {
+      padding: 22px 14px;
+      border: 1px dashed var(--border-color);
+      border-radius: 14px;
+      color: var(--text-muted);
+      text-align: center;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    body.dark .kids-checkin-session,
+    body.dark .kids-checkin-row.is-checked {
+      background: rgba(59,130,246,0.14);
+      border-color: rgba(59,130,246,0.30);
+    }
+
+    body.dark .kids-checkin-search {
+      background: rgba(15,23,42,0.88);
+    }
+
+    @media (max-width: 560px) {
+      .kids-checkin-controls {
+        grid-template-columns: 1fr;
+      }
+
+      .kids-checkin-counter {
+        justify-self: start;
+      }
     }
 
     .service-summary-box {
@@ -8912,6 +9155,19 @@
         <div id="calendar-staff-content" style="padding:16px;"></div>
       </div>
 
+      <div id="calendar-kids-checkin-view" class="detail-card view-hidden">
+        <div class="profile-header">
+          <button class="back-button profile-header-back" type="button" onclick="onDetailBack()" aria-label="ZurÃ¼ck" title="ZurÃ¼ck">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div class="profile-head-inline">
+            <div class="profile-name service-header-title"><i class="fas fa-child-reaching service-header-icon"></i><span>Kinder Check-in</span></div>
+          </div>
+          <div class="profile-subtitle service-header-subtitle" id="calendar-kids-checkin-subtitle"></div>
+        </div>
+        <div id="calendar-kids-checkin-content" style="padding:16px;"></div>
+      </div>
+
       <div id="song-detail-view" class="detail-card view-hidden">
         <div id="song-detail-content"></div>
       </div>
@@ -9801,6 +10057,10 @@
       let currentFlowLastAutoScrollIndex = -1;
       let currentStaffSubFilter = [];
       let currentStaffSearch = "";
+      let currentKidsCheckinSearch = "";
+      let currentKidsCheckinGroup = "all";
+      let currentKidsCheckinBundle = null;
+      let currentKidsCheckinLoading = false;
       let currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
       let currentServiceSeries = [];
       let currentServiceSeriesIndex = 0;
@@ -9842,6 +10102,7 @@
         detailPrint: { contact: false, event: false },
         admin: { imports: false, users: false }
       };
+      const KIDS_CHECKIN_GROUPS = ["A Chäferli", "B Pingu", "C Häsli", "D Löwen", "F Promiseland"];
       let activeDashboardFilterKey = "";
       let activeDashboardFilterLabel = "";
       let activeSmartRules = [];
@@ -20268,7 +20529,7 @@ function updateBottomNavHighlight_() {
       }
 
       function hideAllDetailViews_() {
-        ["detail-view", "view-family", "view-group", "calendar-detail-view", "calendar-staff-view", "calendar-flow-view", "song-detail-view"].forEach(function(id) {
+        ["detail-view", "view-family", "view-group", "calendar-detail-view", "calendar-staff-view", "calendar-kids-checkin-view", "calendar-flow-view", "song-detail-view"].forEach(function(id) {
           const el = document.getElementById(id);
           if (el) el.className = "detail-card view-hidden";
         });
@@ -20286,7 +20547,7 @@ function updateBottomNavHighlight_() {
       }
 
       function onDetailBack() {
-        if (currentDetailOverlayView === "calendar-staff-view" || currentDetailOverlayView === "calendar-flow-view") {
+        if (currentDetailOverlayView === "calendar-staff-view" || currentDetailOverlayView === "calendar-flow-view" || currentDetailOverlayView === "calendar-kids-checkin-view") {
           showDetailView_("calendar-detail-view");
           return;
         }
@@ -20329,6 +20590,8 @@ function updateBottomNavHighlight_() {
         currentServiceOverview = null;
         currentServiceStaffBundle = null;
         currentServiceFlowBundle = null;
+        currentKidsCheckinBundle = null;
+        currentKidsCheckinLoading = false;
         currentSongData = null;
         closeStaffSubFilterOverlay_();
         currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
@@ -24475,6 +24738,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             <div class="service-view-nav">
               <button class="btn btn-secondary" onclick="openCalendarStaffView()"><i class="fas fa-users"></i><span>Mitarbeitende</span></button>
               <button class="btn btn-secondary" onclick="openCalendarFlowView()"><i class="fas fa-list-check"></i><span>Ablauf</span></button>
+              <button class="btn btn-secondary" onclick="openCalendarKidsCheckinView()"><i class="fas fa-child-reaching"></i><span>Kinder</span></button>
             </div>
           ` : ``}
           <div class="action-grid">
@@ -24518,6 +24782,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
           currentServiceOverview = null;
           currentServiceStaffBundle = null;
           currentServiceFlowBundle = null;
+          currentKidsCheckinBundle = null;
+          currentKidsCheckinLoading = false;
           currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
           prefetchCurrentServiceStaff_().catch(() => {});
           prefetchCurrentServiceFlow_().catch(() => {});
@@ -24535,12 +24801,16 @@ function dashDynamicValueCard_(icon, prefix, item) {
         currentServiceOverview = null;
         currentServiceStaffBundle = null;
         currentServiceFlowBundle = null;
+        currentKidsCheckinBundle = null;
+        currentKidsCheckinLoading = false;
         currentServicePrefetch = { overview: null, staff: null, flowLite: null, flowFull: null };
         showEventDetails(String(item.id));
         if (activeSubView === 'calendar-staff-view') {
           setTimeout(() => openCalendarStaffView(), 0);
         } else if (activeSubView === 'calendar-flow-view') {
           setTimeout(() => openCalendarFlowView(), 0);
+        } else if (activeSubView === 'calendar-kids-checkin-view') {
+          setTimeout(() => openCalendarKidsCheckinView(), 0);
         }
       }
 
@@ -25579,6 +25849,277 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
         scheduleSilentServiceRefresh_();
 
+      }
+
+      function getKidsCheckinSessionMeta_() {
+        const meta = currentData?.meta || {};
+        return {
+          eventId: String(meta.eventId || currentEventId || ''),
+          elvantoId: String(meta.elvantoId || ''),
+          startDate: String(meta.startDate || ''),
+          startTime: String(meta.startTime || ''),
+          title: String(meta.title || currentData?.displayName || 'Gottesdienst'),
+          category: String(meta.category || '')
+        };
+      }
+
+      function getKidsCheckinFallbackSession_() {
+        const meta = getKidsCheckinSessionMeta_();
+        const baseId = meta.elvantoId || meta.eventId || 'EVENT';
+        return {
+          key: [baseId, meta.startDate, meta.startTime].filter(Boolean).join('|'),
+          stamp: `${baseId || 'EVENT'} / ${meta.startTime || 'Zeit'}`,
+          serviceId: String(baseId || '').replace(/^SERVICE-/i, ''),
+          eventId: meta.eventId,
+          dateLabel: meta.startDate,
+          time: meta.startTime,
+          title: meta.title || 'Gottesdienst',
+          category: meta.category
+        };
+      }
+
+      function waitForContactsReady_(timeoutMs = 6000) {
+        if (contactsReady) return Promise.resolve(true);
+        return new Promise(resolve => {
+          const started = Date.now();
+          const timer = setInterval(() => {
+            if (contactsReady) {
+              clearInterval(timer);
+              resolve(true);
+              return;
+            }
+            if (Date.now() - started > timeoutMs) {
+              clearInterval(timer);
+              resolve(false);
+            }
+          }, 120);
+        });
+      }
+
+      async function loadKidsCheckinSession_(force = false) {
+        if (currentKidsCheckinBundle && !force) return currentKidsCheckinBundle;
+        if (currentKidsCheckinLoading && !force) return currentKidsCheckinBundle;
+        currentKidsCheckinLoading = true;
+        try {
+          const res = await withGsRetry('kidsCheckin_getSession', [getKidsCheckinSessionMeta_()], { retries: 1, retryDelay: 450 });
+          if (!res?.ok || !res?.session) throw new Error(res?.error || 'Check-in konnte nicht geladen werden.');
+          currentKidsCheckinBundle = res;
+          return res;
+        } finally {
+          currentKidsCheckinLoading = false;
+        }
+      }
+
+      function kidsCheckinFamilyMap_() {
+        const map = {};
+        (contactsLite || []).forEach(item => {
+          const fid = String(item?.familyId || '').trim();
+          if (!fid) return;
+          if (!map[fid]) map[fid] = [];
+          map[fid].push(item);
+        });
+        return map;
+      }
+
+      function kidsCheckinGroupsForContact_(contact) {
+        const values = Array.isArray(contact?.kidsChurchValues) ? contact.kidsChurchValues : [];
+        return KIDS_CHECKIN_GROUPS.filter(label => matchesMultiValueFilter_(values, label));
+      }
+
+      function kidsCheckinPrimaryGroup_(contact) {
+        return kidsCheckinGroupsForContact_(contact)[0] || String((contact?.kidsChurchValues || [])[0] || '').trim();
+      }
+
+      function buildKidsCheckinRows_() {
+        const familyMap = kidsCheckinFamilyMap_();
+        return (contactsLite || [])
+          .filter(c => String(c?.category || '').trim().toLowerCase() === 'gemeinde' && hasAnyMultiValueFilter_(c?.kidsChurchValues))
+          .map(child => {
+            const familyId = String(child?.familyId || '').trim();
+            const familyMembers = familyId ? (familyMap[familyId] || []) : [];
+            const adults = familyMembers.filter(m => !m?.isChild && String(m?.id || '') !== String(child?.id || ''));
+            const parentNames = adults.map(m => String(m?.displayName || '').trim()).filter(Boolean);
+            const groupLabels = kidsCheckinGroupsForContact_(child);
+            const primaryGroup = groupLabels[0] || kidsCheckinPrimaryGroup_(child);
+            const place = [String(child?.postcode || '').trim(), String(child?.city || '').trim()].filter(Boolean).join(' ');
+            const haystack = normalizeSearchText_([
+              child?.displayName,
+              child?.firstName,
+              child?.preferredName,
+              child?.lastName,
+              child?.email,
+              child?.mobile,
+              child?.phone,
+              child?.address,
+              child?.postcode,
+              child?.city,
+              primaryGroup,
+              groupLabels.join(' '),
+              parentNames.join(' '),
+              familyMembers.map(m => [m?.displayName, m?.firstName, m?.preferredName, m?.lastName, m?.email, m?.mobile, m?.phone].join(' ')).join(' ')
+            ].map(v => String(v || '')).join(' '));
+            return {
+              id: String(child?.id || ''),
+              name: String(child?.displayName || '').trim(),
+              initials: ([child?.preferredName || child?.firstName, child?.lastName].map(v => String(v || '').trim()[0]).filter(Boolean).join('') || '?').slice(0, 2),
+              familyId,
+              parentNames,
+              place,
+              groupLabels,
+              primaryGroup,
+              haystack
+            };
+          })
+          .filter(row => row.id && row.name)
+          .sort((a, b) => {
+            const g = KIDS_CHECKIN_GROUPS.indexOf(a.primaryGroup) - KIDS_CHECKIN_GROUPS.indexOf(b.primaryGroup);
+            if (g !== 0) return g;
+            return a.name.localeCompare(b.name, 'de');
+          });
+      }
+
+      function renderKidsCheckin_(errorText = '') {
+        const host = document.getElementById('calendar-kids-checkin-content');
+        const subtitle = document.getElementById('calendar-kids-checkin-subtitle');
+        if (!host || !subtitle) return;
+
+        const bundle = currentKidsCheckinBundle || { session: getKidsCheckinFallbackSession_(), checked: {}, visitCounts: {} };
+        const session = bundle.session || getKidsCheckinFallbackSession_();
+        const checked = bundle.checked && typeof bundle.checked === 'object' ? bundle.checked : {};
+        const visitCounts = bundle.visitCounts && typeof bundle.visitCounts === 'object' ? bundle.visitCounts : {};
+        const allRows = buildKidsCheckinRows_();
+        const selectedGroup = String(currentKidsCheckinGroup || 'all');
+        const rowsByGroup = selectedGroup === 'all'
+          ? allRows
+          : allRows.filter(row => row.groupLabels.includes(selectedGroup) || row.primaryGroup === selectedGroup);
+        const parts = normalizeSearchText_(currentKidsCheckinSearch || '').split(/\s+/).filter(Boolean);
+        const rows = parts.length
+          ? rowsByGroup.filter(row => parts.every(part => row.haystack.includes(part)))
+          : rowsByGroup;
+        const checkedCount = rowsByGroup.filter(row => !!checked[row.id]).length;
+        subtitle.textContent = rowsByGroup.length ? `${checkedCount}/${rowsByGroup.length} eingecheckt` : '';
+
+        const groupButtons = [{ label: 'all', text: 'Alle', count: allRows.length }]
+          .concat(KIDS_CHECKIN_GROUPS.map(label => ({
+            label,
+            text: label,
+            count: allRows.filter(row => row.groupLabels.includes(label) || row.primaryGroup === label).length
+          })));
+
+        const listHtml = errorText
+          ? `<div class="service-empty-box" style="color:var(--danger);">${escapeHtml(errorText)}</div>`
+          : (!rows.length
+            ? `<div class="kids-checkin-empty">Keine Kinder gefunden.</div>`
+            : `<div class="kids-checkin-list">${rows.map(row => {
+                const isChecked = !!checked[row.id];
+                const visits = Number(visitCounts[row.id] || 0);
+                const parents = row.parentNames.length ? `Eltern: ${row.parentNames.slice(0, 3).join(' · ')}` : (row.place || '');
+                const extraGroups = row.groupLabels.length > 1 ? `+${row.groupLabels.length - 1}` : '';
+                return `
+                  <div class="kids-checkin-row ${isChecked ? 'is-checked' : ''}">
+                    <div class="kids-checkin-avatar">${escapeHtml(row.initials)}</div>
+                    <div class="kids-checkin-main">
+                      <button type="button" class="kids-checkin-name" onclick="loadContactMain('${escapeAttr(row.id)}')">${escapeHtml(row.name)}</button>
+                      ${parents ? `<div class="kids-checkin-meta">${escapeHtml(parents)}</div>` : ``}
+                      <div class="kids-checkin-tags">
+                        ${row.primaryGroup ? `<span class="kids-checkin-tag">${escapeHtml(row.primaryGroup)}</span>` : ``}
+                        ${extraGroups ? `<span class="kids-checkin-tag">${escapeHtml(extraGroups)}</span>` : ``}
+                        <span class="kids-checkin-visits">${visits}x besucht</span>
+                      </div>
+                    </div>
+                    <button type="button" class="kids-checkin-toggle ${isChecked ? 'is-checked' : ''}" onclick="toggleKidsCheckin_('${escapeAttr(row.id)}')" aria-label="${isChecked ? 'Check-in entfernen' : 'Einchecken'}">
+                      ${isChecked ? `<i class="fas fa-check"></i>` : ``}
+                    </button>
+                  </div>
+                `;
+              }).join('')}</div>`);
+
+        host.innerHTML = `
+          ${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}
+          <div class="kids-checkin-session">
+            <div class="kids-checkin-session-title">Check-in Session</div>
+            <div>${escapeHtml([session.dateLabel || '', session.time || '', session.title || 'Gottesdienst'].filter(Boolean).join(' · '))}</div>
+            <div>Stempel: ${escapeHtml(session.stamp || session.key || '')}</div>
+          </div>
+          <div class="kids-checkin-controls">
+            <input id="kids-checkin-search" class="kids-checkin-search" type="search" placeholder="Kind oder Eltern suchen..." value="${escapeAttr(currentKidsCheckinSearch || '')}" oninput="setKidsCheckinSearch_(this.value)">
+            <div class="kids-checkin-counter">${checkedCount} / ${rowsByGroup.length}</div>
+          </div>
+          <div class="kids-checkin-groups">
+            ${groupButtons.map(btn => `
+              <button type="button" class="kids-checkin-chip ${String(btn.label) === selectedGroup ? 'is-active' : ''}" onclick="setKidsCheckinGroup_('${escapeAttr(btn.label)}')">
+                <span>${escapeHtml(btn.text)}</span><strong>${btn.count}</strong>
+              </button>
+            `).join('')}
+          </div>
+          ${listHtml}
+        `;
+      }
+
+      async function openCalendarKidsCheckinView() {
+        if (!canViewServiceInternals_()) return;
+        showDetailView_("calendar-kids-checkin-view");
+        const host = document.getElementById("calendar-kids-checkin-content");
+        if (host) host.innerHTML = `${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}<div class="service-inline-loader"><div class="service-inline-loader-dot"></div></div>`;
+
+        try {
+          await ensureContactsLiteLoaded_(false, true);
+          const ready = await waitForContactsReady_();
+          if (!ready) throw new Error('Kontakte konnten nicht geladen werden.');
+          await loadKidsCheckinSession_(true);
+          if (currentDetailOverlayView === 'calendar-kids-checkin-view') renderKidsCheckin_();
+        } catch (err) {
+          if (currentDetailOverlayView === 'calendar-kids-checkin-view') {
+            currentKidsCheckinBundle = currentKidsCheckinBundle || { session: getKidsCheckinFallbackSession_(), checked: {}, visitCounts: {} };
+            renderKidsCheckin_(normalizeErrMsg_(err));
+          }
+        }
+      }
+
+      function setKidsCheckinSearch_(value) {
+        currentKidsCheckinSearch = String(value || '');
+        renderKidsCheckin_();
+        const input = document.getElementById('kids-checkin-search');
+        if (input) {
+          input.focus();
+          const pos = input.value.length;
+          try { input.setSelectionRange(pos, pos); } catch (_) {}
+        }
+      }
+
+      function setKidsCheckinGroup_(value) {
+        currentKidsCheckinGroup = String(value || 'all') || 'all';
+        renderKidsCheckin_();
+      }
+
+      async function toggleKidsCheckin_(personId) {
+        const row = buildKidsCheckinRows_().find(item => String(item.id) === String(personId));
+        if (!row || !currentKidsCheckinBundle?.session) return;
+        const checked = currentKidsCheckinBundle.checked && typeof currentKidsCheckinBundle.checked === 'object'
+          ? currentKidsCheckinBundle.checked
+          : {};
+        const nextChecked = !checked[row.id];
+        currentKidsCheckinBundle.checked = { ...checked };
+        if (nextChecked) currentKidsCheckinBundle.checked[row.id] = { personId: row.id, groupLabel: row.primaryGroup, checkedInAt: new Date().toISOString() };
+        else delete currentKidsCheckinBundle.checked[row.id];
+        renderKidsCheckin_();
+
+        try {
+          const res = await withGsRetry('kidsCheckin_set', [{
+            session: getKidsCheckinSessionMeta_(),
+            personId: row.id,
+            groupLabel: row.primaryGroup,
+            checked: nextChecked
+          }], { retries: 1, retryDelay: 450 });
+          if (!res?.ok || !res?.session) throw new Error(res?.error || 'Check-in konnte nicht gespeichert werden.');
+          currentKidsCheckinBundle = res;
+          if (currentDetailOverlayView === 'calendar-kids-checkin-view') renderKidsCheckin_();
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 2200);
+          loadKidsCheckinSession_(true).then(() => {
+            if (currentDetailOverlayView === 'calendar-kids-checkin-view') renderKidsCheckin_();
+          }).catch(() => {});
+        }
       }
 
       async function openAssignedServicesCalendar() {

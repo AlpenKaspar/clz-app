@@ -375,3 +375,26 @@ CREATE TABLE IF NOT EXISTS prayer_pool_members (
   CONSTRAINT fk_prayer_pool_members_pool FOREIGN KEY (pool_id) REFERENCES prayer_pools(id) ON DELETE CASCADE,
   CONSTRAINT fk_prayer_pool_members_person FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS kids_checkins (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  session_key varchar(190) NOT NULL,
+  service_id varchar(120) NULL,
+  event_id varchar(120) NULL,
+  service_date date NOT NULL,
+  service_time varchar(8) NOT NULL,
+  service_title varchar(190) NULL,
+  person_id varchar(80) NOT NULL,
+  group_label varchar(120) NULL,
+  checked_in_by bigint unsigned NULL,
+  checked_in_at datetime NOT NULL,
+  checked_out_at datetime NULL,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_kids_checkins_session_person (session_key, person_id),
+  KEY idx_kids_checkins_session (session_key),
+  KEY idx_kids_checkins_person_active (person_id, checked_out_at),
+  KEY idx_kids_checkins_date (service_date, service_time),
+  CONSTRAINT fk_kids_checkins_person FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+  CONSTRAINT fk_kids_checkins_user FOREIGN KEY (checked_in_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

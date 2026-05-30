@@ -35,6 +35,8 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
         'kalenderUi_getServiceFlow' => rpc_service_flow($args[0] ?? []),
         'kalenderUi_getServiceDetails', 'kalenderUi_refreshServiceDetails' => rpc_service_details($args[0] ?? []),
+        'kidsCheckin_getSession' => rpc_kids_checkin_session($args[0] ?? [], $user),
+        'kidsCheckin_set' => rpc_kids_checkin_set($args[0] ?? [], $user),
         'kalenderUi_getPersonServiceAssignments' => rpc_person_service_assignments(
             (string) ($args[0] ?? ''),
             (string) ($args[1] ?? ''),
@@ -1759,6 +1761,175 @@ function rpc_service_details(mixed $meta): array
         rpc_service_staff($meta),
         rpc_service_flow($meta)
     );
+}
+
+function rpc_ensure_kids_checkin_schema(): void
+{
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS kids_checkins (
+            id bigint unsigned NOT NULL AUTO_INCREMENT,
+            session_key varchar(190) NOT NULL,
+            service_id varchar(120) NULL,
+            event_id varchar(120) NULL,
+            service_date date NOT NULL,
+            service_time varchar(8) NOT NULL,
+            service_title varchar(190) NULL,
+            person_id varchar(80) NOT NULL,
+            group_label varchar(120) NULL,
+            checked_in_by bigint unsigned NULL,
+            checked_in_at datetime NOT NULL,
+            checked_out_at datetime NULL,
+            updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_kids_checkins_session_person (session_key, person_id),
+            KEY idx_kids_checkins_session (session_key),
+            KEY idx_kids_checkins_person_active (person_id, checked_out_at),
+            KEY idx_kids_checkins_date (service_date, service_time),
+            CONSTRAINT fk_kids_checkins_person FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+            CONSTRAINT fk_kids_checkins_user FOREIGN KEY (checked_in_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+}
+
+function rpc_kids_checkin_meta(mixed $meta): array
+{
+    $data = is_array($meta) ? $meta : [];
+    $rawServiceId = rpc_str($data['elvantoId'] ?? ($data['_elvantoId'] ?? ''));
+    $serviceId = trim(preg_replace('/^SERVICE-/i', '', $rawServiceId) ?? $rawServiceId);
+    $eventId = rpc_str($data['eventId'] ?? ($data['id'] ?? ''));
+    $date = rpc_normalize_dashboard_date(rpc_str($data['startDate'] ?? ($data['StartDatum'] ?? '')));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+        $date = (new DateTimeImmutable('today'))->format('Y-m-d');
+    }
+    $time = rpc_time($data['startTime'] ?? ($data['StartZeit'] ?? '')) ?: '00:00';
+    $title = mb_substr(rpc_str($data['title'] ?? ($data['Bezeichnung'] ?? 'Gottesdienst')), 0, 190);
+    $category = rpc_str($data['category'] ?? ($data['Kategorie'] ?? ''));
+    $baseId = $serviceId !== '' ? 'SERVICE-' . $serviceId : ($eventId !== '' ? $eventId : 'EVENT-' . $date . '-' . $time);
+    $sessionKey = $baseId . '|' . $date . '|' . $time;
+
+    return [
+        'key' => mb_substr($sessionKey, 0, 190),
+        'stamp' => $baseId . ' / ' . $time,
+        'serviceId' => $serviceId,
+        'eventId' => $eventId,
+        'date' => $date,
+        'dateLabel' => rpc_ui_date($date),
+        'time' => $time,
+        'title' => $title !== '' ? $title : 'Gottesdienst',
+        'category' => $category,
+    ];
+}
+
+function rpc_kids_checkin_payload(array $session): array
+{
+    rpc_ensure_kids_checkin_schema();
+    $checkedRows = fetch_all_prepared_legacy(
+        'SELECT person_id, group_label, checked_in_at
+         FROM kids_checkins
+         WHERE session_key = ? AND checked_out_at IS NULL
+         ORDER BY checked_in_at, person_id',
+        [$session['key']]
+    );
+    $checked = [];
+    foreach ($checkedRows as $row) {
+        $personId = rpc_str($row['person_id'] ?? '');
+        if ($personId === '') {
+            continue;
+        }
+        $checked[$personId] = [
+            'personId' => $personId,
+            'groupLabel' => rpc_str($row['group_label'] ?? ''),
+            'checkedInAt' => rpc_str($row['checked_in_at'] ?? ''),
+        ];
+    }
+
+    $visitRows = db()->query(
+        'SELECT person_id, COUNT(DISTINCT session_key) AS visits
+         FROM kids_checkins
+         WHERE checked_out_at IS NULL
+         GROUP BY person_id'
+    )->fetchAll();
+    $visitCounts = [];
+    foreach ($visitRows as $row) {
+        $personId = rpc_str($row['person_id'] ?? '');
+        if ($personId !== '') {
+            $visitCounts[$personId] = (int) ($row['visits'] ?? 0);
+        }
+    }
+
+    return [
+        'ok' => true,
+        'session' => $session,
+        'checked' => $checked,
+        'checkedPersonIds' => array_keys($checked),
+        'visitCounts' => $visitCounts,
+    ];
+}
+
+function rpc_kids_checkin_session(mixed $meta, array $user): array
+{
+    if (rpc_is_guest_role($user)) {
+        return ['ok' => false, 'error' => 'Kinder-Check-in ist fÃ¼r diese Rolle nicht freigeschaltet.'];
+    }
+    $session = rpc_kids_checkin_meta($meta);
+    return rpc_kids_checkin_payload($session);
+}
+
+function rpc_kids_checkin_set(mixed $payload, array $user): array
+{
+    if (rpc_is_guest_role($user)) {
+        return ['ok' => false, 'error' => 'Kinder-Check-in ist fÃ¼r diese Rolle nicht freigeschaltet.'];
+    }
+    if (!is_array($payload)) {
+        return ['ok' => false, 'error' => 'Check-in konnte nicht gespeichert werden.'];
+    }
+    $session = rpc_kids_checkin_meta($payload['session'] ?? []);
+    $personId = rpc_str($payload['personId'] ?? '');
+    if ($personId === '') {
+        return ['ok' => false, 'error' => 'Kind fehlt.'];
+    }
+
+    rpc_ensure_kids_checkin_schema();
+    $checked = (bool) ($payload['checked'] ?? false);
+    if ($checked) {
+        $stmt = db()->prepare(
+            'INSERT INTO kids_checkins
+                (session_key, service_id, event_id, service_date, service_time, service_title, person_id, group_label, checked_in_by, checked_in_at, checked_out_at)
+             VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NULL)
+             ON DUPLICATE KEY UPDATE
+                service_id = VALUES(service_id),
+                event_id = VALUES(event_id),
+                service_date = VALUES(service_date),
+                service_time = VALUES(service_time),
+                service_title = VALUES(service_title),
+                group_label = VALUES(group_label),
+                checked_in_by = VALUES(checked_in_by),
+                checked_in_at = IF(checked_out_at IS NULL, checked_in_at, VALUES(checked_in_at)),
+                checked_out_at = NULL,
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        $stmt->execute([
+            $session['key'],
+            $session['serviceId'] !== '' ? $session['serviceId'] : null,
+            $session['eventId'] !== '' ? $session['eventId'] : null,
+            $session['date'],
+            $session['time'],
+            $session['title'],
+            $personId,
+            rpc_str($payload['groupLabel'] ?? ''),
+            (int) ($user['id'] ?? 0) ?: null,
+        ]);
+    } else {
+        $stmt = db()->prepare(
+            'UPDATE kids_checkins
+             SET checked_out_at = NOW(), updated_at = CURRENT_TIMESTAMP
+             WHERE session_key = ? AND person_id = ? AND checked_out_at IS NULL'
+        );
+        $stmt->execute([$session['key'], $personId]);
+    }
+
+    return rpc_kids_checkin_payload($session);
 }
 
 function rpc_service_overview(mixed $meta): array
