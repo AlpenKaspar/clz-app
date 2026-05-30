@@ -7591,27 +7591,6 @@
       padding: 14px 16px 14px;
     }
 
-    .kids-checkin-session {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      margin: 0 0 12px;
-      padding: 12px 14px;
-      border: 1px solid rgba(37,99,235,0.22);
-      border-radius: 14px;
-      background: rgba(37,99,235,0.09);
-      color: var(--text-main);
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1.35;
-    }
-
-    .kids-checkin-session-title {
-      color: var(--primary);
-      font-size: 13px;
-      font-weight: 950;
-    }
-
     .kids-checkin-controls {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -7692,6 +7671,21 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+
+    .kids-checkin-family-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .kids-checkin-family-title {
+      padding: 4px 2px 0;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 950;
+      letter-spacing: .04em;
+      text-transform: uppercase;
     }
 
     .kids-checkin-row {
@@ -7814,7 +7808,6 @@
       font-weight: 750;
     }
 
-    body.dark .kids-checkin-session,
     body.dark .kids-checkin-row.is-checked {
       background: rgba(59,130,246,0.14);
       border-color: rgba(59,130,246,0.30);
@@ -25948,6 +25941,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return kidsCheckinGroupsForContact_(contact)[0] || String((contact?.kidsChurchValues || [])[0] || '').trim();
       }
 
+      function kidsCheckinFamilyTitle_(members, child) {
+        const rows = Array.isArray(members) && members.length ? members : [child];
+        const names = Array.from(new Set(rows.map(m => String(m?.lastName || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'de'));
+        if (names.length) return `Familie ${names.join(' ')}`;
+        return String(child?.displayName || 'Familie').trim();
+      }
+
       function buildKidsCheckinRows_() {
         const familyMap = kidsCheckinFamilyMap_();
         return (contactsLite || [])
@@ -25959,6 +25959,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
             const parentNames = adults.map(m => String(m?.displayName || '').trim()).filter(Boolean);
             const groupLabels = kidsCheckinGroupsForContact_(child);
             const primaryGroup = groupLabels[0] || kidsCheckinPrimaryGroup_(child);
+            const familyTitle = familyId ? kidsCheckinFamilyTitle_(familyMembers, child) : String(child?.displayName || '').trim();
+            const familySortKey = familyId
+              ? normalizeSearchText_((familyMembers || []).map(m => String(m?.lastName || '')).filter(Boolean).sort((a, b) => a.localeCompare(b, 'de')).join(' '))
+              : normalizeSearchText_(String(child?.lastName || child?.displayName || ''));
             const place = [String(child?.postcode || '').trim(), String(child?.city || '').trim()].filter(Boolean).join(' ');
             const haystack = normalizeSearchText_([
               child?.displayName,
@@ -25981,6 +25985,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
               name: String(child?.displayName || '').trim(),
               initials: ([child?.preferredName || child?.firstName, child?.lastName].map(v => String(v || '').trim()[0]).filter(Boolean).join('') || '?').slice(0, 2),
               familyId,
+              familyKey: familyId || `person_${String(child?.id || '')}`,
+              familyTitle,
+              familySortKey,
+              lastName: String(child?.lastName || '').trim(),
+              firstName: String(child?.preferredName || child?.firstName || '').trim(),
               parentNames,
               place,
               groupLabels,
@@ -25990,10 +25999,28 @@ function dashDynamicValueCard_(icon, prefix, item) {
           })
           .filter(row => row.id && row.name)
           .sort((a, b) => {
-            const g = KIDS_CHECKIN_GROUPS.indexOf(a.primaryGroup) - KIDS_CHECKIN_GROUPS.indexOf(b.primaryGroup);
-            if (g !== 0) return g;
+            const family = String(a.familySortKey || a.familyTitle || '').localeCompare(String(b.familySortKey || b.familyTitle || ''), 'de');
+            if (family !== 0) return family;
+            const last = String(a.lastName || '').localeCompare(String(b.lastName || ''), 'de');
+            if (last !== 0) return last;
+            const first = String(a.firstName || '').localeCompare(String(b.firstName || ''), 'de');
+            if (first !== 0) return first;
             return a.name.localeCompare(b.name, 'de');
           });
+      }
+
+      function groupKidsCheckinRowsByFamily_(rows) {
+        const groups = [];
+        const byKey = {};
+        (Array.isArray(rows) ? rows : []).forEach(row => {
+          const key = String(row?.familyKey || row?.id || '').trim();
+          if (!byKey[key]) {
+            byKey[key] = { key, title: row?.familyTitle || '', rows: [] };
+            groups.push(byKey[key]);
+          }
+          byKey[key].rows.push(row);
+        });
+        return groups;
       }
 
       function renderKidsCheckin_(errorText = '') {
@@ -26002,7 +26029,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (!host || !subtitle) return;
 
         const bundle = currentKidsCheckinBundle || { session: getKidsCheckinFallbackSession_(), checked: {}, visitCounts: {} };
-        const session = bundle.session || getKidsCheckinFallbackSession_();
         const checked = bundle.checked && typeof bundle.checked === 'object' ? bundle.checked : {};
         const visitCounts = bundle.visitCounts && typeof bundle.visitCounts === 'object' ? bundle.visitCounts : {};
         const allRows = buildKidsCheckinRows_();
@@ -26028,7 +26054,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
           ? `<div class="service-empty-box" style="color:var(--danger);">${escapeHtml(errorText)}</div>`
           : (!rows.length
             ? `<div class="kids-checkin-empty">Keine Kinder gefunden.</div>`
-            : `<div class="kids-checkin-list">${rows.map(row => {
+            : `<div class="kids-checkin-list">${groupKidsCheckinRowsByFamily_(rows).map(group => {
+              const showFamilyHeader = Array.isArray(group.rows) && group.rows.length > 1;
+              return `
+                <div class="kids-checkin-family-group">
+                  ${showFamilyHeader ? `<div class="kids-checkin-family-title">${escapeHtml(group.title || 'Familie')}</div>` : ``}
+                  ${group.rows.map(row => {
                 const isChecked = !!checked[row.id];
                 const visits = Number(visitCounts[row.id] || 0);
                 const parents = row.parentNames.length ? `Eltern: ${row.parentNames.slice(0, 3).join(' · ')}` : (row.place || '');
@@ -26050,15 +26081,13 @@ function dashDynamicValueCard_(icon, prefix, item) {
                     </button>
                   </div>
                 `;
-              }).join('')}</div>`);
+                  }).join('')}
+                </div>
+              `;
+            }).join('')}</div>`);
 
         host.innerHTML = `
           ${renderServiceSeriesSwitcher_('service-detail-switcher-sub')}
-          <div class="kids-checkin-session">
-            <div class="kids-checkin-session-title">Check-in Session</div>
-            <div>${escapeHtml([session.dateLabel || '', session.time || '', session.title || 'Gottesdienst'].filter(Boolean).join(' · '))}</div>
-            <div>Stempel: ${escapeHtml(session.stamp || session.key || '')}</div>
-          </div>
           <div class="kids-checkin-controls">
             <input id="kids-checkin-search" class="kids-checkin-search" type="search" placeholder="Kind oder Eltern suchen..." value="${escapeAttr(currentKidsCheckinSearch || '')}" oninput="setKidsCheckinSearch_(this.value)">
             <div class="kids-checkin-counter">${checkedCount} / ${rowsByGroup.length}</div>
