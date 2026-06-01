@@ -3462,7 +3462,11 @@ function rpc_normalize_user_preferences(mixed $payload): array
     if (strlen($birthdayMessageTemplate) > 2000) {
         $birthdayMessageTemplate = substr($birthdayMessageTemplate, 0, 2000);
     }
-    if ($birthdayMessageTemplate === 'Alles Liebe und Gottes Segen zum Geburtstag!') {
+    if (
+        $birthdayMessageTemplate === 'Alles Liebe und Gottes Segen zum Geburtstag!'
+        || $birthdayMessageTemplate === 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker – egal, was kommt. Lass dich feieren! 🎉🥂'
+        || $birthdayMessageTemplate === 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst.'
+    ) {
         $birthdayMessageTemplate = $defaults['birthdayMessageTemplate'];
     }
     $birthdayGreetingStyle = rpc_str($data['birthdayGreetingStyle'] ?? $defaults['birthdayGreetingStyle']);

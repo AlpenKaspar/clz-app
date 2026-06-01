@@ -10132,7 +10132,7 @@
                   <span class="birthday-style-switch-thumb"></span>
                 </div>
               </div>
-              <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst."></textarea>
+              <textarea id="birthday-message-template" class="tools-textarea" rows="4" placeholder="Happy Birthday! 🎈 Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du seine Kraft jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker, egal was kommt. Lass dich feiern! 🎉🥂"></textarea>
               <div class="tools-message-actions">
                 <button class="btn btn-secondary" type="button" onclick="saveBirthdayMessageTemplate_()" style="min-height:34px;padding:0 12px;font-size:12px;">
                   <i class="fas fa-floppy-disk"></i><span>Speichern</span>
@@ -10863,11 +10863,14 @@
       }
 
       function defaultBirthdayMessageTemplate_() {
-        return 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker – egal, was kommt. Lass dich feieren! 🎉🥂';
+        return 'Happy Birthday! 🎈 Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du seine Kraft jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker, egal was kommt. Lass dich feiern! 🎉🥂';
       }
 
       function isLegacyBirthdayDefaultTemplate_(value) {
-        return String(value || '').trim() === 'Alles Liebe und Gottes Segen zum Geburtstag!';
+        const template = String(value || '').trim();
+        return template === 'Alles Liebe und Gottes Segen zum Geburtstag!'
+          || template === 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst. Er stärkt dir den Rücken, schenkt dir echten Frieden und ist dein sicherer Anker – egal, was kommt. Lass dich feieren! 🎉🥂'
+          || template === 'Happy Birthday! 🎈Zu deinem Ehrentag wünsche ich dir von Herzen Gottes Segen und dass du Seine Power jeden Tag spürst.';
       }
 
       function currentBirthdayGreetingStyle_() {
