@@ -1650,7 +1650,7 @@ function rpc_calendar(string $startIso, string $endIso, array $user): array
     $categories = array_values(array_unique(array_filter(array_map(static fn(array $row): string => $row['Kategorie'] ?? '', $events))));
     sort($categories);
 
-    return ['ok' => true, 'events' => $events, 'categories' => $categories];
+    return ['ok' => true, 'events' => $events, 'categories' => $categories, 'dataVersion' => rpc_data_version()];
 }
 
 function rpc_calendar_display_color(array $row): string

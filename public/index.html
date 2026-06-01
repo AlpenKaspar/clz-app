@@ -10464,6 +10464,7 @@
         filterDefs: "clz_filter_defs_v192",
         dashboardStats: "clz_dashboard_stats_v194",
         contactsLite: "clz_contacts_lite_v194",
+        calendarRangePrefix: "clz_calendar_range_v1_",
         personMainPrefix: "clz_person_main_v192_",
         personExtraPrefix: "clz_person_extra_v193_",
         groupSectionPrefix: "clz_group_section_v192_",
@@ -10471,7 +10472,7 @@
         serviceDetailsPrefix: "clz_service_details_v186_",
         serviceMediaPrefix: "clz_service_media_v1_"
       };
-      const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+      const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
       const CALENDAR_WARMUP_DELAY_MS = 1400;
       const perfMarks = {};
       const perfMetrics = {};
@@ -11132,7 +11133,7 @@
       function hydrateBootstrapFromLocalCache_() {
         const cachedRaw = cacheGetRaw_(CACHE_KEYS.bootstrap);
         const cached = cachedRaw?.value || null;
-        if (!cached || typeof cached !== 'object') return false;
+        if (!cached || typeof cached !== 'object') return null;
 
         if (Array.isArray(cached.filters)) {
           contactFilterDefs = cached.filters;
@@ -11145,7 +11146,17 @@
           renderDashboard();
         }
 
-        return true;
+        return { dataVersion: String(cachedRaw?.meta?.dataVersion || '').trim() };
+      }
+
+      function hydrateContactsLiteFromLocalCache_() {
+        const cachedRaw = cacheGetRaw_(CACHE_KEYS.contactsLite);
+        const cached = cachedRaw?.value || null;
+        if (!Array.isArray(cached)) return null;
+        contactsLite = cached;
+        contactsReady = true;
+        renderCalendarViewSwitch_();
+        return { dataVersion: String(cachedRaw?.meta?.dataVersion || '').trim() };
       }
 
       async function fetchBootstrapFromServer_(force = false) {
@@ -11153,6 +11164,16 @@
         if (!res?.ok) throw new Error(res?.error || 'Bootstrap konnte nicht geladen werden.');
         applyBootstrapPayload_(res, { force });
         return res;
+      }
+
+      async function fetchServerDataVersionLight_(reason = 'version') {
+        const now = Date.now();
+        if (currentServerDataVersion && (now - lastVersionCheckAt) < 25000) return currentServerDataVersion;
+        const ping = await withGsRetry('app_ping', [], { retries: 1, retryDelay: 400 });
+        const nextVersion = String(ping?.dataVersion || '').trim();
+        if (nextVersion) currentServerDataVersion = nextVersion;
+        lastVersionCheckAt = now;
+        return nextVersion;
       }
 
       async function checkForDataVersionRefresh_(reason = 'background') {
@@ -11189,30 +11210,7 @@
         if (!backgroundAutoRebuildEnabled) return false;
         if (serverRebuildInFlight) return false;
 
-        const changed = await checkForDataVersionRefresh_(reason);
-        if (changed) return true;
-
-        serverRebuildInFlight = true;
-        try {
-          const rebuild = await withGsRetry("tools_rebuildServerCaches", [], { retries: 1, retryDelay: 700 });
-          if (!rebuild?.ok) return false;
-
-          const ping = await withGsRetry('app_ping', [], { retries: 1, retryDelay: 400 });
-          const nextVersion = String(ping?.dataVersion || '').trim();
-          if (!nextVersion) return false;
-
-          if (!currentServerDataVersion || nextVersion !== currentServerDataVersion) {
-            currentServerDataVersion = nextVersion;
-            await warmUpApp_(true);
-            if (currentTab === 'calendar') await loadCalendar(true);
-            return true;
-          }
-          return false;
-        } catch (e) {
-          return false;
-        } finally {
-          serverRebuildInFlight = false;
-        }
+        return checkForDataVersionRefresh_(reason);
       }
 
       function schedulePeriodicCacheCheck_() {
@@ -12061,6 +12059,19 @@
         } catch (e) {}
       }
 
+      function clearCalendarRangeCache_() {
+        try {
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith(CACHE_KEYS.calendarRangePrefix)) localStorage.removeItem(key);
+          });
+        } catch (e) {}
+      }
+
+      function getCalendarRangeCacheKey_(startIso, endIso) {
+        const role = String(currentUserRole || 'guest').trim().toLowerCase() || 'guest';
+        return `${CACHE_KEYS.calendarRangePrefix}${role}_${String(startIso || '')}_${String(endIso || '')}`;
+      }
+
       function getPersonMainCacheKey_(id) {
         return CACHE_KEYS.personMainPrefix + String(id || "");
       }
@@ -12136,11 +12147,46 @@
         await loadCalendar(showLoading);
       }
 
+      function scheduleSecondaryWarmups_() {
+        setTimeout(() => {
+          const calendarViewVisible = document.getElementById('view-calendar')?.classList.contains('view-active');
+          if (calendarViewVisible || allEvents.length > 0) return;
+          warmupCalendar_(false).catch(() => {});
+        }, CALENDAR_WARMUP_DELAY_MS);
+
+        setTimeout(() => {
+          const songsViewVisible = document.getElementById('view-songs')?.classList.contains('view-active');
+          if (songsViewVisible || songsReady) return;
+          ensureSongsLiteLoaded_(true).catch(() => {});
+        }, CALENDAR_WARMUP_DELAY_MS + 800);
+      }
+
       async function warmUpApp_(force = false) {
         showContactsSkeleton_(false, false);
 
-        hydrateBootstrapFromLocalCache_();
+        const cachedBootstrap = hydrateBootstrapFromLocalCache_();
+        const cachedContacts = hydrateContactsLiteFromLocalCache_();
 
+        if (!force && cachedBootstrap?.dataVersion && cachedContacts?.dataVersion && cachedBootstrap.dataVersion === cachedContacts.dataVersion) {
+          try {
+            const serverVersion = await fetchServerDataVersionLight_('startup-cache');
+            if (serverVersion && serverVersion === cachedBootstrap.dataVersion) {
+              if (contactHasVisibleIntent_()) {
+                runLocalContactSearch(true);
+              } else {
+                maybeRenderIdleContacts_();
+              }
+              renderAllPrimaryViews_();
+              triggerPostBootstrapWarmup_();
+              scheduleSecondaryWarmups_();
+              return;
+            }
+          } catch (e) {}
+        }
+
+        if (!force && cachedContacts) {
+          contactsReady = false;
+        }
         const bootstrapPromise = fetchBootstrapFromServer_(force);
         const contactsPromise = ensureContactsLiteLoaded_(force, false);
 
@@ -23917,7 +23963,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         });
       }
 
-      async function loadCalendar(showLoading = true) {
+      async function loadCalendar(showLoading = true, force = false) {
         if (calendarIsLoading) return;
         calendarIsLoading = true;
 
@@ -23928,6 +23974,25 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const startIso = loadRange.startIso;
           const endIso = loadRange.endIso;
           await refreshCalendarMineAssignmentsIfNeeded_({ silent: true, startIso, endIso });
+
+          const cacheKey = getCalendarRangeCacheKey_(startIso, endIso);
+          if (!force) {
+            const cachedRaw = cacheGetRaw_(cacheKey);
+            const cached = cachedRaw?.value || null;
+            const cachedVersion = String(cachedRaw?.meta?.dataVersion || '').trim();
+            if (Array.isArray(cached?.events) && (!currentServerDataVersion || cachedVersion === currentServerDataVersion)) {
+              allEvents = cached.events;
+              calendarLoadedStartIso = startIso;
+              calendarLoadedEndIso = endIso;
+              filteredCalendarEvents = allEvents.slice();
+              renderCalendarChips(Array.isArray(cached.categories) ? cached.categories : []);
+              filterCalendar({ allowWhileLoading: true });
+              updateGlobalLiveBanner_();
+              perfMeasure_('calendar_ready_ms', 'app_start');
+              setStatus("cal-status", `${allEvents.length} Termine`, "");
+              return;
+            }
+          }
 
           const hadEventsBeforeLoad = Array.isArray(allEvents) && allEvents.length > 0;
           if (showLoading && !hadEventsBeforeLoad) {
@@ -23943,6 +24008,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
           calendarLoadedStartIso = startIso;
           calendarLoadedEndIso = endIso;
           filteredCalendarEvents = allEvents.slice();
+          if (data?.dataVersion) currentServerDataVersion = String(data.dataVersion || currentServerDataVersion || '').trim();
+          cacheSet_(cacheKey, {
+            events: allEvents,
+            categories: Array.isArray(data?.categories) ? data.categories : []
+          }, { dataVersion: String(data?.dataVersion || currentServerDataVersion || '').trim(), source: 'calendar-range' });
           renderCalendarChips(data?.categories || []);
           filterCalendar();
           updateGlobalLiveBanner_();
@@ -26952,8 +27022,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       async function refreshCalendarView(showToast = false) {
         if (showToast) toast("Kalender wird neu geladen...", 1200);
+        clearCalendarRangeCache_();
         allEvents = [];
-        await loadCalendar();
+        await loadCalendar(true, true);
       }
 
       function showContactsSkeleton_(showNote = false, keepStatus = false) {
@@ -27325,6 +27396,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
       async function forceRefreshAppData(showToast = false) {
         clearBootstrapCache_();
+        clearCalendarRangeCache_();
 
         contactsReady = false;
         contactsLite = [];
@@ -28121,11 +28193,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
         hideWelcomeOverlay_();
         updateContactsStage_();
 
-        try {
-          const ping = await withGsRetry("app_ping", [], { retries: 1, retryDelay: 400 });
-          currentServerDataVersion = String(ping?.dataVersion || currentServerDataVersion || '').trim();
-        } catch (e) {
-          toast("Verbindung instabil – bitte bei Bedarf neu laden", 2400);
+        if (!currentServerDataVersion) {
+          try {
+            await fetchServerDataVersionLight_('post-start');
+          } catch (e) {
+            toast("Verbindung instabil – bitte bei Bedarf neu laden", 2400);
+          }
         }
 
         const refreshPermsAndStatus_ = () => {
