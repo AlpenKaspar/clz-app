@@ -1790,10 +1790,11 @@ function rpc_calendar_payload_picture_url(array $raw): string
 {
     $picture = $raw['picture'] ?? '';
     if (is_string($picture)) {
-        return rpc_str($picture);
+        $url = rpc_str($picture);
+        return $url !== '' ? $url : rpc_calendar_payload_asset_image_url($raw);
     }
     if (!is_array($picture)) {
-        return '';
+        return rpc_calendar_payload_asset_image_url($raw);
     }
     foreach (['url', 'medium', 'large', 'small', 'original'] as $key) {
         $value = rpc_str($picture[$key] ?? '');
@@ -1801,7 +1802,62 @@ function rpc_calendar_payload_picture_url(array $raw): string
             return $value;
         }
     }
+    $assetUrl = rpc_calendar_payload_asset_image_url($raw);
+    return $assetUrl;
+}
+
+function rpc_calendar_payload_asset_image_url(array $raw): string
+{
+    foreach (['assets', 'asset', 'resources', 'resource'] as $key) {
+        if (!array_key_exists($key, $raw)) {
+            continue;
+        }
+        foreach (rpc_calendar_normalize_payload_collection($raw[$key]) as $asset) {
+            $url = rpc_calendar_asset_image_url($asset);
+            if ($url !== '') {
+                return $url;
+            }
+        }
+    }
     return '';
+}
+
+function rpc_calendar_asset_image_url(mixed $asset): string
+{
+    if (is_string($asset)) {
+        return preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $asset) ? rpc_str($asset) : '';
+    }
+    if (!is_array($asset)) {
+        return '';
+    }
+    $type = strtolower(rpc_str($asset['type'] ?? ($asset['mime_type'] ?? ($asset['content_type'] ?? ''))));
+    foreach (['url', 'medium', 'large', 'small', 'original', 'thumbnail_url', 'thumb_url'] as $key) {
+        $url = rpc_str($asset[$key] ?? '');
+        if ($url === '') {
+            continue;
+        }
+        $isImageType = str_contains($type, 'image') || str_contains($type, 'bild');
+        if ($isImageType || preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $url)) {
+            return $url;
+        }
+    }
+    return '';
+}
+
+function rpc_calendar_normalize_payload_collection(mixed $value): array
+{
+    if (!is_array($value)) {
+        return $value === null || $value === '' ? [] : [$value];
+    }
+    foreach (['asset', 'resource', 'item'] as $childKey) {
+        if (isset($value[$childKey])) {
+            return rpc_calendar_normalize_payload_collection($value[$childKey]);
+        }
+    }
+    if (array_is_list($value)) {
+        return $value;
+    }
+    return [$value];
 }
 
 function rpc_person_service_assignments(string $personId, string $startIso, string $endIso): array

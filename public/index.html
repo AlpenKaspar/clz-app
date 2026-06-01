@@ -5317,6 +5317,30 @@
       color: var(--text-main);
     }
 
+    .calendar-event-thumb {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      object-fit: cover;
+      flex: 0 0 auto;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+    }
+
+    .calendar-detail-picture-wrap {
+      padding: 12px 16px 0;
+    }
+
+    .calendar-detail-picture {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      background: var(--chip-bg);
+    }
+
     #detail-overlay .detail-topbar {
       display: none;
     }
@@ -10532,11 +10556,11 @@
         return `
           <div style="margin-top:10px;padding:10px 12px;border:1px solid var(--border-color);border-radius:12px;background:var(--card-bg);">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-              <div style="font-weight:800;color:var(--text-color);">Server-Cache</div>
-              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:${badgeBg};color:${badgeColor};font-weight:800;font-size:11px;">Hit-Rate ${rateText}</span>
+              <div style="font-weight:800;color:var(--text-color);">Daten-Cache</div>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(34,197,94,.12);color:#166534;font-weight:800;font-size:11px;">lokal aktiv</span>
             </div>
             <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
-              Treffer: <strong>${hits}</strong> · Fehler: <strong>${misses}</strong> · Schreibvorgänge: <strong>${writes}</strong>${updated ? ` · Aktualisiert: <strong>${escapeHtml(updated)}</strong>` : ''}
+              Browser-Cache f&uuml;r Startdaten, Kontakte und Kalenderbereiche${updated ? ` &middot; Aktualisiert: <strong>${escapeHtml(updated)}</strong>` : ''}
             </div>
           </div>
         `;
@@ -24250,10 +24274,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
             const dateCore = `${getWeekdayShort_(first.StartDatum || '')}, ${formatCalendarDateLabel_(first.StartDatum || '')}`;
             const durationLabel = getDurationLabel_(first.StartDatum, first.EndDatum);
             const relatedIds = e.items.map(item => String(item?.id || '').trim()).filter(Boolean).join(' ');
+            const pictureUrl = String(first.PictureUrl || '').trim();
             return `
               <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(first.id)}" data-related-ids="${escapeAttr(relatedIds)}" onclick="showGroupedServiceDetails('${escapeAttr(e.groupKey)}')">
                 <div style="display:flex; align-items:center; min-width:0; flex:1;">
-                  <div class="event-dot" style="background:${escapeAttr(first.displayColorSolid || first.displayColor || '#94a3b8')}"></div>
+                  ${pictureUrl ? `<img class="calendar-event-thumb" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(first.Bezeichnung || 'Termin')}" loading="lazy" decoding="async">` : `<div class="event-dot" style="background:${escapeAttr(first.displayColorSolid || first.displayColor || '#94a3b8')}"></div>`}
                   <div style="min-width:0; width:100%;">
                     <div class="result-meta-line result-meta-line-top">
                       <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(first.Bezeichnung || '')}</div>
@@ -24275,11 +24300,12 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const dateCore = formatCalendarEventMetaLine_(e);
           const durationLabel = getDurationLabel_(e.StartDatum, e.EndDatum);
           const isActive = String(e.id || '') === String(currentEventId || '');
+          const pictureUrl = String(e.PictureUrl || '').trim();
 
           return `
             <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(e.id)}" onclick="showEventDetails('${escapeAttr(e.id)}')">
               <div style="display:flex; align-items:center; min-width:0; flex:1;">
-                <div class="event-dot" style="background:${escapeAttr(e.displayColorSolid || e.displayColor || '#94a3b8')}"></div>
+                ${pictureUrl ? `<img class="calendar-event-thumb" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(e.Bezeichnung || 'Termin')}" loading="lazy" decoding="async">` : `<div class="event-dot" style="background:${escapeAttr(e.displayColorSolid || e.displayColor || '#94a3b8')}"></div>`}
                 <div style="min-width:0; width:100%;">
                   <div class="result-meta-line result-meta-line-top">
                     <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(e.Bezeichnung || "")}</div>
@@ -25255,6 +25281,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             location: ev.Ort || "",
             description: ev.Details || "",
             liveUrl: liveUrlEffective,
+            pictureUrl: ev.PictureUrl || "",
             title: ev.Bezeichnung || "",
             isService: /^SERVICE-/i.test(String(ev._elvantoId || ""))
           }
@@ -25288,6 +25315,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const liveUrl = String(data?.meta?.liveUrl || '').trim();
         const liveEmbedUrl = buildYoutubeEmbedUrl_(liveUrl);
         const elvantoUrl = normalizeElvantoUrl_(data?.meta?.elvantoUrl || '');
+        const pictureUrl = String(data?.meta?.pictureUrl || '').trim();
 
         hideAllDetailViews_();
 
@@ -25305,6 +25333,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
               ${timeLabel ? `<div class="profile-subtitle calendar-meta-line calendar-meta-line-strong">${escapeHtml(timeLabel)}</div>` : ``}
             </div>
           </div>
+          ${pictureUrl ? `<div class="calendar-detail-picture-wrap"><img class="calendar-detail-picture" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(data.displayName || 'Termin')}" loading="lazy" decoding="async"></div>` : ``}
           ${isService ? renderServiceSeriesSwitcher_() : ``}
           <div class="info-grid" id="calendar-detail-grid"></div>
           ${isService && canViewServiceInternals_() ? `
