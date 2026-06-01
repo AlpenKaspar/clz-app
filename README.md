@@ -64,6 +64,14 @@ cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scrip
 cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_songs.php
 ```
 
+`import_service_details.php` prueft standardmaessig nur einen Footprint der naechsten 3 Gottesdienste
+und importiert Details nur, wenn sich Ablauf, Mitarbeitende, Zeiten, Dateien oder Notizen geaendert haben.
+Ein kompletter Lauf ist weiterhin manuell moeglich:
+
+```text
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_service_details.php --force
+```
+
 Der Songimport fuellt die Tabelle `songs` aus Elvanto und liefert die Daten wieder im alten Frontend-Format
 (`songId`, `songTitle`, `arrangements`), damit die bestehende Songansicht weiter funktioniert.
 

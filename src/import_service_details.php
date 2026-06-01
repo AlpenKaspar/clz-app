@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/import_calendar.php';
 
-function import_service_details(?int $limit = null): array
+function import_service_details(?int $limit = null, bool $force = false, int $footprintLimit = 3): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('service_details');
@@ -16,15 +16,39 @@ function import_service_details(?int $limit = null): array
             throw new RuntimeException('Service-Detailimport laeuft bereits. Bitte den laufenden Import abwarten.');
         }
 
-        $serviceIds = db()->query(
-            "SELECT DISTINCT REPLACE(elvanto_id, 'SERVICE-', '') AS service_id
-             FROM calendar_events
-             WHERE elvanto_id LIKE 'SERVICE-%'
-             ORDER BY start_date"
-        )->fetchAll();
-        if ($limit !== null && $limit > 0) {
-            $serviceIds = array_slice($serviceIds, 0, $limit);
+        $footprint = null;
+        if (!$force) {
+            $footprint = build_service_details_import_footprint($footprintLimit);
+            $previousFootprint = app_setting('IMPORT_SERVICE_DETAILS_FOOTPRINT', '');
+            if ($footprint['hash'] !== '' && hash_equals($previousFootprint, $footprint['hash'])) {
+                set_app_setting('IMPORT_SERVICE_DETAILS_LAST_CHECK', date('c'));
+                set_app_setting('IMPORT_SERVICE_DETAILS_FOOTPRINT_META', json_encode($footprint, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                release_service_details_import_lock();
+                $lockAcquired = false;
+                import_run_finish($runId, 'ok', 0, 'Skipped service details import; footprint unchanged.');
+
+                return [
+                    'ok' => true,
+                    'type' => 'service_details',
+                    'skipped' => true,
+                    'reason' => 'footprint_unchanged',
+                    'services' => 0,
+                    'times' => 0,
+                    'volunteers' => 0,
+                    'planItems' => 0,
+                    'footprint' => service_details_footprint_public_meta($footprint),
+                    'startedAt' => $startedAt,
+                    'finishedAt' => date('Y-m-d H:i:s'),
+                ];
+            }
         }
+
+        $serviceIds = $force
+            ? load_service_detail_import_service_ids($limit)
+            : array_map(
+                static fn(array $entry): array => ['service_id' => (string) ($entry['id'] ?? '')],
+                $footprint['entries'] ?? []
+            );
 
         $services = 0;
         $times = 0;
@@ -54,18 +78,28 @@ function import_service_details(?int $limit = null): array
         }
 
         set_app_setting('IMPORT_SERVICE_DETAILS_LAST', date('c'));
+        set_app_setting('IMPORT_SERVICE_DETAILS_LAST_CHECK', date('c'));
+        if ($footprint !== null) {
+            set_app_setting('IMPORT_SERVICE_DETAILS_FOOTPRINT', $footprint['hash']);
+            set_app_setting('IMPORT_SERVICE_DETAILS_FOOTPRINT_META', json_encode($footprint, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
         release_service_details_import_lock();
         $lockAcquired = false;
 
-        import_run_finish($runId, 'ok', $services, "Imported {$services} services, {$times} times, {$volunteers} volunteers, {$planItems} plan items.");
+        $forceText = $force ? ' Forced import.' : '';
+        $footprintText = $footprint !== null ? ' Footprint checked.' : '';
+        import_run_finish($runId, 'ok', $services, "Imported {$services} services, {$times} times, {$volunteers} volunteers, {$planItems} plan items.{$forceText}{$footprintText}");
 
         return [
             'ok' => true,
             'type' => 'service_details',
+            'skipped' => false,
+            'forced' => $force,
             'services' => $services,
             'times' => $times,
             'volunteers' => $volunteers,
             'planItems' => $planItems,
+            'footprint' => $footprint !== null ? service_details_footprint_public_meta($footprint) : null,
             'startedAt' => $startedAt,
             'finishedAt' => date('Y-m-d H:i:s'),
         ];
@@ -79,6 +113,193 @@ function import_service_details(?int $limit = null): array
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
     }
+}
+
+function load_service_detail_import_service_ids(?int $limit = null): array
+{
+    $rows = db()->query(
+        "SELECT REPLACE(elvanto_id, 'SERVICE-', '') AS service_id
+         FROM calendar_events
+         WHERE elvanto_id LIKE 'SERVICE-%'
+         GROUP BY elvanto_id
+         ORDER BY MIN(start_date), MIN(start_time)"
+    )->fetchAll();
+
+    return $limit !== null && $limit > 0 ? array_slice($rows, 0, $limit) : $rows;
+}
+
+function build_service_details_import_footprint(int $limit = 3): array
+{
+    $serviceRows = fetch_upcoming_service_detail_footprint_services($limit);
+    $entries = [];
+
+    foreach ($serviceRows as $row) {
+        $serviceId = trim((string) ($row['service_id'] ?? ''));
+        if ($serviceId === '') {
+            continue;
+        }
+        $data = elvanto_post('services/getInfo.json', [
+            'id' => $serviceId,
+            'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
+        ]);
+        $service = extract_service_detail_payload($data);
+        if (!$service) {
+            continue;
+        }
+        $entries[] = service_detail_footprint_entry($serviceId, $service, $row);
+    }
+
+    $payload = [
+        'version' => 1,
+        'limit' => $limit,
+        'generatedAt' => date('c'),
+        'entries' => $entries,
+    ];
+    $hashPayload = $payload;
+    unset($hashPayload['generatedAt']);
+    $json = json_encode($hashPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return [
+        'hash' => is_string($json) ? hash('sha256', $json) : '',
+        'count' => count($entries),
+        'limit' => $limit,
+        'entries' => $entries,
+        'generatedAt' => $payload['generatedAt'],
+    ];
+}
+
+function fetch_upcoming_service_detail_footprint_services(int $limit): array
+{
+    $stmt = db()->prepare(
+        "SELECT REPLACE(elvanto_id, 'SERVICE-', '') AS service_id,
+                MIN(start_date) AS start_date,
+                MIN(start_time) AS start_time,
+                MIN(title) AS title
+         FROM calendar_events
+         WHERE elvanto_id LIKE 'SERVICE-%'
+           AND start_date >= ?
+         GROUP BY elvanto_id
+         ORDER BY MIN(start_date), MIN(start_time), MIN(title)
+         LIMIT " . max(1, $limit)
+    );
+    $stmt->execute([(new DateTimeImmutable('today', new DateTimeZone(env('APP_TIMEZONE', 'Europe/Zurich') ?: 'Europe/Zurich')))->format('Y-m-d')]);
+    return $stmt->fetchAll();
+}
+
+function service_detail_footprint_entry(string $serviceId, array $service, array $calendarRow): array
+{
+    return [
+        'id' => $serviceId,
+        'calendarDate' => normalize_string($calendarRow['start_date'] ?? ''),
+        'calendarTime' => normalize_string($calendarRow['start_time'] ?? ''),
+        'title' => normalize_string($service['name'] ?? ($calendarRow['title'] ?? '')),
+        'status' => normalize_string($service['status'] ?? ''),
+        'modified' => normalize_string($service['date_modified'] ?? ($service['modified_date'] ?? ($service['updated'] ?? ''))),
+        'serviceTimes' => service_detail_footprint_times($service, ['service_times']),
+        'rehearsalTimes' => service_detail_footprint_times($service, ['rehearsal_times', 'rehearsals']),
+        'otherTimes' => service_detail_footprint_times($service, ['other_times']),
+        'plans' => service_detail_footprint_plans($service),
+        'volunteers' => service_detail_footprint_volunteers($service),
+        'files' => service_detail_footprint_files($service),
+        'notes' => normalize_calendar_footprint_text(extract_event_remark_text($service)),
+    ];
+}
+
+function service_detail_footprint_times(array $service, array $keys): array
+{
+    $out = [];
+    foreach ($keys as $key) {
+        foreach (service_get_path_array($service, [$key, rtrim($key, 's')]) ?: normalize_collection($service[$key] ?? []) as $time) {
+            if (!is_array($time)) {
+                continue;
+            }
+            $out[] = [
+                'id' => normalize_string($time['id'] ?? ''),
+                'name' => normalize_string($time['name'] ?? ($time['label'] ?? '')),
+                'starts' => normalize_string($time['starts'] ?? ($time['start'] ?? '')),
+                'ends' => normalize_string($time['ends'] ?? ($time['end'] ?? '')),
+            ];
+        }
+    }
+    return $out;
+}
+
+function service_detail_footprint_plans(array $service): array
+{
+    $out = [];
+    $order = 0;
+    foreach (extract_service_plan_items($service) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $order++;
+        $out[] = [
+            'order' => $order,
+            'title' => normalize_string($item['title'] ?? ($item['name'] ?? ($item['heading'] ?? ''))),
+            'type' => normalize_string($item['type'] ?? ($item['item_type'] ?? '')),
+            'starts' => normalize_string($item['starts'] ?? ($item['start_time'] ?? ($item['time'] ?? ''))),
+            'duration' => normalize_string($item['duration'] ?? ($item['duration_min'] ?? '')),
+            'description' => normalize_calendar_footprint_text(normalize_string($item['description'] ?? ($item['details'] ?? ($item['note'] ?? '')))),
+            'song' => normalize_string($item['song']['title'] ?? ($item['song_title'] ?? '')),
+        ];
+    }
+    return $out;
+}
+
+function service_detail_footprint_volunteers(array $service): array
+{
+    $out = [];
+    foreach (extract_service_volunteers($service) as $volunteer) {
+        if (!is_array($volunteer)) {
+            continue;
+        }
+        $person = is_array($volunteer['person'] ?? null) ? $volunteer['person'] : [];
+        $out[] = [
+            'personId' => normalize_string($volunteer['person_id'] ?? ($person['id'] ?? ($volunteer['id'] ?? ''))),
+            'name' => normalize_string($volunteer['name'] ?? ($volunteer['display_name'] ?? ($person['name'] ?? ''))),
+            'department' => normalize_string($volunteer['_department_name'] ?? ''),
+            'subDepartment' => normalize_string($volunteer['_sub_department_name'] ?? ''),
+            'position' => normalize_string($volunteer['_position_name'] ?? ($volunteer['position_name'] ?? ($volunteer['role'] ?? ''))),
+            'status' => normalize_string($volunteer['status'] ?? ''),
+        ];
+    }
+    usort($out, static fn(array $a, array $b): int => implode('|', $a) <=> implode('|', $b));
+    return $out;
+}
+
+function service_detail_footprint_files(array $service): array
+{
+    $files = service_get_path_array($service, ['files', 'file']) ?: normalize_collection($service['files'] ?? []);
+    $out = [];
+    foreach ($files as $file) {
+        if (!is_array($file)) {
+            continue;
+        }
+        $out[] = [
+            'id' => normalize_string($file['id'] ?? ''),
+            'name' => normalize_string($file['name'] ?? ($file['title'] ?? '')),
+            'url' => normalize_string($file['url'] ?? ($file['link'] ?? '')),
+        ];
+    }
+    return $out;
+}
+
+function service_details_footprint_public_meta(array $footprint): array
+{
+    return [
+        'hash' => $footprint['hash'] ?? '',
+        'count' => $footprint['count'] ?? 0,
+        'limit' => $footprint['limit'] ?? 0,
+        'services' => array_map(
+            static fn(array $entry): array => [
+                'id' => (string) ($entry['id'] ?? ''),
+                'date' => (string) ($entry['calendarDate'] ?? ''),
+                'time' => (string) ($entry['calendarTime'] ?? ''),
+                'title' => (string) ($entry['title'] ?? ''),
+            ],
+            $footprint['entries'] ?? []
+        ),
+    ];
 }
 
 function save_service_detail_bundle(string $serviceId, array $service): array

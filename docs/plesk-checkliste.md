@@ -101,6 +101,14 @@ cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scrip
 cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_songs.php
 ```
 
+Der Service-Detailimport nutzt standardmaessig einen Footprint der naechsten 3 Gottesdienste und
+ueberspringt den Import, wenn Ablauf, Mitarbeitende, Zeiten, Dateien und Notizen unveraendert sind.
+Im Cron deshalb ohne `--force` laufen lassen. Fuer einen kompletten manuellen Neuaufbau:
+
+```text
+cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/import_service_details.php --force
+```
+
 Admin-Import per Browser/API:
 
 ```text
@@ -111,7 +119,8 @@ https://deine-domain.ch/api/admin/import-songs.php?token=DEIN_ADMIN_IMPORT_TOKEN
 Empfohlener Rhythmus:
 
 - Personen: nachts oder manuell
-- Kalender/Services: alle 15-60 Minuten oder nachts plus Admin-Button
+- Kalender: 2-3x taeglich mit Footprint
+- Service-Details: 2-3x taeglich kurz nach Kalender, ohne `--force`
 - Songs: nachts oder manuell nach Aenderungen in Elvanto
 - Cache-Rebuild: nach jedem Import
 
