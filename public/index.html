@@ -4592,9 +4592,25 @@
       line-height: 1;
     }
 
+    .result-item.active .song-result-badge {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    .result-item.active > .fa-chevron-right {
+      color: var(--primary);
+    }
+
     body.dark .song-result-badge {
       background: rgba(37,99,235,0.18);
       border-color: rgba(96,165,250,0.25);
+    }
+
+    body.dark .result-item.active .song-result-badge {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
     }
 
     .event-dot {
@@ -6013,6 +6029,27 @@
     }
     .settings-collapsible[open] > summary::after {
       transform: rotate(180deg);
+    }
+    .sync-status-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .sync-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #94a3b8;
+      flex: 0 0 8px;
+    }
+    .sync-status-dot.is-ok {
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.14);
+    }
+    .sync-status-dot.is-error {
+      background: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239,68,68,0.12);
     }
     .settings-collapsible-body {
       padding: 0 14px 14px;
@@ -25107,10 +25144,17 @@ function dashDynamicValueCard_(icon, prefix, item) {
           displayName: ev.Bezeichnung || "",
           details: [
             { label: "Ort", value: ev.Ort },
+            ev.BookedPersonName ? {
+              label: "Gebucht von",
+              value: ev.BookedPersonId
+                ? `<button type="button" class="service-person-link" onclick="event.stopPropagation(); loadContactMain('${escapeAttr(ev.BookedPersonId)}')">${escapeHtml(ev.BookedPersonName)}</button>`
+                : ev.BookedPersonName,
+              allowHtml: !!ev.BookedPersonId
+            } : null,
             { label: "Bemerkung", value: ev.Details || ev.DETAILS || "", preline: true, allowHtml: true },
             { label: "Ressourcen", value: ev.Ressourcen || ev.RESSOURCEN || "", bubbleCsv: true },
             { label: "Livestream", value: liveUrlEffective }
-          ].filter(d => d.value),
+          ].filter(d => d && d.value),
           meta: {
             eventId: ev.id || "",
             elvantoId: ev._elvantoId || "",
@@ -25431,6 +25475,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         const overview = bundle?.overview || {};
         const parts = [];
         if (overview.timeLabel) parts.push(`<div><strong>Zeitfenster:</strong> ${escapeHtml(overview.timeLabel)}</div>`);
+        if (overview.seriesName) parts.push(`<div><strong>Serie:</strong> ${escapeHtml(overview.seriesName)}</div>`);
         if (overview.rehearsalTimes) parts.push(`<div><strong>Probe:</strong> ${escapeHtml(overview.rehearsalTimes)}</div>`);
         if (overview.otherTimes) parts.push(`<div><strong>Weitere Zeiten:</strong> ${escapeHtml(overview.otherTimes)}</div>`);
         if (overview.roleSummary) parts.push(`<div><strong>Rollen:</strong> ${escapeHtml(overview.roleSummary)}</div>`);
@@ -27370,6 +27415,44 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
       }
 
+      function syncStatusDateKey_(value) {
+        if (value instanceof Date) {
+          if (Number.isNaN(value.getTime())) return '';
+          const y = value.getFullYear();
+          const m = String(value.getMonth() + 1).padStart(2, '0');
+          const d = String(value.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const direct = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (direct) return direct[1];
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return '';
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, '0');
+        const d = String(parsed.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function syncStatusDotClass_(groups) {
+        const today = syncStatusDateKey_(new Date());
+        const list = (Array.isArray(groups) ? groups : []).filter(Boolean);
+        const hasError = list.some(item => String(item?.status || '').toLowerCase() === 'error');
+        const hasOkToday = list.some(item => {
+          const status = String(item?.status || '').toLowerCase();
+          return status === 'ok' && syncStatusDateKey_(item?.iso || item?.finishedAt || item?.startedAt) === today;
+        });
+        if (hasError) return 'is-error';
+        return hasOkToday ? 'is-ok' : '';
+      }
+
+      function renderSyncStatusSummary_(groups) {
+        const cls = syncStatusDotClass_(groups);
+        const label = cls === 'is-ok' ? 'Heute erfolgreich synchronisiert' : (cls === 'is-error' ? 'Letzter Sync mit Fehler' : 'Noch kein heutiger Sync');
+        return `<span class="sync-status-title"><span class="sync-status-dot ${cls}" title="${escapeAttr(label)}"></span><span>Status & Cache</span></span>`;
+      }
+
       async function refreshSyncStatus_() {
         const box = document.getElementById("sync-status");
         if (!box) return;
@@ -27410,7 +27493,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             if (existing) return existing;
             box.innerHTML = `
               <details class="settings-collapsible" ${wasOpen ? "open" : ""}>
-                <summary>Status & Cache</summary>
+                <summary><span class="sync-status-title"><span class="sync-status-dot"></span><span>Status & Cache</span></span></summary>
                 <div class="settings-collapsible-body">
                   <div id="sync-status-grid" style="display:grid;gap:12px;">
                     <div>
@@ -27448,6 +27531,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
 
           const detailsEl = ensureSyncStatusShell_();
           if (detailsEl) detailsEl.open = wasOpen;
+          const summaryEl = detailsEl?.querySelector('summary');
+          if (summaryEl) summaryEl.innerHTML = renderSyncStatusSummary_([p, k, s, m, songsStatus]);
           const userText = box.querySelector('#sync-user-text');
           const personenText = box.querySelector('#sync-personen-text');
           const kalenderText = box.querySelector('#sync-kalender-text');

@@ -258,7 +258,7 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
             'end' => $endStr,
             'page' => $page,
             'page_size' => 500,
-            'fields' => ['assets'],
+            'fields' => ['assets', 'locations', 'register_url'],
         ]);
 
         $events = normalize_collection($data['events']['event'] ?? []);
@@ -336,7 +336,7 @@ function import_calendar_services(string $startStr, string $endStr): int
             'end' => $endStr,
             'page' => $page,
             'page_size' => 500,
-            'fields' => ['service_times'],
+            'fields' => ['service_times', 'picture'],
         ]);
 
         $services = normalize_collection($data['services']['service'] ?? []);

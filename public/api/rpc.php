@@ -30,7 +30,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'personenUi_extendedSearch' => rpc_extended_search((string) ($args[0] ?? ''), $user),
         'personenUi_getFamily' => rpc_is_guest_role($user) ? rpc_empty_family((string) ($args[0] ?? '')) : rpc_family((string) ($args[0] ?? '')),
         'personenUi_getGroupByName' => rpc_is_guest_role($user) ? rpc_empty_group((string) ($args[0] ?? '')) : rpc_group((string) ($args[0] ?? '')),
-        'getCalendarEventsRange' => rpc_calendar((string) ($args[0] ?? ''), (string) ($args[1] ?? '')),
+        'getCalendarEventsRange' => rpc_calendar((string) ($args[0] ?? ''), (string) ($args[1] ?? ''), $user),
         'kalenderUi_getServiceOverview' => rpc_service_overview($args[0] ?? []),
         'kalenderUi_getServiceStaff' => rpc_service_staff($args[0] ?? []),
         'kalenderUi_getServiceFlow' => rpc_service_flow($args[0] ?? []),
@@ -1628,14 +1628,18 @@ function rpc_empty_group(string $groupName): array
     ];
 }
 
-function rpc_calendar(string $startIso, string $endIso): array
+function rpc_calendar(string $startIso, string $endIso, array $user): array
 {
     $start = $startIso !== '' ? $startIso : (new DateTimeImmutable('today'))->format('Y-m-d');
     $end = $endIso !== '' ? $endIso : (new DateTimeImmutable($start))->modify('+60 days')->format('Y-m-d');
+    $visibilitySql = rpc_is_guest_role($user)
+        ? " AND LOWER(COALESCE(status, '')) = 'public'"
+        : '';
     $stmt = db()->prepare(
         'SELECT * FROM calendar_events
-         WHERE start_date <= :end_date AND COALESCE(end_date, start_date) >= :start_date
-         ORDER BY start_date, start_time, title'
+         WHERE start_date <= :end_date AND COALESCE(end_date, start_date) >= :start_date'
+         . $visibilitySql .
+        ' ORDER BY start_date, start_time, title'
     );
     $stmt->execute([':start_date' => $start, ':end_date' => $end]);
 
@@ -1692,6 +1696,7 @@ function rpc_calendar_event(array $row): array
 {
     $id = rpc_str($row['elvanto_id'] ?? '');
     $serviceId = rpc_starts_with($id, 'SERVICE-') ? substr($id, 8) : '';
+    $raw = rpc_decode_json_array($row['raw_json'] ?? null);
     return [
         'id' => 'evt_' . rpc_str($row['id'] ?? ''),
         'Bezeichnung' => rpc_str($row['title'] ?? ''),
@@ -1703,12 +1708,100 @@ function rpc_calendar_event(array $row): array
         'Ort' => rpc_str($row['location'] ?? ''),
         'Details' => rpc_str($row['details'] ?? ''),
         'Ressourcen' => rpc_str($row['resources'] ?? ''),
+        'Status' => rpc_str($row['status'] ?? ''),
+        'PictureUrl' => rpc_calendar_payload_picture_url($raw),
+        'RegisterUrl' => rpc_str($raw['register_url'] ?? ''),
+        'AdminNotes' => rpc_str($raw['admin_notes'] ?? ''),
+        'BookedPersonId' => rpc_calendar_person_field($raw, 'id'),
+        'BookedPersonName' => rpc_calendar_person_field($raw, 'name'),
         'displayColor' => rpc_calendar_display_color($row),
         '_elvantoId' => $id,
         '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : rpc_elvanto_calendar_url($id),
         'hasServiceFlow' => $serviceId !== '',
         '_serviceLeadInMin' => 0,
     ];
+}
+
+function rpc_calendar_person_field(array $raw, string $wanted): string
+{
+    foreach ([
+        'person', 'person_id', 'owner', 'organizer', 'organiser', 'created_by', 'created_by_person',
+        'booked_by', 'booked_by_person', 'booking_person', 'contact'
+    ] as $key) {
+        if (!array_key_exists($key, $raw)) {
+            continue;
+        }
+        $person = rpc_calendar_person_payload($raw[$key]);
+        if ($wanted === 'name' && $person['name'] === '' && $person['id'] !== '') {
+            $person['name'] = rpc_calendar_person_name_by_id($person['id']);
+        }
+        if ($person[$wanted] !== '') {
+            return $person[$wanted];
+        }
+    }
+    return '';
+}
+
+function rpc_calendar_person_name_by_id(string $personId): string
+{
+    $personId = trim($personId);
+    if ($personId === '') {
+        return '';
+    }
+    try {
+        $stmt = db()->prepare('SELECT display_name, preferred_name, firstname, lastname FROM people WHERE id = ? LIMIT 1');
+        $stmt->execute([$personId]);
+        $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return '';
+        }
+        $display = rpc_str($row['display_name'] ?? '');
+        if ($display !== '') {
+            return $display;
+        }
+        $first = rpc_str($row['preferred_name'] ?? '') ?: rpc_str($row['firstname'] ?? '');
+        return trim($first . ' ' . rpc_str($row['lastname'] ?? ''));
+    } catch (Throwable) {
+        return '';
+    }
+}
+
+function rpc_calendar_person_payload(mixed $value): array
+{
+    if (is_string($value) || is_numeric($value)) {
+        return ['id' => rpc_str($value), 'name' => ''];
+    }
+    if (!is_array($value)) {
+        return ['id' => '', 'name' => ''];
+    }
+    $id = rpc_str($value['id'] ?? ($value['person_id'] ?? ($value['personId'] ?? '')));
+    $first = rpc_str($value['preferred_name'] ?? ($value['firstname'] ?? ($value['first_name'] ?? '')));
+    $last = rpc_str($value['lastname'] ?? ($value['last_name'] ?? ''));
+    $name = rpc_str($value['name'] ?? ($value['display_name'] ?? trim($first . ' ' . $last)));
+    if (($id === '' || $name === '') && isset($value['person']) && is_array($value['person'])) {
+        $nested = rpc_calendar_person_payload($value['person']);
+        $id = $id !== '' ? $id : $nested['id'];
+        $name = $name !== '' ? $name : $nested['name'];
+    }
+    return ['id' => $id, 'name' => $name];
+}
+
+function rpc_calendar_payload_picture_url(array $raw): string
+{
+    $picture = $raw['picture'] ?? '';
+    if (is_string($picture)) {
+        return rpc_str($picture);
+    }
+    if (!is_array($picture)) {
+        return '';
+    }
+    foreach (['url', 'medium', 'large', 'small', 'original'] as $key) {
+        $value = rpc_str($picture[$key] ?? '');
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
 }
 
 function rpc_person_service_assignments(string $personId, string $startIso, string $endIso): array
@@ -2060,6 +2153,8 @@ function rpc_service_overview(mixed $meta): array
     $times = rpc_service_times($serviceId);
     $selectedTime = is_array($context['time'] ?? null) ? $context['time'] : null;
     $raw = rpc_decode_json_array($service['raw_json'] ?? null);
+    $series = is_array($raw['series'] ?? null) ? $raw['series'] : [];
+    $seriesName = rpc_str($raw['series_name'] ?? ($series['name'] ?? ($raw['series_title'] ?? '')));
     $rehearsal = rpc_service_named_times($raw, ['rehearsal_times', 'rehearsals']);
     $other = rpc_service_named_times($raw, ['other_times']);
     $roleSummary = rpc_service_role_summary($serviceId, $context['timeId']);
@@ -2077,6 +2172,7 @@ function rpc_service_overview(mixed $meta): array
             'startTime' => rpc_time(substr($overviewStart, 11, 8)),
             'endTime' => rpc_time(substr($overviewEnd, 11, 8)),
             'timeLabel' => $selectedTime ? rpc_service_time_label([$selectedTime]) : rpc_service_time_label($times),
+            'seriesName' => $seriesName,
             'rehearsalTimes' => implode(' · ', $rehearsal),
             'otherTimes' => implode(' · ', $other),
             'roleSummary' => $roleSummary,
@@ -2234,9 +2330,9 @@ function rpc_service_named_times(array $service, array $keys): array
             if (!is_array($time)) {
                 continue;
             }
-            $label = rpc_str($time['name'] ?? ($time['label'] ?? ''));
-            $start = rpc_time(substr(rpc_str($time['starts'] ?? ($time['start'] ?? '')), 11, 8));
-            $end = rpc_time(substr(rpc_str($time['ends'] ?? ($time['end'] ?? '')), 11, 8));
+            $label = rpc_str($time['name'] ?? ($time['label'] ?? ($time['title'] ?? ($time['type'] ?? ''))));
+            $start = rpc_service_named_time_value($time, ['starts', 'start', 'starts_at', 'start_time', 'time']);
+            $end = rpc_service_named_time_value($time, ['ends', 'end', 'ends_at', 'end_time']);
             $range = trim($start . ($end !== '' ? '-' . $end : ''));
             $text = trim(($label !== '' ? $label . ': ' : '') . $range);
             if ($text !== '') {
@@ -2245,6 +2341,24 @@ function rpc_service_named_times(array $service, array $keys): array
         }
     }
     return array_values(array_unique($out));
+}
+
+function rpc_service_named_time_value(array $time, array $keys): string
+{
+    foreach ($keys as $key) {
+        $raw = rpc_str($time[$key] ?? '');
+        if ($raw === '') {
+            continue;
+        }
+        if (preg_match('/\b(\d{1,2}:\d{2})(?::\d{2})?\b/', $raw, $m)) {
+            return rpc_time($m[1]);
+        }
+        $candidate = rpc_time($raw);
+        if ($candidate !== '') {
+            return $candidate;
+        }
+    }
+    return '';
 }
 
 function rpc_service_extract_collection(mixed $value, array $innerKeys = []): array
