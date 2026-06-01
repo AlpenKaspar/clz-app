@@ -353,6 +353,22 @@ CREATE TABLE IF NOT EXISTS push_notification_log (
   CONSTRAINT fk_push_notification_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS push_pending_notifications (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  user_id bigint unsigned NOT NULL,
+  notification_key varchar(190) NOT NULL,
+  title varchar(190) NOT NULL,
+  body text NULL,
+  url text NULL,
+  tag varchar(190) NULL,
+  created_at datetime NOT NULL,
+  consumed_at datetime NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_push_pending_user_key (user_id, notification_key),
+  KEY idx_push_pending_user (user_id, consumed_at, created_at),
+  CONSTRAINT fk_push_pending_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS prayer_sessions (
   session_id varchar(120) NOT NULL,
   user_email varchar(190) NULL,

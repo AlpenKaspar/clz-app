@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clz-app-shell-v4';
+const CACHE_NAME = 'clz-app-shell-v5';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -52,6 +52,21 @@ self.addEventListener('push', event => {
   }
 
   const show = async () => {
+    if (!data.title && !data.body) {
+      try {
+        const res = await fetch('/api/push-summary.php', {
+          cache: 'no-store',
+          credentials: 'same-origin'
+        });
+        if (res.ok) {
+          const summary = await res.json();
+          if (summary && summary.ok && summary.notification) {
+            data = Object.assign({}, data, summary.notification);
+          }
+        }
+      } catch (e) {}
+    }
+
     if (!data.title && !data.body) {
       try {
         const res = await fetch('/api/birthday-push-summary.php', {

@@ -18617,10 +18617,25 @@ function updateBottomNavHighlight_() {
         }
         if (!params) return false;
         const tab = String(params.get('tab') || '').trim().toLowerCase();
+        const panel = String(params.get('panel') || '').trim().toLowerCase();
         const filter = String(params.get('filter') || params.get('dashboardFilter') || '').trim();
-        if (tab !== 'contacts' && !filter) return false;
+        if (tab !== 'contacts' && tab !== 'tools' && !filter) return false;
         if (filter) {
           setTimeout(() => openDashboardFilter(filter, routeFilterLabel_(filter)), 80);
+          return true;
+        }
+        if (tab === 'tools') {
+          switchTab('tools');
+          if (panel === 'users') {
+            setTimeout(() => {
+              const el = document.getElementById('admin-users-panel');
+              if (el) {
+                el.open = true;
+                el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                loadAdminUsers_({ silent: true }).catch(() => {});
+              }
+            }, 180);
+          }
           return true;
         }
         if (tab === 'contacts') {

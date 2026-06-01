@@ -101,6 +101,10 @@ Nur Super-Admins koennen Benutzer und Rollen in der App unter `Mehr > Benutzer &
 muss die Google-Adresse exakt mit dieser E-Mail uebereinstimmen.
 Mindestens eine echte Verwaltungsadresse sollte deshalb in `APP_SUPER_ADMIN_EMAILS` stehen.
 
+Neue Google-Logins mit Rolle `guest` erzeugen direkt eine Push-Benachrichtigung fuer aktive Super-Admins
+mit Push-Subscription. Dafuer ist kein Cron noetig. Geburtstags-Pushes laufen weiter ueber die geplanten
+Tasks `send_birthday_notifications.php` und `send_weekly_birthday_notifications.php`.
+
 `APP_SESSION_DAYS` steuert, wie lange ein Login gueltig bleibt. Die App erneuert die Session bei normalen API-Aufrufen
 und im Hintergrund automatisch, solange der Browser offen ist.
 
