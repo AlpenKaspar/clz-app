@@ -258,7 +258,7 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
             'end' => $endStr,
             'page' => $page,
             'page_size' => 500,
-            'fields' => ['assets', 'locations', 'register_url', 'picture', 'organizer', 'organiser', 'owner', 'created_by', 'created_by_person'],
+            'fields' => ['assets', 'locations', 'register_url', 'organizer', 'organiser', 'owner', 'created_by', 'created_by_person'],
         ]);
 
         $events = normalize_collection($data['events']['event'] ?? []);
