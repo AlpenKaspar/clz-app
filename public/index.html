@@ -11243,6 +11243,9 @@
         "FAMILIE": "fa-people-roof",
         "KATEGORIE": "fa-tag",
         "ORT": "fa-location-dot",
+        "ORGANISATOR": "fa-user-tie",
+        "ERSTELLT VON": "fa-user-pen",
+        "GEBUCHT VON": "fa-user-check",
         "DETAILS": "fa-align-left",
         "TERMIN": "fa-clock",
         "GEBURTSDATUM": "fa-cake-candles",
@@ -25244,6 +25247,20 @@ function dashDynamicValueCard_(icon, prefix, item) {
           displayName: ev.Bezeichnung || "",
           details: [
             { label: "Ort", value: ev.Ort },
+            ev.OrganizerPersonName ? {
+              label: "Organisator",
+              value: ev.OrganizerPersonId
+                ? `<button type="button" class="service-person-link" onclick="event.stopPropagation(); loadContactMain('${escapeAttr(ev.OrganizerPersonId)}')">${escapeHtml(ev.OrganizerPersonName)}</button>`
+                : ev.OrganizerPersonName,
+              allowHtml: !!ev.OrganizerPersonId
+            } : null,
+            ev.CreatedByPersonName && ev.CreatedByPersonName !== ev.OrganizerPersonName ? {
+              label: "Erstellt von",
+              value: ev.CreatedByPersonId
+                ? `<button type="button" class="service-person-link" onclick="event.stopPropagation(); loadContactMain('${escapeAttr(ev.CreatedByPersonId)}')">${escapeHtml(ev.CreatedByPersonName)}</button>`
+                : ev.CreatedByPersonName,
+              allowHtml: !!ev.CreatedByPersonId
+            } : null,
             ev.BookedPersonName ? {
               label: "Gebucht von",
               value: ev.BookedPersonId

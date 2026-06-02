@@ -1712,8 +1712,12 @@ function rpc_calendar_event(array $row): array
         'PictureUrl' => rpc_calendar_payload_picture_url($raw),
         'RegisterUrl' => rpc_str($raw['register_url'] ?? ''),
         'AdminNotes' => rpc_str($raw['admin_notes'] ?? ''),
-        'BookedPersonId' => rpc_calendar_person_field($raw, 'id'),
-        'BookedPersonName' => rpc_calendar_person_field($raw, 'name'),
+        'OrganizerPersonId' => rpc_calendar_person_field($raw, 'id', ['organizer', 'organiser', 'owner']),
+        'OrganizerPersonName' => rpc_calendar_person_field($raw, 'name', ['organizer', 'organiser', 'owner']),
+        'CreatedByPersonId' => rpc_calendar_person_field($raw, 'id', ['created_by', 'created_by_person']),
+        'CreatedByPersonName' => rpc_calendar_person_field($raw, 'name', ['created_by', 'created_by_person']),
+        'BookedPersonId' => rpc_calendar_person_field($raw, 'id', ['booked_by', 'booked_by_person', 'booking_person', 'contact', 'person', 'person_id']),
+        'BookedPersonName' => rpc_calendar_person_field($raw, 'name', ['booked_by', 'booked_by_person', 'booking_person', 'contact', 'person', 'person_id']),
         'displayColor' => rpc_calendar_display_color($row),
         '_elvantoId' => $id,
         '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : rpc_elvanto_calendar_url($id),
@@ -1722,12 +1726,13 @@ function rpc_calendar_event(array $row): array
     ];
 }
 
-function rpc_calendar_person_field(array $raw, string $wanted): string
+function rpc_calendar_person_field(array $raw, string $wanted, ?array $keys = null): string
 {
-    foreach ([
+    $keys ??= [
         'person', 'person_id', 'owner', 'organizer', 'organiser', 'created_by', 'created_by_person',
         'booked_by', 'booked_by_person', 'booking_person', 'contact'
-    ] as $key) {
+    ];
+    foreach ($keys as $key) {
         if (!array_key_exists($key, $raw)) {
             continue;
         }
@@ -1769,7 +1774,11 @@ function rpc_calendar_person_name_by_id(string $personId): string
 function rpc_calendar_person_payload(mixed $value): array
 {
     if (is_string($value) || is_numeric($value)) {
-        return ['id' => rpc_str($value), 'name' => ''];
+        $text = rpc_str($value);
+        if ($text !== '' && !preg_match('/^[a-f0-9-]{16,}$/i', $text) && !preg_match('/^\d+$/', $text)) {
+            return ['id' => '', 'name' => $text];
+        }
+        return ['id' => $text, 'name' => ''];
     }
     if (!is_array($value)) {
         return ['id' => '', 'name' => ''];
