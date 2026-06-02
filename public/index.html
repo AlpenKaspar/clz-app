@@ -5317,28 +5317,16 @@
       color: var(--text-main);
     }
 
-    .calendar-event-thumb {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      object-fit: cover;
-      flex: 0 0 auto;
-      border: 1px solid var(--border-color);
-      background: var(--chip-bg);
-    }
-
-    .calendar-detail-picture-wrap {
-      padding: 12px 16px 0;
-    }
-
     .calendar-detail-picture {
-      width: 100%;
+      width: 108px;
+      height: 108px;
       display: block;
-      aspect-ratio: 16 / 9;
       object-fit: cover;
-      border-radius: 16px;
+      border-radius: 24px;
       border: 1px solid var(--border-color);
       background: var(--chip-bg);
+      margin: 0 auto 8px;
+      box-shadow: 0 10px 26px rgba(15,23,42,0.10);
     }
 
     #detail-overlay .detail-topbar {
@@ -24274,11 +24262,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
             const dateCore = `${getWeekdayShort_(first.StartDatum || '')}, ${formatCalendarDateLabel_(first.StartDatum || '')}`;
             const durationLabel = getDurationLabel_(first.StartDatum, first.EndDatum);
             const relatedIds = e.items.map(item => String(item?.id || '').trim()).filter(Boolean).join(' ');
-            const pictureUrl = String(first.PictureUrl || '').trim();
             return `
               <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(first.id)}" data-related-ids="${escapeAttr(relatedIds)}" onclick="showGroupedServiceDetails('${escapeAttr(e.groupKey)}')">
                 <div style="display:flex; align-items:center; min-width:0; flex:1;">
-                  ${pictureUrl ? `<img class="calendar-event-thumb" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(first.Bezeichnung || 'Termin')}" loading="lazy" decoding="async">` : `<div class="event-dot" style="background:${escapeAttr(first.displayColorSolid || first.displayColor || '#94a3b8')}"></div>`}
+                  <div class="event-dot" style="background:${escapeAttr(first.displayColorSolid || first.displayColor || '#94a3b8')}"></div>
                   <div style="min-width:0; width:100%;">
                     <div class="result-meta-line result-meta-line-top">
                       <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(first.Bezeichnung || '')}</div>
@@ -24300,12 +24287,11 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const dateCore = formatCalendarEventMetaLine_(e);
           const durationLabel = getDurationLabel_(e.StartDatum, e.EndDatum);
           const isActive = String(e.id || '') === String(currentEventId || '');
-          const pictureUrl = String(e.PictureUrl || '').trim();
 
           return `
             <div class="result-item ${isActive ? 'active' : ''}" data-id="${escapeAttr(e.id)}" onclick="showEventDetails('${escapeAttr(e.id)}')">
               <div style="display:flex; align-items:center; min-width:0; flex:1;">
-                ${pictureUrl ? `<img class="calendar-event-thumb" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(e.Bezeichnung || 'Termin')}" loading="lazy" decoding="async">` : `<div class="event-dot" style="background:${escapeAttr(e.displayColorSolid || e.displayColor || '#94a3b8')}"></div>`}
+                <div class="event-dot" style="background:${escapeAttr(e.displayColorSolid || e.displayColor || '#94a3b8')}"></div>
                 <div style="min-width:0; width:100%;">
                   <div class="result-meta-line result-meta-line-top">
                     <div class="result-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(e.Bezeichnung || "")}</div>
@@ -25324,7 +25310,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             <button class="back-button calendar-header-back" type="button" onclick="onDetailBack()" aria-label="Zurück" title="Zurück">
               <i class="fas fa-arrow-left"></i>
             </button>
-            <i class="fas fa-calendar-check fa-5x" style="color:var(--primary); display:block; margin:0 auto 6px;"></i>
+            ${pictureUrl ? `<img class="calendar-detail-picture" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(data.displayName || 'Termin')}" loading="lazy" decoding="async">` : `<i class="fas fa-calendar-check fa-5x" style="color:var(--primary); display:block; margin:0 auto 6px;"></i>`}
             <div class="profile-name">${escapeHtml(data.displayName || "")}</div>
             <div class="calendar-meta-stack">
               ${categoryLabel ? `<div class="profile-subtitle calendar-meta-line">${escapeHtml(categoryLabel)}</div>` : ``}
@@ -25333,7 +25319,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
               ${timeLabel ? `<div class="profile-subtitle calendar-meta-line calendar-meta-line-strong">${escapeHtml(timeLabel)}</div>` : ``}
             </div>
           </div>
-          ${pictureUrl ? `<div class="calendar-detail-picture-wrap"><img class="calendar-detail-picture" src="${escapeAttr(pictureUrl)}" alt="${escapeAttr(data.displayName || 'Termin')}" loading="lazy" decoding="async"></div>` : ``}
           ${isService ? renderServiceSeriesSwitcher_() : ``}
           <div class="info-grid" id="calendar-detail-grid"></div>
           ${isService && canViewServiceInternals_() ? `

@@ -1791,13 +1791,13 @@ function rpc_calendar_payload_picture_url(array $raw): string
     $picture = $raw['picture'] ?? '';
     if (is_string($picture)) {
         $url = rpc_str($picture);
-        return $url !== '' ? $url : rpc_calendar_payload_asset_image_url($raw);
+        return rpc_calendar_picture_url_or_empty($url) ?: rpc_calendar_payload_asset_image_url($raw);
     }
     if (!is_array($picture)) {
         return rpc_calendar_payload_asset_image_url($raw);
     }
     foreach (['url', 'medium', 'large', 'small', 'original'] as $key) {
-        $value = rpc_str($picture[$key] ?? '');
+        $value = rpc_calendar_picture_url_or_empty(rpc_str($picture[$key] ?? ''));
         if ($value !== '') {
             return $value;
         }
@@ -1825,19 +1825,20 @@ function rpc_calendar_payload_asset_image_url(array $raw): string
 function rpc_calendar_asset_image_url(mixed $asset): string
 {
     if (is_string($asset)) {
-        return preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $asset) ? rpc_str($asset) : '';
+        $url = rpc_calendar_picture_url_or_empty(rpc_str($asset));
+        return preg_match('/\.(png|jpe?g|webp|gif|svg)(\?|$)/i', $url) ? $url : '';
     }
     if (!is_array($asset)) {
         return '';
     }
     $type = strtolower(rpc_str($asset['type'] ?? ($asset['mime_type'] ?? ($asset['content_type'] ?? ''))));
     foreach (['url', 'medium', 'large', 'small', 'original', 'thumbnail_url', 'thumb_url'] as $key) {
-        $url = rpc_str($asset[$key] ?? '');
+        $url = rpc_calendar_picture_url_or_empty(rpc_str($asset[$key] ?? ''));
         if ($url === '') {
             continue;
         }
         $isImageType = str_contains($type, 'image') || str_contains($type, 'bild');
-        if ($isImageType || preg_match('/\.(png|jpe?g|webp|gif)(\?|$)/i', $url)) {
+        if ($isImageType || preg_match('/\.(png|jpe?g|webp|gif|svg)(\?|$)/i', $url)) {
             return $url;
         }
     }
@@ -1858,6 +1859,19 @@ function rpc_calendar_normalize_payload_collection(mixed $value): array
         return $value;
     }
     return [$value];
+}
+
+function rpc_calendar_picture_url_or_empty(string $url): string
+{
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+    $lower = strtolower($url);
+    if (str_contains($lower, 'cdn.elvanto.eu/img/default-event-avatar.svg')) {
+        return '';
+    }
+    return $url;
 }
 
 function rpc_person_service_assignments(string $personId, string $startIso, string $endIso): array
