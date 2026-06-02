@@ -63,7 +63,7 @@ function import_service_details(?int $limit = null, bool $force = false, int $fo
 
             $data = elvanto_post('services/getInfo.json', [
                 'id' => $serviceId,
-                'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
+                'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files', 'picture'],
             ]);
             $service = extract_service_detail_payload($data);
             if (!$service) {
@@ -140,7 +140,7 @@ function build_service_details_import_footprint(int $limit = 3): array
         }
         $data = elvanto_post('services/getInfo.json', [
             'id' => $serviceId,
-            'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files'],
+            'fields' => ['service_times', 'rehearsal_times', 'other_times', 'plans', 'volunteers', 'songs', 'notes', 'files', 'picture'],
         ]);
         $service = extract_service_detail_payload($data);
         if (!$service) {
