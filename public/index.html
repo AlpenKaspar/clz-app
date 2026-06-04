@@ -33,9 +33,6 @@
       --radius: 16px;
       --danger: #F54927;
       --success: #15803d;
-      --clz-gradient: linear-gradient(135deg, #a71d68, #d67158);
-      --clz-gradient-soft: linear-gradient(135deg, rgba(167,29,104,0.14), rgba(214,113,88,0.30));
-      --clz-gradient-ring: conic-gradient(from 0turn, rgba(167,29,104,0), #a71d68, #d67158, rgba(167,29,104,0));
       --desktop-max: 1180px;
     }
 
@@ -1961,7 +1958,7 @@
     }
 
     .chip.active, .dash-btn.active {
-      background: var(--clz-gradient);
+      background: var(--primary);
       color: white;
       border-color: transparent;
     }
@@ -4174,32 +4171,6 @@
       flex: 0 0 auto;
     }
 
-    .contacts-view-switch::before,
-    .birthday-frequency-switch::before,
-    .birthday-style-switch::before,
-    .theme-switch::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      padding: 1px;
-      background: var(--clz-gradient-ring);
-      opacity: 0;
-      pointer-events: none;
-      z-index: 5;
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      animation: clzSwitcherRing 1.2s ease-out .28s 1;
-    }
-
-    @keyframes clzSwitcherRing {
-      0% { opacity: 0; transform: rotate(0turn); }
-      16% { opacity: 1; }
-      78% { opacity: 1; }
-      100% { opacity: 0; transform: rotate(1turn); }
-    }
-
     .contacts-view-thumb {
       position: absolute;
       top: 4px;
@@ -4207,7 +4178,7 @@
       width: 56px;
       height: calc(100% - 8px);
       border-radius: 999px;
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(37,99,235,0.14), rgba(96,165,250,0.30));
       transition: transform .22s ease, width .22s ease;
       z-index: 0;
       pointer-events: none;
@@ -4236,7 +4207,7 @@
     }
 
     .contacts-view-btn[aria-checked="true"] {
-      color: #fff;
+      color: var(--primary);
       transform: translateY(-1px);
     }
 
@@ -5761,14 +5732,14 @@
       width: calc((100% - 8px) / 3);
       height: calc(100% - 8px);
       border-radius: 999px;
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
       transition: transform .22s ease;
       z-index: 0;
       pointer-events: none;
     }
 
     body.dark .birthday-frequency-switch-thumb {
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
     }
 
     .birthday-frequency-switch[data-mode="daily"] .birthday-frequency-switch-thumb { transform: translateX(100%); }
@@ -5794,12 +5765,12 @@
     }
 
     .birthday-frequency-switch-btn[aria-checked="true"] {
-      color: #fff;
+      color: var(--primary);
       transform: translateY(-1px);
     }
 
     body.dark .birthday-frequency-switch-btn { color: #64748b; }
-    body.dark .birthday-frequency-switch-btn[aria-checked="true"] { color: #fff; }
+    body.dark .birthday-frequency-switch-btn[aria-checked="true"] { color: var(--primary); }
 
     .tools-message-row {
       align-items: flex-start;
@@ -5883,14 +5854,14 @@
       width: calc((100% - 8px) / 2);
       height: calc(100% - 8px);
       border-radius: 999px;
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
       transition: transform .22s ease;
       z-index: 0;
       pointer-events: none;
     }
 
     body.dark .birthday-style-switch-thumb {
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
     }
 
     .birthday-style-switch[data-mode="formal"] .birthday-style-switch-thumb { transform: translateX(100%); }
@@ -5916,12 +5887,12 @@
     }
 
     .birthday-style-switch-btn[aria-checked="true"] {
-      color: #fff;
+      color: var(--primary);
       transform: translateY(-1px);
     }
 
     body.dark .birthday-style-switch-btn { color: #64748b; }
-    body.dark .birthday-style-switch-btn[aria-checked="true"] { color: #fff; }
+    body.dark .birthday-style-switch-btn[aria-checked="true"] { color: var(--primary); }
 
     .tools-message-actions {
       display: flex;
@@ -6024,13 +5995,13 @@
       width: calc((100% - 8px) / 3);
       height: calc(100% - 8px);
       border-radius: 999px;
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(37,99,235,0.16), rgba(96,165,250,0.34));
       transition: transform .22s ease;
       z-index: 0;
       pointer-events: none;
     }
     body.dark .theme-switch-thumb {
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
     }
     .theme-switch[data-mode="auto"] .theme-switch-thumb { transform: translateX(100%); }
     .theme-switch[data-mode="dark"] .theme-switch-thumb { transform: translateX(200%); }
@@ -6054,11 +6025,11 @@
     }
     .theme-switch-btn:hover { color: var(--primary); }
     .theme-switch-btn[aria-checked="true"] {
-      color: #fff;
+      color: var(--primary);
       transform: translateY(-1px);
     }
     body.dark .theme-switch-btn { color: #64748b; }
-    body.dark .theme-switch-btn[aria-checked="true"] { color: #fff; }
+    body.dark .theme-switch-btn[aria-checked="true"] { color: var(--primary); }
 
     .settings-collapsible {
       margin-top: 10px;
@@ -7630,7 +7601,7 @@
     }
 
     body.dark .contacts-view-thumb {
-      background: var(--clz-gradient);
+      background: linear-gradient(135deg, rgba(96,165,250,0.24), rgba(96,165,250,0.4));
       box-shadow: 0 8px 18px rgba(2,6,23,0.28);
     }
 
@@ -7639,7 +7610,7 @@
     }
 
     body.dark .contacts-view-btn[aria-checked="true"] {
-      color: #fff;
+      color: var(--primary);
     }
 
     .family-result-item {
@@ -7693,7 +7664,7 @@
       border-radius: 50%;
     }
 
-    .switch input:checked + .slider { background: var(--clz-gradient); border-color: transparent; }
+    .switch input:checked + .slider { background-color: rgba(37,99,235,0.75); }
     .switch input:checked + .slider:before { transform: translateX(20px); }
 
 .service-view-nav {
