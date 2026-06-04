@@ -1086,6 +1086,20 @@
       object-fit: contain;
     }
 
+    .clz-bplus-mark {
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #a71d68, #d67158);
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .clz-bplus-mark svg {
+      width: 58%;
+      height: 58%;
+      display: block;
+    }
+
     .auth-title {
       font-size: 25px;
       line-height: 1.1;
@@ -1200,23 +1214,9 @@
       place-items: center;
       font-size: 18px;
       color: #fff;
-      background: transparent;
+      background: linear-gradient(135deg, #a71d68, #d67158);
       box-shadow: 0 10px 22px rgba(214,113,88,0.22);
       overflow: hidden;
-    }
-
-    .welcome-mark-logo {
-      width: 54px;
-      height: 54px;
-      object-fit: contain;
-      display: block;
-      filter: drop-shadow(0 1px 1px rgba(0,0,0,0.10));
-    }
-
-    .welcome-mark-fallback {
-      font-size: 18px;
-      line-height: 1;
-      color: #fff;
     }
 
     .welcome-title {
@@ -9206,13 +9206,12 @@
 
 <div id="auth-gate" class="auth-gate" hidden>
   <div class="auth-card">
-    <div class="auth-logo">
-      <img
-        src="/icons/app-icon.svg"
-        alt="CLZ Logo"
-        loading="eager"
-        decoding="sync"
-      >
+    <div class="auth-logo clz-bplus-mark" role="img" aria-label="CLZ Logo">
+      <svg viewBox="0 0 50 50" aria-hidden="true" focusable="false">
+        <g fill="currentColor" fill-rule="evenodd">
+          <path d="M9.16 21.99h18.32l-9.16 9.16H0zM27.48 18.32V0l-9.16 9.16v9.16zM27.48 40.3V22l-9.16 9.16v18.32zM31.15 21.99h18.32l-9.16 9.16h-9.16z"/>
+        </g>
+      </svg>
     </div>
     <div class="auth-title">CLZ APP</div>
     <div id="auth-gate-message" class="auth-subtitle">Melde dich mit deinem Google-Konto an, um Kontakte, Kalender, Songs und Übersicht zu laden.</div>
@@ -9226,14 +9225,12 @@
 
 <div id="welcome-overlay" class="welcome-overlay show">
   <div class="welcome-card">
-    <div class="welcome-mark">
-      <img
-        src="/icons/app-icon.svg"
-        alt="CLZ Logo"
-        class="welcome-mark-logo"
-        loading="eager"
-        decoding="sync"
-      >
+    <div class="welcome-mark clz-bplus-mark" role="img" aria-label="CLZ Logo">
+      <svg viewBox="0 0 50 50" aria-hidden="true" focusable="false">
+        <g fill="currentColor" fill-rule="evenodd">
+          <path d="M9.16 21.99h18.32l-9.16 9.16H0zM27.48 18.32V0l-9.16 9.16v9.16zM27.48 40.3V22l-9.16 9.16v18.32zM31.15 21.99h18.32l-9.16 9.16h-9.16z"/>
+        </g>
+      </svg>
     </div>
     <div class="welcome-title">CLZ APP</div>
     <div id="welcome-greeting" class="welcome-subtitle"></div>
