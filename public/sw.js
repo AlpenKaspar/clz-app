@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clz-app-shell-v9';
+const CACHE_NAME = 'clz-app-shell-v10';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,6 +6,7 @@ const APP_SHELL = [
   '/favicon-16.png?v=20260604c',
   '/favicon-32.png?v=20260604c',
   '/favicon-48.png?v=20260604c',
+  '/favicon-96.png?v=20260604c',
   '/app-icon.svg?v=20260604c',
   '/apple-touch-icon.png?v=20260604c',
   '/icon-192.png?v=20260604c',
