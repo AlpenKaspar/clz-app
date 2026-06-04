@@ -1,7 +1,8 @@
-const CACHE_NAME = 'clz-app-shell-v7';
+const CACHE_NAME = 'clz-app-shell-v8';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/favicon.ico?v=20260604b',
   '/icons/app-icon.svg?v=20260604b',
   '/icons/apple-touch-icon.png?v=20260604b',
   '/icons/icon-192.png?v=20260604b',
