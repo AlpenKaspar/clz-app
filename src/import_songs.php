@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/import_people.php';
 
-function import_songs(): array
+function import_songs(bool $enrich = true): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('songs');
 
     try {
-        $songs = fetch_elvanto_songs();
+        $songs = fetch_elvanto_songs($enrich);
         $pdo = db();
         $pdo->beginTransaction();
         $pdo->exec('DELETE FROM songs');
@@ -29,11 +29,13 @@ function import_songs(): array
         set_app_setting('IMPORT_SONGS_LAST', date('c'));
         $pdo->commit();
 
-        import_run_finish($runId, 'ok', $count, "Imported {$count} songs.");
+        $modeText = $enrich ? '' : ' Lite import.';
+        import_run_finish($runId, 'ok', $count, "Imported {$count} songs.{$modeText}");
 
         return [
             'ok' => true,
             'type' => 'songs',
+            'enriched' => $enrich,
             'count' => $count,
             'startedAt' => $startedAt,
             'finishedAt' => date('Y-m-d H:i:s'),
@@ -47,9 +49,10 @@ function import_songs(): array
     }
 }
 
-function fetch_elvanto_songs(): array
+function fetch_elvanto_songs(bool $enrich = true): array
 {
     $songs = [];
+    $seen = [];
     $page = 1;
     $pageSize = 200;
 
@@ -64,13 +67,22 @@ function fetch_elvanto_songs(): array
             break;
         }
 
+        $newInBatch = 0;
         foreach ($batch as $song) {
             if (is_array($song)) {
-                $songs[] = enrich_elvanto_song_payload($song);
+                $signature = song_payload_signature($song);
+                if ($signature !== '' && isset($seen[$signature])) {
+                    continue;
+                }
+                if ($signature !== '') {
+                    $seen[$signature] = true;
+                }
+                $songs[] = $enrich ? enrich_elvanto_song_payload($song) : $song;
+                $newInBatch++;
             }
         }
 
-        if (count($batch) < $pageSize) {
+        if ($newInBatch === 0 || count($batch) < $pageSize) {
             break;
         }
         $page++;
@@ -113,6 +125,7 @@ function enrich_elvanto_song_payload(array $song): array
 function fetch_elvanto_song_arrangements(string $songId): array
 {
     $arrangements = [];
+    $seen = [];
     $page = 1;
     $pageSize = 100;
 
@@ -133,9 +146,17 @@ function fetch_elvanto_song_arrangements(string $songId): array
             break;
         }
 
+        $newInBatch = 0;
         foreach ($batch as $arrangement) {
             if (!is_array($arrangement)) {
                 continue;
+            }
+            $signature = song_payload_signature($arrangement);
+            if ($signature !== '' && isset($seen[$signature])) {
+                continue;
+            }
+            if ($signature !== '') {
+                $seen[$signature] = true;
             }
             $arrangementId = normalize_string($arrangement['id'] ?? '');
             if ($arrangementId !== '') {
@@ -145,9 +166,10 @@ function fetch_elvanto_song_arrangements(string $songId): array
                 }
             }
             $arrangements[] = $arrangement;
+            $newInBatch++;
         }
 
-        if (count($batch) < $pageSize) {
+        if ($newInBatch === 0 || count($batch) < $pageSize) {
             break;
         }
         $page++;
@@ -159,6 +181,7 @@ function fetch_elvanto_song_arrangements(string $songId): array
 function fetch_elvanto_arrangement_keys(string $arrangementId): array
 {
     $keys = [];
+    $seen = [];
     $page = 1;
     $pageSize = 100;
 
@@ -179,19 +202,45 @@ function fetch_elvanto_arrangement_keys(string $arrangementId): array
             break;
         }
 
+        $newInBatch = 0;
         foreach ($batch as $key) {
             if (is_array($key)) {
+                $signature = song_payload_signature($key);
+                if ($signature !== '' && isset($seen[$signature])) {
+                    continue;
+                }
+                if ($signature !== '') {
+                    $seen[$signature] = true;
+                }
                 $keys[] = $key;
+                $newInBatch++;
             }
         }
 
-        if (count($batch) < $pageSize) {
+        if ($newInBatch === 0 || count($batch) < $pageSize) {
             break;
         }
         $page++;
     }
 
     return $keys;
+}
+
+function song_payload_signature(array $payload): string
+{
+    foreach (['id', 'song_id', 'arrangement_id', 'key_id'] as $key) {
+        $value = normalize_string($payload[$key] ?? '');
+        if ($value !== '') {
+            return $key . ':' . $value;
+        }
+    }
+
+    $name = normalize_string($payload['title'] ?? ($payload['name'] ?? ''));
+    if ($name !== '') {
+        return 'name:' . sha1($name . '|' . normalize_string($payload['key_name'] ?? ($payload['key'] ?? '')));
+    }
+
+    return '';
 }
 
 function extract_song_detail_payload(array $data): array

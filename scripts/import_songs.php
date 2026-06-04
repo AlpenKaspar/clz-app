@@ -6,7 +6,8 @@ require __DIR__ . '/../src/bootstrap.php';
 require __DIR__ . '/../src/import_songs.php';
 
 try {
-    $result = import_songs();
+    $lite = in_array('--lite', $argv ?? [], true);
+    $result = import_songs(!$lite);
     echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
     exit(0);
 } catch (Throwable $e) {
