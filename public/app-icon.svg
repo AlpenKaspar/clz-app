@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#clzIconGradient)"/>
-  <g fill="#fff" fill-rule="evenodd" transform="translate(112 112) scale(5.6)">
+  <g fill="#fff" fill-rule="evenodd" transform="translate(94 94) scale(6.35)">
     <path d="M9.16 21.99h18.32l-9.16 9.16H0zM27.48 18.32V0l-9.16 9.16v9.16zM27.48 40.3V22l-9.16 9.16v18.32zM31.15 21.99h18.32l-9.16 9.16h-9.16z"/>
   </g>
 </svg>
