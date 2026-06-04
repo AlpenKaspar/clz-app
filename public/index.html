@@ -5675,12 +5675,21 @@
     }
 
     .tools-section-label {
-      margin-top: 2px;
+      margin: 2px 0 6px 8px;
       color: var(--text-muted);
       font-size: 11px;
       font-weight: 900;
       text-transform: uppercase;
       letter-spacing: .04em;
+    }
+
+    .tools-notification-choice {
+      display: grid;
+      gap: 6px;
+    }
+
+    .tools-notification-choice + .tools-notification-choice {
+      margin-top: 6px;
     }
 
     .tools-toggle-list {
@@ -10015,7 +10024,7 @@
                   <div id="user-preferences-status" class="tools-sub">Pro Login gespeichert</div>
                 </div>
               </div>
-              <div>
+              <div class="tools-notification-choice">
                 <div class="tools-section-label">Geburtstage</div>
                 <div id="birthday-frequency-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="Geburtstags-Benachrichtigung">
                   <button type="button" id="birthday-frequency-off" class="birthday-frequency-switch-btn" onclick="setBirthdayNotificationFrequency_('off')" aria-checked="true">Aus</button>
@@ -10024,7 +10033,7 @@
                   <span class="birthday-frequency-switch-thumb"></span>
                 </div>
               </div>
-              <div>
+              <div class="tools-notification-choice">
                 <div class="tools-section-label">Meine Eins&auml;tze</div>
                 <div id="service-reminder-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="Benachrichtigung f&uuml;r eigene Eins&auml;tze">
                   <button type="button" id="service-reminder-off" class="birthday-frequency-switch-btn" onclick="setServiceReminderLead_('off')" aria-checked="true">Aus</button>
@@ -10033,7 +10042,7 @@
                   <span class="birthday-frequency-switch-thumb"></span>
                 </div>
               </div>
-              <div>
+              <div class="tools-notification-choice">
                 <div class="tools-section-label">OnAir</div>
                 <div id="on-air-reminder-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="OnAir-Benachrichtigung">
                   <button type="button" id="on-air-reminder-off" class="birthday-frequency-switch-btn" onclick="setOnAirReminderLead_('off')" aria-checked="true">Aus</button>
