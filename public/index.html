@@ -13252,6 +13252,9 @@
         songsPlayerState.shuffleRanks = {};
         songsPlayerState.shuffleAvoidTopKey = songsPlayerItemKey_(visible[0] || songsPlayerState.currentItem);
         renderSongsPlayerList_();
+        if (songsPlayerState.filtered.length) {
+          previewSongsPlayerItem_(0);
+        }
         updateSongsPlayerShuffleButton_();
       }
 
@@ -13552,9 +13555,8 @@
         if (title) title.textContent = item?.songTitle || item?.name || 'Titel';
         if (meta) meta.textContent = songsPlayerMetaText_(item);
         if (predigt) {
-          const url = String(item?.predigtscriptUrl || '').trim();
-          predigt.classList.toggle('is-visible', !!url);
-          predigt.innerHTML = url ? `<button class="btn btn-secondary" type="button" onclick="openSongsPlayerCurrentPredigtScript_()"><i class="fas fa-file-pdf"></i><span>Predigtscript</span></button>` : '';
+          predigt.classList.remove('is-visible');
+          predigt.innerHTML = '';
         }
         updateSongsPlayerPitchControls_();
       }
@@ -13564,6 +13566,17 @@
         const url = String(item.predigtscriptUrl || '').trim();
         if (!url) {
           toast('Kein Predigtscript verknuepft', 1400);
+          return;
+        }
+        openServicePdfViewer_(url, item.predigtscriptTitle || 'Predigtscript');
+      }
+
+      function openSongsPlayerPredigtScriptForItem_(idx) {
+        const item = songsPlayerState.filtered[idx] || {};
+        const url = String(item.predigtscriptUrl || '').trim();
+        closeSongsPlayerItemMenu_();
+        if (!url) {
+          toast('Kein Predigtscript verknüpft', 1400);
           return;
         }
         openServicePdfViewer_(url, item.predigtscriptTitle || 'Predigtscript');
@@ -13801,13 +13814,19 @@
         const songId = getSongsPlayerItemSongId_(item);
         const queued = isSongsPlayerQueuedNext_(item);
         songsPlayerState.actionMenuIndex = idx;
+        const nextLabel = queued ? 'Aus Nächstes entfernen' : 'Als Nächstes abspielen';
+        const nextAction = queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`;
         menu.innerHTML = `
-          <button type="button" onclick="${queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${queued ? 'Aus Nächstes entfernen' : 'Als Nächstes abspielen'}</span></button>
+          <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
           <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
           <button type="button" onclick="openSongsPlayerSongDetail_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Zum Song</span></button>
         `;
         if (item.kind === 'livestream') {
-          menu.innerHTML = `<button type="button" onclick="${queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${queued ? 'Aus NÃ¤chstes entfernen' : 'Als NÃ¤chstes abspielen'}</span></button>`;
+          const predigtUrl = String(item?.predigtscriptUrl || '').trim();
+          menu.innerHTML = `
+            <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
+            <button type="button" onclick="openSongsPlayerPredigtScriptForItem_(${idx})" ${predigtUrl ? '' : 'disabled'}><i class="fas fa-file-pdf"></i><span>Predigtscript</span></button>
+          `;
         }
         const useSheet = !!asSheet || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 680px)').matches);
         menu.hidden = false;
@@ -15900,6 +15919,9 @@ function updateBottomNavHighlight_() {
         document.getElementById('view-songs').className = (tab === 'songs') ? 'view-active' : 'view-hidden';
         document.getElementById('view-dashboard').className = (tab === 'dashboard') ? 'view-active' : 'view-hidden';
         document.getElementById('view-tools').className = (tab === 'tools') ? 'view-active' : 'view-hidden';
+        if (tab === 'calendar' && normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
+          mainTabScrollPositions_.calendar = 0;
+        }
         prepareMainTabScroll_(tab);
 
         if (tab === 'contacts') maybeRenderIdleContacts_();
@@ -25262,9 +25284,22 @@ function dashDynamicValueCard_(icon, prefix, item) {
         openServicePdfViewer_(predigt.url, predigt.title || 'Predigtscript');
       }
 
+      function buildServicePdfViewerSrc_(url) {
+        const cleanUrl = String(url || '').trim();
+        if (!cleanUrl) return '';
+        try {
+          const parsed = new URL(cleanUrl, window.location.href);
+          if (parsed.origin === window.location.origin) return parsed.href;
+          return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(parsed.href)}`;
+        } catch (e) {
+          return cleanUrl;
+        }
+      }
+
       function openServicePdfViewer_(url, title) {
         const cleanUrl = String(url || '').trim();
         if (!cleanUrl) return;
+        const viewerUrl = buildServicePdfViewerSrc_(cleanUrl);
         let overlay = document.getElementById('service-pdf-overlay');
         if (!overlay) {
           overlay = document.createElement('div');
@@ -25279,7 +25314,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             <div class="service-pdf-title">${escapeHtml(title || 'PDF')}</div>
             <a class="icon-btn" href="${escapeAttr(cleanUrl)}" target="_blank" rel="noopener" aria-label="Extern oeffnen" title="Extern oeffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>
           </div>
-          <iframe class="service-pdf-frame" src="${escapeAttr(cleanUrl)}" title="${escapeAttr(title || 'PDF')}"></iframe>
+          <iframe class="service-pdf-frame" src="${escapeAttr(viewerUrl || cleanUrl)}" title="${escapeAttr(title || 'PDF')}"></iframe>
         `;
         overlay.hidden = false;
         document.body.classList.add('detail-open');
