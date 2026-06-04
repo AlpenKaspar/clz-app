@@ -1,12 +1,15 @@
-const CACHE_NAME = 'clz-app-shell-v8';
+const CACHE_NAME = 'clz-app-shell-v9';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/favicon.ico?v=20260604b',
-  '/icons/app-icon.svg?v=20260604b',
-  '/icons/apple-touch-icon.png?v=20260604b',
-  '/icons/icon-192.png?v=20260604b',
-  '/icons/icon-512.png?v=20260604b',
+  '/favicon.ico?v=20260604c',
+  '/favicon-16.png?v=20260604c',
+  '/favicon-32.png?v=20260604c',
+  '/favicon-48.png?v=20260604c',
+  '/app-icon.svg?v=20260604c',
+  '/apple-touch-icon.png?v=20260604c',
+  '/icon-192.png?v=20260604c',
+  '/icon-512.png?v=20260604c',
   '/icons/logo-bplus-mobile.svg',
   '/js/songs-audio-pitch.js',
   '/manifest.webmanifest'
@@ -91,8 +94,8 @@ self.addEventListener('push', event => {
     const title = data.title || 'CLZ Spiez';
     const options = {
       body: data.body || 'Öffne die App für aktuelle Geburtstage.',
-      icon: data.icon || '/icons/icon-192.png',
-      badge: data.badge || '/icons/icon-192.png',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
       tag: data.tag || 'clz-notification',
       renotify: !!data.renotify,
       data: {
