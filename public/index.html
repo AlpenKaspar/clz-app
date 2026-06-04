@@ -1076,13 +1076,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #a71d68, #d67158);
+      background: transparent;
       overflow: hidden;
     }
 
     .auth-logo img {
-      width: 58px;
-      height: 58px;
+      width: 74px;
+      height: 74px;
       object-fit: contain;
     }
 
@@ -1122,7 +1122,7 @@
     }
 
     body.dark .auth-logo {
-      background: linear-gradient(135deg, #a71d68, #d67158);
+      background: transparent;
     }
 
     .welcome-card {
@@ -1200,13 +1200,14 @@
       place-items: center;
       font-size: 18px;
       color: #fff;
-      background: linear-gradient(135deg, #a71d68, #d67158);
+      background: transparent;
       box-shadow: 0 10px 22px rgba(214,113,88,0.22);
+      overflow: hidden;
     }
 
     .welcome-mark-logo {
-      width: 30px;
-      height: 30px;
+      width: 54px;
+      height: 54px;
       object-fit: contain;
       display: block;
       filter: drop-shadow(0 1px 1px rgba(0,0,0,0.10));
@@ -9207,7 +9208,7 @@
   <div class="auth-card">
     <div class="auth-logo">
       <img
-        src="/icons/logo-bplus-mobile.svg"
+        src="/icons/app-icon.svg"
         alt="CLZ Logo"
         loading="eager"
         decoding="sync"
@@ -9227,14 +9228,12 @@
   <div class="welcome-card">
     <div class="welcome-mark">
       <img
-        src="/icons/logo-bplus-mobile.svg"
+        src="/icons/app-icon.svg"
         alt="CLZ Logo"
         class="welcome-mark-logo"
         loading="eager"
         decoding="sync"
-        onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
       >
-      <i class="fas fa-star welcome-mark-fallback" style="display:none;"></i>
     </div>
     <div class="welcome-title">CLZ APP</div>
     <div id="welcome-greeting" class="welcome-subtitle"></div>
