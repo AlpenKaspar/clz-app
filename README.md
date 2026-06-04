@@ -93,7 +93,7 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 APP_SUPER_ADMIN_EMAILS=deine.admin.mail@example.ch
 APP_ADMIN_EMAILS=deine.admin.mail@example.ch
-APP_SESSION_DAYS=30
+APP_SESSION_DAYS=180
 ```
 
 Der erste Login legt den User automatisch in der Tabelle `users` an. E-Mails in `APP_SUPER_ADMIN_EMAILS` erhalten die Rolle `super_admin`, E-Mails in `APP_ADMIN_EMAILS` erhalten die Rolle `admin`, alle anderen starten sicherheitshalber als `guest`, bis sie freigegeben werden.
@@ -106,7 +106,7 @@ mit Push-Subscription. Dafuer ist kein Cron noetig. Geburtstags-Pushes laufen we
 Tasks `send_birthday_notifications.php` und `send_weekly_birthday_notifications.php`.
 
 `APP_SESSION_DAYS` steuert, wie lange ein Login gueltig bleibt. Die App erneuert die Session bei normalen API-Aufrufen
-und im Hintergrund automatisch, solange der Browser offen ist.
+und im Hintergrund automatisch, solange der Browser offen ist. Der Wert kann bei Bedarf z.B. auf `365` oder maximal `1095` Tage gesetzt werden.
 
 Die Login-Benutzer und Rollen stehen in MySQL in der Tabelle `users`. Die Listen `APP_SUPER_ADMIN_EMAILS` und `APP_ADMIN_EMAILS` liegen nur in `.env`
 und dienen als Bootstrap/Override fuer Super-Admins und Admins. `.env` wird nicht nach Git committet und liegt nicht unter `public/`.

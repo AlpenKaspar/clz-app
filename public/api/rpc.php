@@ -70,6 +70,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'tools_adminUsersList' => rpc_admin_users_list($user),
         'tools_adminCreateUser' => rpc_admin_create_user($args[0] ?? [], $user),
         'tools_adminUpdateUser' => rpc_admin_update_user($args[0] ?? [], $user),
+        'tools_adminDeleteUser' => rpc_admin_delete_user($args[0] ?? [], $user),
         'tools_adminLinkUserPerson' => rpc_admin_link_user_person($args[0] ?? [], $user),
         'tools_adminImpersonateUser' => rpc_admin_impersonate_user((int) ($args[0] ?? 0), $user),
         'tools_adminStopImpersonation' => rpc_admin_stop_impersonation($user),
@@ -1293,8 +1294,31 @@ function rpc_admin_update_user(mixed $payload, array $user): array
         throw new RuntimeException('Ungueltige Rolle.');
     }
     $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
-    $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
-    $stmt->execute([$role, $isActive, $id]);
+    $displayName = array_key_exists('displayName', $data) ? rpc_str($data['displayName'] ?? '') : null;
+    if ($displayName !== null) {
+        $stmt = db()->prepare('UPDATE users SET display_name = ?, role = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([$displayName, $role, $isActive, $id]);
+    } else {
+        $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([$role, $isActive, $id]);
+    }
+    return rpc_admin_users_list($user);
+}
+
+function rpc_admin_delete_user(mixed $payload, array $user): array
+{
+    rpc_require_real_super_admin($user);
+    $data = is_array($payload) ? $payload : [];
+    $id = (int) ($data['id'] ?? 0);
+    if ($id <= 0) {
+        throw new RuntimeException('User fehlt.');
+    }
+    if ($id === (int) ($user['id'] ?? 0)) {
+        throw new RuntimeException('Du kannst deinen eigenen Benutzer nicht loeschen.');
+    }
+
+    $stmt = db()->prepare('DELETE FROM users WHERE id = ?');
+    $stmt->execute([$id]);
     return rpc_admin_users_list($user);
 }
 

@@ -29,8 +29,8 @@ function app_session_lifetime_seconds(): int
     if ($days < 1) {
         $days = 30;
     }
-    if ($days > 365) {
-        $days = 365;
+    if ($days > 1095) {
+        $days = 1095;
     }
     return $days * 24 * 60 * 60;
 }

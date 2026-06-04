@@ -27711,10 +27711,15 @@ function dashDynamicValueCard_(icon, prefix, item) {
           const active = user?.isActive !== false;
           const name = String(user?.displayName || user?.email || 'Benutzer');
           const email = String(user?.email || '');
+          const canDelete = normalizeUserEmail_(email) !== normalizeUserEmail_(currentLoginEmail);
           const lastLogin = formatIsoShort_(user?.lastLoginAt || '') || 'noch nie';
           return `
             <div class="admin-user-row ${active ? '' : 'is-inactive'}">
               <div style="min-width:0;">
+                <div class="admin-user-controls" style="margin-bottom:8px;justify-content:flex-start;">
+                  <input id="admin-user-display-${id}" type="text" value="${escapeAttr(String(user?.displayName || ''))}" placeholder="Name" style="min-height:34px;border:1px solid var(--border-color);border-radius:10px;padding:0 10px;font-weight:800;background:var(--card-bg);color:var(--text-color);min-width:180px;max-width:100%;">
+                  <button class="btn btn-secondary" type="button" onclick="saveAdminUserName_(${id})"><i class="fas fa-floppy-disk"></i><span>Name</span></button>
+                </div>
                 <div class="admin-user-name">${escapeHtml(name)}</div>
                 <div class="admin-user-meta">${escapeHtml(email)} · letzter Login: ${escapeHtml(lastLogin)}</div>
               </div>
@@ -27723,6 +27728,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
                   ${['guest', 'member', 'admin', 'super_admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${roleLabel_(r)}</option>`).join('')}
                 </select>
                 <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
+                ${canDelete ? `<button class="btn btn-secondary" type="button" onclick="deleteAdminUser_(${id})"><i class="fas fa-trash"></i><span>L&ouml;schen</span></button>` : ``}
                 <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>
               </div>
               ${renderAdminUserPersonLink_(user)}
@@ -27903,7 +27909,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       async function updateAdminUserRole_(id, role) {
         try {
           const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
-          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role, isActive: user?.isActive !== false }], { retries: 1, retryDelay: 500 });
+          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role, isActive: user?.isActive !== false, displayName: user?.displayName || '' }], { retries: 1, retryDelay: 500 });
           adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
           renderAdminUsers_();
           toast('Rolle gespeichert', 1200);
@@ -27916,10 +27922,39 @@ function dashDynamicValueCard_(icon, prefix, item) {
       async function toggleAdminUserActive_(id, isActive) {
         try {
           const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
-          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role: user?.role || 'guest', isActive }], { retries: 1, retryDelay: 500 });
+          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role: user?.role || 'guest', isActive, displayName: user?.displayName || '' }], { retries: 1, retryDelay: 500 });
           adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
           renderAdminUsers_();
           toast(isActive ? 'Benutzer aktiviert' : 'Benutzer gesperrt', 1200);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      async function saveAdminUserName_(id) {
+        try {
+          const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
+          const displayName = String(document.getElementById(`admin-user-display-${id}`)?.value || '').trim();
+          const data = await withGsRetry('tools_adminUpdateUser', [{ id, role: user?.role || 'guest', isActive: user?.isActive !== false, displayName }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          renderAdminUsers_();
+          toast('Name gespeichert', 1200);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 1800);
+        }
+      }
+
+      async function deleteAdminUser_(id) {
+        const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
+        const label = String(user?.displayName || user?.email || 'Benutzer');
+        if (!window.confirm(`${label} wirklich loeschen?`)) return;
+        try {
+          const data = await withGsRetry('tools_adminDeleteUser', [{ id }], { retries: 1, retryDelay: 500 });
+          adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
+          renderAdminUsers_();
+          const status = document.getElementById('admin-users-status');
+          if (status) status.textContent = `${adminUsersCache.length} Benutzer`;
+          toast('Benutzer geloescht', 1200);
         } catch (err) {
           toast(normalizeErrMsg_(err), 1800);
         }
