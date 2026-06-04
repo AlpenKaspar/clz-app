@@ -1,11 +1,11 @@
-const CACHE_NAME = 'clz-app-shell-v6';
+const CACHE_NAME = 'clz-app-shell-v7';
 const APP_SHELL = [
   '/',
   '/index.html',
-  '/icons/app-icon.svg',
-  '/icons/apple-touch-icon.png',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/icons/app-icon.svg?v=20260604b',
+  '/icons/apple-touch-icon.png?v=20260604b',
+  '/icons/icon-192.png?v=20260604b',
+  '/icons/icon-512.png?v=20260604b',
   '/icons/logo-bplus-mobile.svg',
   '/js/songs-audio-pitch.js',
   '/manifest.webmanifest'
