@@ -3536,6 +3536,8 @@ function rpc_default_user_preferences(): array
             'servicesMine' => false,
         ],
         'birthdayFrequency' => 'off',
+        'serviceReminderLead' => 'off',
+        'onAirReminderLead' => 'off',
         'birthdayMessageTemplate' => '',
         'birthdayGreetingStyle' => 'personal',
         'calendarLayoutMode' => 'list',
@@ -3595,13 +3597,25 @@ function rpc_normalize_user_preferences(mixed $payload): array
             $birthdayFrequency = $defaults['birthdayFrequency'];
         }
     }
+    $serviceReminderLead = rpc_str($data['serviceReminderLead'] ?? '');
+    if (!in_array($serviceReminderLead, ['off', 'day', 'week'], true)) {
+        $serviceReminderLead = !empty($notifications['servicesMine'])
+            ? 'day'
+            : $defaults['serviceReminderLead'];
+    }
+    $onAirReminderLead = rpc_str($data['onAirReminderLead'] ?? $defaults['onAirReminderLead']);
+    if (!in_array($onAirReminderLead, ['off', '5m', '1h'], true)) {
+        $onAirReminderLead = $defaults['onAirReminderLead'];
+    }
     return [
         'notifications' => [
             'birthdaysToday' => $birthdayFrequency === 'daily',
             'birthdaysWeek' => $birthdayFrequency === 'weekly',
-            'servicesMine' => (bool) ($notifications['servicesMine'] ?? $defaults['notifications']['servicesMine']),
+            'servicesMine' => $serviceReminderLead !== 'off',
         ],
         'birthdayFrequency' => $birthdayFrequency,
+        'serviceReminderLead' => $serviceReminderLead,
+        'onAirReminderLead' => $onAirReminderLead,
         'birthdayMessageTemplate' => $birthdayMessageTemplate,
         'birthdayGreetingStyle' => $birthdayGreetingStyle,
         'calendarLayoutMode' => $calendarLayoutMode,

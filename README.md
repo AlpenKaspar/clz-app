@@ -104,6 +104,8 @@ Mindestens eine echte Verwaltungsadresse sollte deshalb in `APP_SUPER_ADMIN_EMAI
 Neue Google-Logins mit Rolle `guest` erzeugen direkt eine Push-Benachrichtigung fuer aktive Super-Admins
 mit Push-Subscription. Dafuer ist kein Cron noetig. Geburtstags-Pushes laufen weiter ueber die geplanten
 Tasks `send_birthday_notifications.php` und `send_weekly_birthday_notifications.php`.
+Eigene Einsatz- und OnAir-Pushes laufen ueber `scripts/send_service_notifications.php`; sinnvoll ist ein Cron alle 5-15 Minuten,
+z.B. `cd /home/httpd/vhosts/ypg.ch/app.clzspiez.ch && /opt/plesk/php/8.2/bin/php scripts/send_service_notifications.php`.
 
 `APP_SESSION_DAYS` steuert, wie lange ein Login gueltig bleibt. Die App erneuert die Session bei normalen API-Aufrufen
 und im Hintergrund automatisch, solange der Browser offen ist. Der Wert kann bei Bedarf z.B. auf `365` oder maximal `1095` Tage gesetzt werden.

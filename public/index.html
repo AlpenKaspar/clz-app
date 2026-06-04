@@ -5744,6 +5744,10 @@
 
     .birthday-frequency-switch[data-mode="daily"] .birthday-frequency-switch-thumb { transform: translateX(100%); }
     .birthday-frequency-switch[data-mode="weekly"] .birthday-frequency-switch-thumb { transform: translateX(200%); }
+    .birthday-frequency-switch[data-mode="day"] .birthday-frequency-switch-thumb,
+    .birthday-frequency-switch[data-mode="5m"] .birthday-frequency-switch-thumb { transform: translateX(100%); }
+    .birthday-frequency-switch[data-mode="week"] .birthday-frequency-switch-thumb,
+    .birthday-frequency-switch[data-mode="1h"] .birthday-frequency-switch-thumb { transform: translateX(200%); }
 
     .birthday-frequency-switch-btn {
       position: relative;
@@ -10020,6 +10024,24 @@
                   <span class="birthday-frequency-switch-thumb"></span>
                 </div>
               </div>
+              <div>
+                <div class="tools-section-label">Meine Eins&auml;tze</div>
+                <div id="service-reminder-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="Benachrichtigung f&uuml;r eigene Eins&auml;tze">
+                  <button type="button" id="service-reminder-off" class="birthday-frequency-switch-btn" onclick="setServiceReminderLead_('off')" aria-checked="true">Aus</button>
+                  <button type="button" id="service-reminder-day" class="birthday-frequency-switch-btn" onclick="setServiceReminderLead_('day')" aria-checked="false">1 Tag</button>
+                  <button type="button" id="service-reminder-week" class="birthday-frequency-switch-btn" onclick="setServiceReminderLead_('week')" aria-checked="false">1 Woche</button>
+                  <span class="birthday-frequency-switch-thumb"></span>
+                </div>
+              </div>
+              <div>
+                <div class="tools-section-label">OnAir</div>
+                <div id="on-air-reminder-switch" class="birthday-frequency-switch" data-mode="off" role="radiogroup" aria-label="OnAir-Benachrichtigung">
+                  <button type="button" id="on-air-reminder-off" class="birthday-frequency-switch-btn" onclick="setOnAirReminderLead_('off')" aria-checked="true">Aus</button>
+                  <button type="button" id="on-air-reminder-5m" class="birthday-frequency-switch-btn" onclick="setOnAirReminderLead_('5m')" aria-checked="false">5 Min.</button>
+                  <button type="button" id="on-air-reminder-1h" class="birthday-frequency-switch-btn" onclick="setOnAirReminderLead_('1h')" aria-checked="false">1 Std.</button>
+                  <span class="birthday-frequency-switch-thumb"></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -10296,7 +10318,7 @@
       let currentUserPersonId = "";
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
-      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal", calendarLayoutMode: "list" };
+      let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", serviceReminderLead: "off", onAirReminderLead: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal", calendarLayoutMode: "list" };
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
@@ -10590,13 +10612,21 @@
         const birthdayGreetingStyle = rawGreetingStyle === 'formal' ? 'formal' : 'personal';
         const rawCalendarLayout = prefs && typeof prefs === 'object' ? String(prefs.calendarLayoutMode || '').trim().toLowerCase() : '';
         const calendarLayoutPref = rawCalendarLayout === 'agenda' ? 'agenda' : (rawCalendarLayout === 'list' ? 'list' : calendarLayoutMode);
+        const rawServiceReminderLead = prefs && typeof prefs === 'object' ? String(prefs.serviceReminderLead || '').trim().toLowerCase() : '';
+        const serviceReminderLead = ['day', 'week'].includes(rawServiceReminderLead)
+          ? rawServiceReminderLead
+          : (!rawServiceReminderLead && notifications.servicesMine ? 'day' : 'off');
+        const rawOnAirReminderLead = prefs && typeof prefs === 'object' ? String(prefs.onAirReminderLead || '').trim().toLowerCase() : '';
+        const onAirReminderLead = ['5m', '1h'].includes(rawOnAirReminderLead) ? rawOnAirReminderLead : 'off';
         return {
           notifications: {
             birthdaysToday: birthdayFrequency === 'daily',
             birthdaysWeek: birthdayFrequency === 'weekly',
-            servicesMine: !!notifications.servicesMine
+            servicesMine: serviceReminderLead !== 'off'
           },
           birthdayFrequency,
+          serviceReminderLead,
+          onAirReminderLead,
           birthdayMessageTemplate: normalizedTemplate,
           birthdayGreetingStyle,
           calendarLayoutMode: calendarLayoutPref === 'agenda' ? 'agenda' : 'list'
@@ -10622,16 +10652,29 @@
       function renderUserPreferences_() {
         const n = currentUserPreferences?.notifications || {};
         const birthdayFrequency = currentUserPreferences?.birthdayFrequency || (n.birthdaysToday ? 'daily' : (n.birthdaysWeek ? 'weekly' : 'off'));
+        const serviceReminderLead = currentUserPreferences?.serviceReminderLead || (n.servicesMine ? 'day' : 'off');
+        const onAirReminderLead = currentUserPreferences?.onAirReminderLead || 'off';
         const frequencyHost = document.getElementById('birthday-frequency-switch');
         const frequencyOff = document.getElementById('birthday-frequency-off');
         const frequencyDaily = document.getElementById('birthday-frequency-daily');
         const frequencyWeekly = document.getElementById('birthday-frequency-weekly');
+        const serviceHost = document.getElementById('service-reminder-switch');
+        const serviceOff = document.getElementById('service-reminder-off');
+        const serviceDay = document.getElementById('service-reminder-day');
+        const serviceWeek = document.getElementById('service-reminder-week');
+        const onAirHost = document.getElementById('on-air-reminder-switch');
+        const onAirOff = document.getElementById('on-air-reminder-off');
+        const onAir5m = document.getElementById('on-air-reminder-5m');
+        const onAir1h = document.getElementById('on-air-reminder-1h');
         const status = document.getElementById('user-preferences-status');
         const pushBtn = document.getElementById('push-notification-btn');
         const notificationRow = document.getElementById('tools-notification-row');
         const notificationToggleDisabled = !!pushNotificationStatus.loading;
-        if (notificationRow) notificationRow.hidden = !(pushNotificationStatus.supported && pushNotificationStatus.enabled);
+        const canShowNotifications = pushNotificationStatus.supported && pushNotificationStatus.enabled && pushNotificationCapability_().canUse;
+        if (notificationRow) notificationRow.hidden = !canShowNotifications;
         if (frequencyHost) frequencyHost.dataset.mode = birthdayFrequency;
+        if (serviceHost) serviceHost.dataset.mode = serviceReminderLead;
+        if (onAirHost) onAirHost.dataset.mode = onAirReminderLead;
         [
           [frequencyOff, 'off'],
           [frequencyDaily, 'daily'],
@@ -10639,6 +10682,24 @@
         ].forEach(([btn, mode]) => {
           if (!btn) return;
           btn.setAttribute('aria-checked', birthdayFrequency === mode ? 'true' : 'false');
+          btn.disabled = notificationToggleDisabled;
+        });
+        [
+          [serviceOff, 'off'],
+          [serviceDay, 'day'],
+          [serviceWeek, 'week']
+        ].forEach(([btn, mode]) => {
+          if (!btn) return;
+          btn.setAttribute('aria-checked', serviceReminderLead === mode ? 'true' : 'false');
+          btn.disabled = notificationToggleDisabled;
+        });
+        [
+          [onAirOff, 'off'],
+          [onAir5m, '5m'],
+          [onAir1h, '1h']
+        ].forEach(([btn, mode]) => {
+          if (!btn) return;
+          btn.setAttribute('aria-checked', onAirReminderLead === mode ? 'true' : 'false');
           btn.disabled = notificationToggleDisabled;
         });
         if (frequencyDaily) {
@@ -10677,10 +10738,17 @@
       }
 
       function pushIsSupported_() {
-        if (location.protocol !== 'https:') return false;
-        if (!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window)) return false;
-        if (isIosDevice_() && !isStandalonePwa_()) return false;
-        return true;
+        return pushNotificationCapability_().canUse;
+      }
+
+      function pushNotificationCapability_() {
+        if (location.protocol !== 'https:') return { canUse: false, reason: 'https' };
+        if (!('serviceWorker' in navigator)) return { canUse: false, reason: 'serviceWorker' };
+        if (!('PushManager' in window)) return { canUse: false, reason: 'pushManager' };
+        if (!('Notification' in window)) return { canUse: false, reason: 'notification' };
+        if (isIosDevice_() && !isStandalonePwa_()) return { canUse: false, reason: 'ios-pwa' };
+        if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return { canUse: false, reason: 'denied' };
+        return { canUse: true, reason: '' };
       }
 
       function isIosDevice_() {
@@ -10888,6 +10956,39 @@
             toast('Wunsch gespeichert, Push noch nicht aktiv', 2200);
             renderUserPreferences_();
           }
+        }
+      }
+
+      async function setServiceReminderLead_(lead) {
+        const next = ['day', 'week'].includes(String(lead || '').trim()) ? String(lead || '').trim() : 'off';
+        const prefs = normalizeUserPreferences_({
+          ...currentUserPreferences,
+          serviceReminderLead: next,
+          notifications: {
+            ...(currentUserPreferences?.notifications || {}),
+            servicesMine: next !== 'off'
+          }
+        });
+        currentUserPreferences = prefs;
+        renderUserPreferences_();
+        await saveUserPreferences_('Einsatz-Erinnerung gespeichert');
+        if (next !== 'off') {
+          const pushOk = await ensurePushNotificationsActive_();
+          if (!pushOk) toast('Wunsch gespeichert, Push noch nicht aktiv', 2200);
+        }
+      }
+
+      async function setOnAirReminderLead_(lead) {
+        const next = ['5m', '1h'].includes(String(lead || '').trim()) ? String(lead || '').trim() : 'off';
+        currentUserPreferences = normalizeUserPreferences_({
+          ...currentUserPreferences,
+          onAirReminderLead: next
+        });
+        renderUserPreferences_();
+        await saveUserPreferences_('OnAir-Erinnerung gespeichert');
+        if (next !== 'off') {
+          const pushOk = await ensurePushNotificationsActive_();
+          if (!pushOk) toast('Wunsch gespeichert, Push noch nicht aktiv', 2200);
         }
       }
 
@@ -18699,7 +18800,7 @@ function updateBottomNavHighlight_() {
         const tab = String(params.get('tab') || '').trim().toLowerCase();
         const panel = String(params.get('panel') || '').trim().toLowerCase();
         const filter = String(params.get('filter') || params.get('dashboardFilter') || '').trim();
-        if (tab !== 'contacts' && tab !== 'tools' && !filter) return false;
+        if (tab !== 'contacts' && tab !== 'calendar' && tab !== 'tools' && !filter) return false;
         if (filter) {
           setTimeout(() => openDashboardFilter(filter, routeFilterLabel_(filter)), 80);
           return true;
@@ -18720,6 +18821,10 @@ function updateBottomNavHighlight_() {
         }
         if (tab === 'contacts') {
           switchTab('contacts');
+          return true;
+        }
+        if (tab === 'calendar') {
+          switchTab('calendar');
           return true;
         }
         return false;
