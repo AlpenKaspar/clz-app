@@ -1,7 +1,12 @@
-const CACHE_NAME = 'clz-app-shell-v5';
+const CACHE_NAME = 'clz-app-shell-v6';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/icons/app-icon.svg',
+  '/icons/apple-touch-icon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/logo-bplus-mobile.svg',
   '/js/songs-audio-pitch.js',
   '/manifest.webmanifest'
 ];
@@ -85,8 +90,8 @@ self.addEventListener('push', event => {
     const title = data.title || 'CLZ Spiez';
     const options = {
       body: data.body || 'Öffne die App für aktuelle Geburtstage.',
-      icon: data.icon || 'https://rollsimply.com/elvanto-icon.png',
-      badge: data.badge || 'https://rollsimply.com/elvanto-icon.png',
+      icon: data.icon || '/icons/icon-192.png',
+      badge: data.badge || '/icons/icon-192.png',
       tag: data.tag || 'clz-notification',
       renotify: !!data.renotify,
       data: {

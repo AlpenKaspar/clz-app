@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="CLZ SPIEZ">
   <meta name="theme-color" content="#2563eb">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" type="image/x-icon" href="https://rollsimply.com/favicon.ico">
-  <link rel="apple-touch-icon" href="https://rollsimply.com/elvanto-icon.png">
+  <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="/vendor/chordsheetjs.bundle.min.js"></script>
   <script src="/js/songs-audio-pitch.js?v=20260522a"></script>
@@ -1076,7 +1076,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #eff6ff;
+      background: var(--primary);
       overflow: hidden;
     }
 
@@ -1122,7 +1122,7 @@
     }
 
     body.dark .auth-logo {
-      background: rgba(37,99,235,0.18);
+      background: var(--primary);
     }
 
     .welcome-card {
@@ -4490,12 +4490,23 @@
 
     .result-item {
       padding: 14px 16px;
-      border-bottom: 1px solid var(--border-color);
       cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
+      position: relative;
+    }
+
+    .result-item::after {
+      content: "";
+      position: absolute;
+      left: 70px;
+      right: 44px;
+      bottom: 0;
+      height: 1px;
+      background: var(--border-color);
+      pointer-events: none;
     }
 
     #cal-results .result-item {
@@ -4503,12 +4514,16 @@
       padding-right: 18px;
     }
 
-    .result-item:last-child { border-bottom: none; }
+    .result-item:last-child::after { display: none; }
 
     .result-item.active {
       background: rgba(238,242,255,0.8);
       border-left: 4px solid var(--primary);
       padding-left: 12px;
+    }
+
+    .result-item.active::after {
+      left: 66px;
     }
 
     #cal-results .result-item.active {
@@ -4578,9 +4593,9 @@
       align-items: center;
       justify-content: center;
       flex: 0 0 42px;
-      background: rgba(37,99,235,0.10);
-      border: 1px solid rgba(37,99,235,0.16);
-      color: var(--primary);
+      background: rgba(241,245,249,0.9);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
       font-size: 15px;
       font-weight: 950;
       line-height: 1;
@@ -4593,9 +4608,9 @@
     }
 
     .result-item.active .song-result-badge {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: #fff;
+      background: rgba(241,245,249,0.96);
+      border-color: var(--border-color);
+      color: var(--text-muted);
     }
 
     .result-item.active > .fa-chevron-right {
@@ -4603,14 +4618,14 @@
     }
 
     body.dark .song-result-badge {
-      background: rgba(37,99,235,0.18);
-      border-color: rgba(96,165,250,0.25);
+      background: rgba(2,6,23,0.25);
+      border-color: var(--border-color);
     }
 
     body.dark .result-item.active .song-result-badge {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: #fff;
+      background: rgba(2,6,23,0.25);
+      border-color: var(--border-color);
+      color: var(--text-muted);
     }
 
     .event-dot {
@@ -9192,7 +9207,7 @@
   <div class="auth-card">
     <div class="auth-logo">
       <img
-        src="https://www.clzspiez.ch/app/themes/wly.wp.theme/assets/images/logo-bplus-mobile.svg"
+        src="/icons/logo-bplus-mobile.svg"
         alt="CLZ Logo"
         loading="eager"
         decoding="sync"
@@ -9212,7 +9227,7 @@
   <div class="welcome-card">
     <div class="welcome-mark">
       <img
-        src="https://www.clzspiez.ch/app/themes/wly.wp.theme/assets/images/logo-bplus-mobile.svg"
+        src="/icons/logo-bplus-mobile.svg"
         alt="CLZ Logo"
         class="welcome-mark-logo"
         loading="eager"
