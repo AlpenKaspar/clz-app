@@ -778,7 +778,6 @@ function rpc_person_main(string $personId, array $user = []): array
     [$custom, $groups, $family] = rpc_person_enrichment($personId);
     $lite = rpc_contact_row($row, $custom, $groups, $family);
     $address = rpc_address_block($lite['address'], $lite['postcode'], $lite['city']);
-    $birthday = rpc_ui_date($lite['birthday']);
     $age = $lite['age'] !== null ? (string) $lite['age'] : '';
 
     $details = [
@@ -791,10 +790,8 @@ function rpc_person_main(string $personId, array $user = []): array
             ['waHref' => rpc_whatsapp_href($lite['mobile'])]
         ),
         array_merge(rpc_detail('Adresse', $address, 'address'), ['mapHref' => rpc_maps_href($address), 'preline' => true]),
-        rpc_detail('Geburtsdatum', $birthday),
         rpc_detail('Alter', $age),
         rpc_detail('Geschlecht', $lite['gender']),
-        $lite['dateAdded'] !== '' ? rpc_detail('Hinzugefügt', rpc_ui_date(substr($lite['dateAdded'], 0, 10))) : rpc_detail('Hinzugefügt', ''),
         $lite['familyId'] !== '' ? rpc_detail('Familie', 'Familie anzeigen', 'family') : rpc_detail('Familie', ''),
         rpc_detail('Picture', $lite['pictureUrl']),
     ];
@@ -854,6 +851,10 @@ function rpc_person_extra(string $personId, array $user = []): array
 
     if (rpc_str($row['departments'] ?? '') !== '') {
         $extra[] = rpc_detail('Mitarbeit', rpc_str($row['departments'] ?? ''));
+    }
+
+    if (rpc_str($row['birthday'] ?? '') !== '') {
+        $extra[] = rpc_detail('Geburtsdatum', rpc_ui_date(rpc_str($row['birthday'] ?? '')));
     }
 
     if (rpc_str($row['date_added'] ?? '') !== '') {

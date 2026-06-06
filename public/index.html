@@ -12028,6 +12028,10 @@
         return isAdminRole_();
       }
 
+      function canUseAdvancedDashboard_() {
+        return !isMemberRole_();
+      }
+
       function isGuestRole_() {
         const role = String(currentUserRole || "guest").toLowerCase();
         return role === "gast" || role === "guest";
@@ -12119,6 +12123,7 @@
 
         const adminPanel = document.getElementById('admin-users-panel');
         if (adminPanel) adminPanel.style.display = canManageUsers_() ? '' : 'none';
+        applyDashboardAccessUi_();
         renderUserPreferences_();
         updateImpersonationBanner_();
 
@@ -12130,6 +12135,22 @@
         }
 
         requestAnimationFrame(() => setTimeout(updateBottomNavHighlight_, 30));
+      }
+
+      function applyDashboardAccessUi_() {
+        const advancedAllowed = canUseAdvancedDashboard_();
+        const smartToggle = document.getElementById('dash-smart-toggle');
+        if (smartToggle) smartToggle.style.display = advancedAllowed ? '' : 'none';
+        if (!advancedAllowed && smartBuilderExpanded) {
+          closeSmartFilterOverlay();
+        }
+        ['dash-btn-households', 'dash-btn-ages', 'dash-btn-next-step', 'dash-btn-children-youth'].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) btn.style.display = advancedAllowed ? '' : 'none';
+        });
+        if (!advancedAllowed && dashboardMode !== 'overview') {
+          dashboardMode = 'overview';
+        }
       }
 
       function updateImpersonationBanner_() {
@@ -16032,6 +16053,7 @@ function updateBottomNavHighlight_() {
         setTimeout(() => checkForDataVersionRefresh_('tab_' + tab), 120);
         updateGlobalLiveBanner_();
         if (tab === 'dashboard') {
+          applyDashboardAccessUi_();
           renderDashboardSmartBuilder_();
           renderDashboard();
         }
@@ -16149,6 +16171,7 @@ function updateBottomNavHighlight_() {
           dashboardLongPressTimer = setTimeout(() => {
             dashboardLongPressTimer = null;
             if (!dashboardLongPressActive) return;
+            if (!canUseAdvancedDashboard_()) return;
             dashboardLongPressIgnoreClickUntil = Date.now() + 700;
             triggerHapticFeedback_();
             switchTab('dashboard');
@@ -23217,6 +23240,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
           showDashboardSkeleton_();
           return;
         }
+        if (!canUseAdvancedDashboard_() && dashboardMode !== "overview") {
+          dashboardMode = "overview";
+        }
+        applyDashboardAccessUi_();
 
         setStatus("dash-status", "", "");
 
@@ -23384,6 +23411,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function switchDashboardMode(mode) {
+        if (!canUseAdvancedDashboard_() && mode !== "overview") {
+          mode = "overview";
+        }
         dashboardMode = mode;
         document.getElementById("dash-btn-overview").classList.toggle("active", mode === "overview");
         document.getElementById("dash-btn-households").classList.toggle("active", mode === "households");
@@ -24036,6 +24066,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function toggleSmartBuilder_() {
+        if (!canUseAdvancedDashboard_()) return;
         if (smartBuilderExpanded) closeSmartFilterOverlay();
         else openSmartFilterOverlay();
       }
@@ -24057,6 +24088,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
       }
 
       function openSmartFilterOverlay() {
+        if (!canUseAdvancedDashboard_()) {
+          closeSmartFilterOverlay();
+          return;
+        }
         smartBuilderExpanded = true;
         ensureDefaultGemeindeSmartRule_();
         const backdrop = document.getElementById("smart-filter-backdrop");
@@ -24099,6 +24134,10 @@ function dashDynamicValueCard_(icon, prefix, item) {
       function renderDashboardSmartBuilder_() {
         const box = document.getElementById("dash-smart-builder");
         if (!box) return;
+        if (!canUseAdvancedDashboard_()) {
+          box.innerHTML = "";
+          return;
+        }
         const typeDefs = getSmartRuleTypeDefs_();
         const options = typeDefs.map(def => `<option value="${escapeAttr(def.value)}">${escapeHtml(def.label)}</option>`).join("");
         const hasRules = Array.isArray(activeSmartRules) && activeSmartRules.length > 0;
