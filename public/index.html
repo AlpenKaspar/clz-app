@@ -12225,6 +12225,35 @@
         }
       }
 
+      function clampImpersonationBanner_(banner, left, top, persist = false) {
+        if (!banner) return;
+        const margin = 6;
+        const width = Math.max(48, banner.offsetWidth || banner.getBoundingClientRect().width || 48);
+        const height = Math.max(40, banner.offsetHeight || banner.getBoundingClientRect().height || 40);
+        const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+        const maxTop = Math.max(margin, window.innerHeight - height - margin);
+        const nextLeft = Math.max(margin, Math.min(Number(left) || margin, maxLeft));
+        const nextTop = Math.max(margin, Math.min(Number(top) || margin, maxTop));
+        banner.style.left = nextLeft + 'px';
+        banner.style.top = nextTop + 'px';
+        banner.style.right = 'auto';
+        if (persist) {
+          try {
+            localStorage.setItem('clz_impersonation_banner_pos_v1', JSON.stringify({
+              left: Math.round(nextLeft),
+              top: Math.round(nextTop)
+            }));
+          } catch (e) {}
+        }
+      }
+
+      function reclampImpersonationBanner_() {
+        const banner = document.getElementById('impersonation-banner');
+        if (!banner || banner.style.display === 'none') return;
+        const rect = banner.getBoundingClientRect();
+        clampImpersonationBanner_(banner, rect.left, rect.top, true);
+      }
+
       function applyImpersonationBannerState_() {
         const banner = document.getElementById('impersonation-banner');
         if (!banner) return;
@@ -12235,11 +12264,10 @@
         try {
           const pos = JSON.parse(localStorage.getItem('clz_impersonation_banner_pos_v1') || 'null');
           if (pos && Number.isFinite(pos.left) && Number.isFinite(pos.top)) {
-            banner.style.left = Math.max(6, Math.min(pos.left, window.innerWidth - 48)) + 'px';
-            banner.style.top = Math.max(6, Math.min(pos.top, window.innerHeight - 48)) + 'px';
-            banner.style.right = 'auto';
+            clampImpersonationBanner_(banner, pos.left, pos.top, true);
           }
         } catch (e) {}
+        setTimeout(reclampImpersonationBanner_, 0);
       }
 
       function toggleImpersonationBannerCollapsed_() {
@@ -12260,31 +12288,26 @@
           const startY = ev.clientY;
           const startLeft = rect.left;
           const startTop = rect.top;
-          const maxLeft = () => Math.max(6, window.innerWidth - banner.offsetWidth - 6);
-          const maxTop = () => Math.max(6, window.innerHeight - banner.offsetHeight - 6);
 
           const onMove = (moveEv) => {
-            const nextLeft = Math.max(6, Math.min(maxLeft(), startLeft + moveEv.clientX - startX));
-            const nextTop = Math.max(6, Math.min(maxTop(), startTop + moveEv.clientY - startY));
-            banner.style.left = nextLeft + 'px';
-            banner.style.top = nextTop + 'px';
-            banner.style.right = 'auto';
+            clampImpersonationBanner_(banner, startLeft + moveEv.clientX - startX, startTop + moveEv.clientY - startY);
           };
           const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
             const finalRect = banner.getBoundingClientRect();
-            try {
-              localStorage.setItem('clz_impersonation_banner_pos_v1', JSON.stringify({
-                left: Math.round(finalRect.left),
-                top: Math.round(finalRect.top)
-              }));
-            } catch (e) {}
+            clampImpersonationBanner_(banner, finalRect.left, finalRect.top, true);
           };
 
           ev.preventDefault();
           window.addEventListener('pointermove', onMove);
           window.addEventListener('pointerup', onUp);
+        });
+        window.addEventListener('resize', function() {
+          setTimeout(reclampImpersonationBanner_, 80);
+        });
+        window.addEventListener('orientationchange', function() {
+          setTimeout(reclampImpersonationBanner_, 220);
         });
       }
 
