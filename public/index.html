@@ -6152,7 +6152,7 @@
 
     .admin-user-create {
       display: grid;
-      grid-template-columns: minmax(160px, 1.1fr) minmax(130px, .9fr) 104px 92px;
+      grid-template-columns: minmax(160px, 1.1fr) minmax(130px, .9fr) 104px auto auto;
       gap: 8px;
       align-items: center;
       margin-top: 12px;
@@ -6160,6 +6160,15 @@
       border: 1px solid var(--border-color);
       border-radius: 14px;
       background: var(--card-bg);
+    }
+
+    .admin-user-form-title {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0;
     }
 
     .admin-user-create input,
@@ -6338,6 +6347,9 @@
         grid-template-columns: 1fr 1fr;
       }
       .admin-user-create input[type="email"] {
+        grid-column: 1 / -1;
+      }
+      .admin-user-form-title {
         grid-column: 1 / -1;
       }
       .admin-user-controls {
@@ -10207,7 +10219,8 @@
             <div class="tools-import-note">
               Neue Google-Logins starten als Gast. Gib hier gezielt Admin- oder Mitarbeiterrechte frei.
             </div>
-            <form class="admin-user-create" onsubmit="createAdminUser_(event)">
+            <form id="admin-user-form" class="admin-user-create" onsubmit="createAdminUser_(event)">
+              <div id="admin-user-form-title" class="admin-user-form-title">Benutzer hinzufügen</div>
               <input id="admin-user-email" type="email" autocomplete="email" placeholder="email@clzspiez.ch" required>
               <input id="admin-user-name" type="text" autocomplete="name" placeholder="Name optional">
               <select id="admin-user-role" aria-label="Rolle">
@@ -10216,8 +10229,11 @@
                 <option value="admin">Admin</option>
                 <option value="super_admin">Super-Admin</option>
               </select>
-              <button class="btn btn-primary" type="submit">
-                <i class="fas fa-plus"></i><span>Hinzufügen</span>
+              <button id="admin-user-submit" class="btn btn-primary" type="submit">
+                <i id="admin-user-submit-icon" class="fas fa-plus"></i><span id="admin-user-submit-text">Hinzufügen</span>
+              </button>
+              <button id="admin-user-cancel-edit" class="btn btn-secondary" type="button" onclick="resetAdminUserForm_()" style="display:none;">
+                <i class="fas fa-xmark"></i><span>Abbrechen</span>
               </button>
             </form>
             <div class="admin-users-toolbar">
@@ -10386,6 +10402,7 @@
       let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
+      let adminEditingUserId = 0;
       let authExpiredShown = false;
       let authKeepaliveTimer = null;
       let currentPermissions = {
@@ -28120,10 +28137,6 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return `
             <div class="admin-user-row ${active ? '' : 'is-inactive'}">
               <div style="min-width:0;">
-                <div class="admin-user-controls" style="margin-bottom:8px;justify-content:flex-start;">
-                  <input id="admin-user-display-${id}" type="text" value="${escapeAttr(String(user?.displayName || ''))}" placeholder="Name" style="min-height:34px;border:1px solid var(--border-color);border-radius:10px;padding:0 10px;font-weight:800;background:var(--card-bg);color:var(--text-color);min-width:180px;max-width:100%;">
-                  <button class="btn btn-secondary" type="button" onclick="saveAdminUserName_(${id})"><i class="fas fa-floppy-disk"></i><span>Name</span></button>
-                </div>
                 <div class="admin-user-name">${escapeHtml(name)}</div>
                 <div class="admin-user-meta">${escapeHtml(email)} · letzter Login: ${escapeHtml(lastLogin)}</div>
               </div>
@@ -28131,6 +28144,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 <select onchange="updateAdminUserRole_(${id}, this.value)" aria-label="Rolle">
                   ${['guest', 'member', 'admin', 'super_admin'].map(r => `<option value="${r}" ${r === role ? 'selected' : ''}>${roleLabel_(r)}</option>`).join('')}
                 </select>
+                <button class="btn btn-secondary" type="button" onclick="editAdminUser_(${id})"><i class="fas fa-pen"></i><span>Bearbeiten</span></button>
                 <button class="btn btn-secondary" type="button" onclick="toggleAdminUserActive_(${id}, ${active ? 'false' : 'true'})">${active ? 'Sperren' : 'Aktiv'}</button>
                 ${canDelete ? `<button class="btn btn-secondary" type="button" onclick="deleteAdminUser_(${id})"><i class="fas fa-trash"></i><span>L&ouml;schen</span></button>` : ``}
                 <button class="btn btn-primary" type="button" onclick="impersonateAdminUser_(${id})">Simulieren</button>
@@ -28283,6 +28297,39 @@ function dashDynamicValueCard_(icon, prefix, item) {
         linkAdminUserPerson_(userId, '');
       }
 
+      function setAdminUserFormMode_(user = null) {
+        const editing = !!(user && Number(user?.id || 0) > 0);
+        adminEditingUserId = editing ? Number(user.id || 0) : 0;
+        const emailEl = document.getElementById('admin-user-email');
+        const nameEl = document.getElementById('admin-user-name');
+        const roleEl = document.getElementById('admin-user-role');
+        const titleEl = document.getElementById('admin-user-form-title');
+        const submitIcon = document.getElementById('admin-user-submit-icon');
+        const submitText = document.getElementById('admin-user-submit-text');
+        const cancelBtn = document.getElementById('admin-user-cancel-edit');
+
+        if (emailEl) emailEl.value = editing ? String(user?.email || '') : '';
+        if (nameEl) nameEl.value = editing ? String(user?.displayName || '') : '';
+        if (roleEl) roleEl.value = editing ? String(user?.role || 'guest').toLowerCase() : 'guest';
+        if (titleEl) titleEl.textContent = editing ? 'Benutzer ändern' : 'Benutzer hinzufügen';
+        if (submitIcon) submitIcon.className = editing ? 'fas fa-floppy-disk' : 'fas fa-plus';
+        if (submitText) submitText.textContent = editing ? 'Ändern' : 'Hinzufügen';
+        if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
+      }
+
+      function resetAdminUserForm_() {
+        setAdminUserFormMode_(null);
+      }
+
+      function editAdminUser_(id) {
+        const user = (adminUsersCache || []).find(u => Number(u?.id || 0) === Number(id));
+        if (!user) return;
+        setAdminUserFormMode_(user);
+        const form = document.getElementById('admin-user-form');
+        if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => document.getElementById('admin-user-email')?.focus(), 180);
+      }
+
       async function createAdminUser_(event) {
         if (event) event.preventDefault();
         const emailEl = document.getElementById('admin-user-email');
@@ -28296,15 +28343,26 @@ function dashDynamicValueCard_(icon, prefix, item) {
           return;
         }
         try {
-          const data = await withGsRetry('tools_adminCreateUser', [{ email, displayName, role, isActive: true }], { retries: 1, retryDelay: 500 });
+          let data;
+          const editingId = Number(adminEditingUserId || 0);
+          if (editingId > 0) {
+            const existing = (adminUsersCache || []).find(u => Number(u?.id || 0) === editingId);
+            data = await withGsRetry('tools_adminUpdateUser', [{
+              id: editingId,
+              email,
+              displayName,
+              role,
+              isActive: existing?.isActive !== false
+            }], { retries: 1, retryDelay: 500 });
+          } else {
+            data = await withGsRetry('tools_adminCreateUser', [{ email, displayName, role, isActive: true }], { retries: 1, retryDelay: 500 });
+          }
           adminUsersCache = Array.isArray(data?.users) ? data.users : adminUsersCache;
           renderAdminUsers_();
-          if (emailEl) emailEl.value = '';
-          if (nameEl) nameEl.value = '';
-          if (roleEl) roleEl.value = 'guest';
+          resetAdminUserForm_();
           const status = document.getElementById('admin-users-status');
           if (status) status.textContent = `${adminUsersCache.length} Benutzer`;
-          toast('Benutzer gespeichert', 1300);
+          toast(editingId > 0 ? 'Benutzer geändert' : 'Benutzer gespeichert', 1300);
         } catch (err) {
           toast(normalizeErrMsg_(err), 2000);
         }

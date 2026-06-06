@@ -1290,6 +1290,17 @@ function rpc_admin_update_user(mixed $payload, array $user): array
     if ($id <= 0) {
         throw new RuntimeException('User fehlt.');
     }
+    $email = strtolower(rpc_str($data['email'] ?? ''));
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Bitte eine gueltige E-Mail-Adresse eingeben.');
+    }
+    if ($email !== '') {
+        $stmt = db()->prepare('SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1');
+        $stmt->execute([$email, $id]);
+        if ((int) ($stmt->fetchColumn() ?: 0) > 0) {
+            throw new RuntimeException('Diese E-Mail-Adresse ist bereits vergeben.');
+        }
+    }
     $role = strtolower(rpc_str($data['role'] ?? 'guest'));
     if (!in_array($role, ['super_admin', 'admin', 'member', 'guest'], true)) {
         throw new RuntimeException('Ungueltige Rolle.');
@@ -1297,11 +1308,21 @@ function rpc_admin_update_user(mixed $payload, array $user): array
     $isActive = array_key_exists('isActive', $data) ? (((bool) $data['isActive']) ? 1 : 0) : 1;
     $displayName = array_key_exists('displayName', $data) ? rpc_str($data['displayName'] ?? '') : null;
     if ($displayName !== null) {
-        $stmt = db()->prepare('UPDATE users SET display_name = ?, role = ?, is_active = ? WHERE id = ?');
-        $stmt->execute([$displayName, $role, $isActive, $id]);
+        if ($email !== '') {
+            $stmt = db()->prepare('UPDATE users SET email = ?, display_name = ?, role = ?, is_active = ? WHERE id = ?');
+            $stmt->execute([$email, $displayName, $role, $isActive, $id]);
+        } else {
+            $stmt = db()->prepare('UPDATE users SET display_name = ?, role = ?, is_active = ? WHERE id = ?');
+            $stmt->execute([$displayName, $role, $isActive, $id]);
+        }
     } else {
-        $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
-        $stmt->execute([$role, $isActive, $id]);
+        if ($email !== '') {
+            $stmt = db()->prepare('UPDATE users SET email = ?, role = ?, is_active = ? WHERE id = ?');
+            $stmt->execute([$email, $role, $isActive, $id]);
+        } else {
+            $stmt = db()->prepare('UPDATE users SET role = ?, is_active = ? WHERE id = ?');
+            $stmt->execute([$role, $isActive, $id]);
+        }
     }
     return rpc_admin_users_list($user);
 }
