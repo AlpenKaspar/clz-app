@@ -20548,6 +20548,13 @@ function updateBottomNavHighlight_() {
         } else {
           filterCalendar({ allowWhileLoading: true });
         }
+        if (next === 'list') {
+          mainTabScrollPositions_.calendar = 0;
+          requestAnimationFrame(() => {
+            const root = getMainScrollRoot_();
+            if (root) root.scrollTop = 0;
+          });
+        }
         saveCalendarLayoutPreference_();
       }
 
