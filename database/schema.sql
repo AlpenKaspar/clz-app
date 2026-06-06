@@ -400,7 +400,7 @@ CREATE TABLE IF NOT EXISTS prayer_pools (
   created_by_email varchar(190) NULL,
   created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_prayer_pool_name (pool_name)
+  UNIQUE KEY uq_prayer_pool_owner_name (created_by_email, pool_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS prayer_pool_members (

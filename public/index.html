@@ -10323,7 +10323,7 @@
     </div>
     <div id="prayer-pool-picker" class="prayer-pool-picker" hidden onclick="event.stopPropagation();">
       <div class="prayer-pool-picker-card">
-        <div class="prayer-pool-picker-title">Zum Pool Kranke hinzufügen</div>
+        <div class="prayer-pool-picker-title">Zum Pool hinzufügen</div>
         <div class="prayer-pool-picker-sub">Welche Personen sollen hinzugefügt werden?</div>
         <div class="prayer-pool-target">
           <label for="prayer-pool-target-select">Pool</label>
@@ -10439,9 +10439,10 @@
       let prayerDeckMode = 'alphabetical';
       let prayerDeckPrefetch = { inFlight: false, loadedAt: 0, cards: [] };
       let prayerPoolsCache = { loadedAt: 0, pools: [] };
-      let prayerPoolMembersCache = { loadedAt: 0, poolName: 'Kranke', members: [] };
-      let prayerPoolDefaultTarget = 'Kranke';
-      let prayerPoolSelectedName = 'Kranke';
+      const PRAYER_DEFAULT_POOL_NAME = 'Gebetspool';
+      let prayerPoolMembersCache = { loadedAt: 0, poolName: PRAYER_DEFAULT_POOL_NAME, members: [] };
+      let prayerPoolDefaultTarget = PRAYER_DEFAULT_POOL_NAME;
+      let prayerPoolSelectedName = PRAYER_DEFAULT_POOL_NAME;
       let prayerPoolMembersLoading = false;
       let prayerPoolMembersReqId = 0;
       let prayerPoolSelectDebounceTimer = null;
@@ -17029,8 +17030,8 @@ function updateBottomNavHighlight_() {
           host.innerHTML = '';
           return;
         }
-        const selectedNameLower = String(prayerPoolSelectedName || 'Kranke').trim().toLowerCase();
-        const selectedPoolLabel = String(prayerPoolSelectedName || 'Kranke').trim() || 'Kranke';
+        const selectedNameLower = String(prayerPoolSelectedName || PRAYER_DEFAULT_POOL_NAME).trim().toLowerCase();
+        const selectedPoolLabel = String(prayerPoolSelectedName || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
         const hasSelectedMembers = String(prayerPoolMembersCache.poolName || '').toLowerCase() === selectedNameLower;
         const memberRows = hasSelectedMembers && Array.isArray(prayerPoolMembersCache.members) ? prayerPoolMembersCache.members : [];
         host.innerHTML = `
@@ -17044,13 +17045,13 @@ function updateBottomNavHighlight_() {
                 <div class="prayer-pool-open">
                   <span class="prayer-pool-item-main">
                     <span>${escapeHtml(String(pool?.name || 'Pool'))}</span>
-                    ${String(pool?.name || '').toLowerCase() === 'kranke' ? `<i class="fas fa-star" title="Standard"></i>` : ``}
+                    ${pool?.isDefault || String(pool?.name || '').toLowerCase() === PRAYER_DEFAULT_POOL_NAME.toLowerCase() ? `<i class="fas fa-star" title="Standard"></i>` : ``}
                   </span>
                   <span class="prayer-pool-meta prayer-pool-meta-inline">${Number(pool?.cardsCount || 0)} Karten · ${Number(pool?.membersCount || 0)} Personen</span>
                 </div>
                 <div class="prayer-pool-actions">
                   <button class="prayer-pool-item-start" type="button" onclick="event.stopPropagation(); startPrayerModeFromPool_('${escapeAttr(String(pool?.name || ''))}', this)">Jetzt beten</button>
-                  ${String(pool?.name || '').toLowerCase() !== 'kranke' ? `<button class="prayer-pool-item-delete" type="button" aria-label="Pool löschen" title="Pool löschen" onclick="event.stopPropagation(); deletePrayerPool_('${escapeAttr(String(pool?.name || ''))}')"><i class="fas fa-trash"></i></button>` : ``}
+                  ${!(pool?.isDefault || String(pool?.name || '').toLowerCase() === PRAYER_DEFAULT_POOL_NAME.toLowerCase()) ? `<button class="prayer-pool-item-delete" type="button" aria-label="Pool löschen" title="Pool löschen" onclick="event.stopPropagation(); deletePrayerPool_('${escapeAttr(String(pool?.name || ''))}')"><i class="fas fa-trash"></i></button>` : ``}
                 </div>
               </div>
             `).join('')}
@@ -17089,8 +17090,8 @@ function updateBottomNavHighlight_() {
       function renderPrayerPoolMembersList_() {
         const wrap = document.querySelector('#prayer-pools-wrap .prayer-pools-members-list');
         if (!wrap) return;
-        const selectedNameLower = String(prayerPoolSelectedName || 'Kranke').trim().toLowerCase();
-        const selectedPoolLabel = String(prayerPoolSelectedName || 'Kranke').trim() || 'Kranke';
+        const selectedNameLower = String(prayerPoolSelectedName || PRAYER_DEFAULT_POOL_NAME).trim().toLowerCase();
+        const selectedPoolLabel = String(prayerPoolSelectedName || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
         const hasSelectedMembers = String(prayerPoolMembersCache.poolName || '').toLowerCase() === selectedNameLower;
         const memberRows = hasSelectedMembers && Array.isArray(prayerPoolMembersCache.members) ? prayerPoolMembersCache.members : [];
         if (prayerPoolMembersLoading) {
@@ -17154,7 +17155,7 @@ function updateBottomNavHighlight_() {
       async function refreshPrayerPoolMembers_(options) {
         const opts = options && typeof options === 'object' ? options : {};
         const force = !!opts.force;
-        const targetPool = String(opts.poolName || prayerPoolSelectedName || 'Kranke').trim() || 'Kranke';
+        const targetPool = String(opts.poolName || prayerPoolSelectedName || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
         const ttlMs = 5 * 60 * 1000;
         const hasFreshCache = Array.isArray(prayerPoolMembersCache.members) && String(prayerPoolMembersCache.poolName || '') === targetPool && (Date.now() - Number(prayerPoolMembersCache.loadedAt || 0) < ttlMs);
         if (!force && hasFreshCache) {
@@ -17203,9 +17204,8 @@ function updateBottomNavHighlight_() {
         try {
           const res = await withGsRetry('prayerPools_get', [], { retries: 1, retryDelay: 500 });
           prayerPoolsCache = { loadedAt: Date.now(), pools: Array.isArray(res?.pools) ? res.pools : [] };
-          if (String(prayerPoolDefaultTarget || '').trim() === '') prayerPoolDefaultTarget = 'Kranke';
-          const hasDefault = prayerPoolsCache.pools.some(p => String(p?.name || '').trim().toLowerCase() === String(prayerPoolDefaultTarget || '').trim().toLowerCase());
-          if (!hasDefault) prayerPoolDefaultTarget = String(prayerPoolsCache.pools[0]?.name || 'Kranke');
+          const defaultPool = prayerPoolsCache.pools.find(p => p?.isDefault || String(p?.name || '').trim().toLowerCase() === PRAYER_DEFAULT_POOL_NAME.toLowerCase());
+          prayerPoolDefaultTarget = String(defaultPool?.name || PRAYER_DEFAULT_POOL_NAME);
           const hasSelected = prayerPoolsCache.pools.some(p => String(p?.name || '').trim().toLowerCase() === String(prayerPoolSelectedName || '').trim().toLowerCase());
           if (!hasSelected) prayerPoolSelectedName = prayerPoolDefaultTarget;
           renderPrayerPools_({ pools: prayerPoolsCache.pools });
@@ -17253,15 +17253,15 @@ function updateBottomNavHighlight_() {
         try {
           const res = await withGsRetry('prayerPools_delete', [name], { retries: 1, retryDelay: 500 });
           if (!res?.ok) {
-            if (String(res?.reason || '') === 'protected_default_pool') toast('Kranke kann nicht gelöscht werden', 1600);
+            if (String(res?.reason || '') === 'protected_default_pool') toast(`${PRAYER_DEFAULT_POOL_NAME} kann nicht gelöscht werden`, 1600);
             else toast('Pool konnte nicht gelöscht werden', 1600);
             return;
           }
           if (String(prayerPoolDefaultTarget || '').toLowerCase() === name.toLowerCase()) {
-            prayerPoolDefaultTarget = 'Kranke';
+            prayerPoolDefaultTarget = PRAYER_DEFAULT_POOL_NAME;
           }
           if (String(prayerPoolSelectedName || '').toLowerCase() === name.toLowerCase()) {
-            prayerPoolSelectedName = prayerPoolDefaultTarget || 'Kranke';
+            prayerPoolSelectedName = prayerPoolDefaultTarget || PRAYER_DEFAULT_POOL_NAME;
           }
           const poolsNow = (Array.isArray(prayerPoolsCache.pools) ? prayerPoolsCache.pools : [])
             .filter(p => String(p?.name || '').trim().toLowerCase() !== name.toLowerCase());
@@ -17597,7 +17597,7 @@ function updateBottomNavHighlight_() {
                   : `<span class="prayer-member-avatar prayer-member-avatar-fallback"><i class="fas fa-user"></i></span>`
                 }
                 <div class="prayer-member-main">
-                  <div class="prayer-member-name">${escapeHtml(String(m?.name || 'Person'))}${m?.newBadge ? `<span class="prayer-member-new-badge">${escapeHtml(String(m.newBadge))}</span>` : ``}${krankSet[String(m?.personId || '').trim()] ? `<i class="fas fa-heart-pulse prayer-member-pool-icon" title="Kranke"></i>` : ``}</div>
+                  <div class="prayer-member-name">${escapeHtml(String(m?.name || 'Person'))}${m?.newBadge ? `<span class="prayer-member-new-badge">${escapeHtml(String(m.newBadge))}</span>` : ``}${krankSet[String(m?.personId || '').trim()] ? `<i class="fas fa-heart-pulse prayer-member-pool-icon" title="${escapeAttr(PRAYER_DEFAULT_POOL_NAME)}"></i>` : ``}</div>
                   ${m?.age != null && String(m.age) !== '' ? `<div class="prayer-member-age">${escapeHtml(String(m.age))} Jahre</div>` : ``}
                 </div>
               </div>
@@ -17743,12 +17743,12 @@ function updateBottomNavHighlight_() {
         const pools = Array.isArray(prayerPoolsCache.pools) ? prayerPoolsCache.pools : [];
         if (poolSelect) {
           poolSelect.innerHTML = pools.map(p => `<option value="${escapeAttr(String(p?.name || ''))}">${escapeHtml(String(p?.name || 'Pool'))}</option>`).join('');
-          const defaultName = String(prayerPoolDefaultTarget || 'Kranke');
+          const defaultName = String(prayerPoolDefaultTarget || PRAYER_DEFAULT_POOL_NAME);
           const hasDefault = pools.some(p => String(p?.name || '').toLowerCase() === defaultName.toLowerCase());
-          poolSelect.value = hasDefault ? defaultName : String(pools[0]?.name || 'Kranke');
+          poolSelect.value = hasDefault ? defaultName : String(pools[0]?.name || PRAYER_DEFAULT_POOL_NAME);
         }
         prayerPoolPickerState = {
-          poolName: (poolSelect && poolSelect.value) ? String(poolSelect.value) : String(prayerPoolDefaultTarget || 'Kranke'),
+          poolName: (poolSelect && poolSelect.value) ? String(poolSelect.value) : String(prayerPoolDefaultTarget || PRAYER_DEFAULT_POOL_NAME),
           slotEl: slotEl || null,
           personIds: members.map(m => String(m.personId || '').trim()).filter(Boolean)
         };
@@ -17774,7 +17774,7 @@ function updateBottomNavHighlight_() {
         const selectedId = String(selected?.getAttribute('data-pool-person-id') || '').trim();
         const slotEl = prayerPoolPickerState?.slotEl || null;
         const poolSelect = picker.querySelector('#prayer-pool-target-select');
-        const selectedPoolName = String(poolSelect?.value || prayerPoolPickerState?.poolName || prayerPoolDefaultTarget || 'Kranke').trim() || 'Kranke';
+        const selectedPoolName = String(poolSelect?.value || prayerPoolPickerState?.poolName || prayerPoolDefaultTarget || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
         if (!selectedId) {
           toast('Bitte eine Person auswählen', 1400);
           return;
@@ -17802,14 +17802,14 @@ function updateBottomNavHighlight_() {
       }
 
       async function removePrayerPoolMember_(poolName, personId) {
-        const pool = String(poolName || 'Kranke').trim() || 'Kranke';
+        const pool = String(poolName || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
         const pid = String(personId || '').trim();
         if (!pid) return;
         try {
           await withGsRetry('prayerPools_removeMembers', [{ poolName: pool, personIds: [pid] }], { retries: 1, retryDelay: 500 });
           refreshPrayerPools_({ force: true });
           refreshPrayerPoolMembers_({ force: true });
-          toast('Aus Kranke entfernt', 1400);
+          toast(`Aus ${pool} entfernt`, 1400);
         } catch (err) {
           toast(normalizeErrMsg_(err), 1800);
         }
@@ -22710,7 +22710,7 @@ function updateBottomNavHighlight_() {
           const personId = String(data?.meta?.personId || "").trim();
           const showPoolLink = !!(lastContactPoolAddHint && String(lastContactPoolAddHint.personId || "") === personId);
           const poolLinkHtml = showPoolLink
-            ? `<button class="btn btn-primary" onclick="openPoolFromContact_('${escapeAttr(String(lastContactPoolAddHint.poolName || 'Kranke'))}')"><i class="fas fa-layer-group"></i><span>Pool öffnen</span></button>`
+            ? `<button class="btn btn-primary" onclick="openPoolFromContact_('${escapeAttr(String(lastContactPoolAddHint.poolName || PRAYER_DEFAULT_POOL_NAME))}')"><i class="fas fa-layer-group"></i><span>Pool öffnen</span></button>`
             : ``;
           area.innerHTML = `
             ${elvantoUrl ? `<a class="btn btn-secondary" href="${escapeAttr(elvantoUrl)}" target="_blank" rel="noopener"><i class="fas fa-church"></i><span>Elvanto</span></a>` : ``}
@@ -22751,7 +22751,7 @@ function updateBottomNavHighlight_() {
             prayerPoolsCache = { loadedAt: Date.now(), pools: pools.slice() };
           }
           let poolName = '';
-          const defaultPool = String(prayerPoolDefaultTarget || pools[0]?.name || 'Kranke').trim() || 'Kranke';
+          const defaultPool = String(prayerPoolDefaultTarget || pools[0]?.name || PRAYER_DEFAULT_POOL_NAME).trim() || PRAYER_DEFAULT_POOL_NAME;
           const optionsText = pools.length
             ? pools.map((p, i) => `${i + 1}: ${String(p?.name || 'Pool')}`).join('\n')
             : 'Noch keine Pools vorhanden.';

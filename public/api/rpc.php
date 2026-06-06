@@ -79,11 +79,11 @@ function rpc_dispatch(string $fn, array $args, array $user): array
         'personenUi_getPrayerDeck' => ['ok' => true, 'cards' => rpc_prayer_deck($user)],
         'prayerDeck_getByPool' => ['ok' => true, 'cards' => rpc_prayer_deck_by_pool((string) ($args[0] ?? ''), $user)],
         'prayerPools_get' => ['ok' => true, 'pools' => rpc_prayer_pools($user)],
-        'prayerPools_getMembers' => ['ok' => true, 'members' => rpc_prayer_pool_members((string) ($args[0] ?? 'Kranke'))],
+        'prayerPools_getMembers' => ['ok' => true, 'members' => rpc_prayer_pool_members((string) ($args[0] ?? rpc_default_prayer_pool_name()), $user)],
         'prayerPools_create' => rpc_prayer_pool_create($args[0] ?? [], $user),
-        'prayerPools_delete' => rpc_prayer_pool_delete((string) ($args[0] ?? '')),
-        'prayerPools_addMembers' => rpc_prayer_pool_add_members($args[0] ?? []),
-        'prayerPools_removeMembers' => rpc_prayer_pool_remove_members($args[0] ?? []),
+        'prayerPools_delete' => rpc_prayer_pool_delete((string) ($args[0] ?? ''), $user),
+        'prayerPools_addMembers' => rpc_prayer_pool_add_members($args[0] ?? [], $user),
+        'prayerPools_removeMembers' => rpc_prayer_pool_remove_members($args[0] ?? [], $user),
         'prayer_startSession' => rpc_prayer_start_session($args[0] ?? [], $user),
         'prayer_heartbeat' => rpc_prayer_heartbeat($args[0] ?? []),
         'prayer_endSession' => rpc_prayer_end_session($args[0] ?? []),
@@ -733,26 +733,76 @@ function rpc_prayer_member_role(string $relationship, bool $isSingle): string
     return 'Familienmitglied';
 }
 
-function rpc_prayer_pool_id(string $poolName): int
+function rpc_default_prayer_pool_name(): string
 {
+    return 'Gebetspool';
+}
+
+function rpc_prayer_pool_owner(array $user = []): string
+{
+    return strtolower(rpc_str($user['email'] ?? ''));
+}
+
+function rpc_ensure_prayer_pool_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $cols = db()->query("SHOW COLUMNS FROM prayer_pools LIKE 'created_by_email'")->fetchAll();
+        if (!$cols) {
+            db()->exec('ALTER TABLE prayer_pools ADD COLUMN created_by_email varchar(190) NULL AFTER pool_name');
+        }
+    } catch (Throwable) {}
+    try {
+        $idx = fetch_all_prepared_legacy("SHOW INDEX FROM prayer_pools WHERE Key_name = 'uq_prayer_pool_name'", []);
+        if ($idx) {
+            db()->exec('ALTER TABLE prayer_pools DROP INDEX uq_prayer_pool_name');
+        }
+    } catch (Throwable) {}
+    try {
+        $idx = fetch_all_prepared_legacy("SHOW INDEX FROM prayer_pools WHERE Key_name = 'uq_prayer_pool_owner_name'", []);
+        if (!$idx) {
+            db()->exec('ALTER TABLE prayer_pools ADD UNIQUE KEY uq_prayer_pool_owner_name (created_by_email, pool_name)');
+        }
+    } catch (Throwable) {}
+    try {
+        $stmt = db()->prepare(
+            'INSERT IGNORE INTO prayer_pools (pool_name, created_by_email)
+             SELECT ?, LOWER(email)
+             FROM users
+             WHERE email IS NOT NULL AND email <> ""'
+        );
+        $stmt->execute([rpc_default_prayer_pool_name()]);
+    } catch (Throwable) {}
+}
+
+function rpc_prayer_pool_id(string $poolName, array $user = []): int
+{
+    rpc_ensure_prayer_pool_schema();
     $name = rpc_str($poolName);
     if ($name === '') {
         return 0;
     }
-    $stmt = db()->prepare('SELECT id FROM prayer_pools WHERE LOWER(pool_name) = LOWER(?) LIMIT 1');
-    $stmt->execute([$name]);
+    $owner = rpc_prayer_pool_owner($user);
+    $stmt = db()->prepare('SELECT id FROM prayer_pools WHERE LOWER(pool_name) = LOWER(?) AND LOWER(COALESCE(created_by_email, "")) = ? LIMIT 1');
+    $stmt->execute([$name, $owner]);
     return (int) ($stmt->fetchColumn() ?: 0);
 }
 
-function rpc_ensure_prayer_pool(string $poolName): int
+function rpc_ensure_prayer_pool(string $poolName, array $user = []): int
 {
-    $name = rpc_str($poolName) ?: 'Kranke';
-    $existing = rpc_prayer_pool_id($name);
+    rpc_ensure_prayer_pool_schema();
+    $name = rpc_str($poolName) ?: rpc_default_prayer_pool_name();
+    $owner = rpc_prayer_pool_owner($user);
+    $existing = rpc_prayer_pool_id($name, $user);
     if ($existing > 0) {
         return $existing;
     }
-    $stmt = db()->prepare('INSERT INTO prayer_pools (pool_name) VALUES (?)');
-    $stmt->execute([$name]);
+    $stmt = db()->prepare('INSERT INTO prayer_pools (pool_name, created_by_email) VALUES (?, ?)');
+    $stmt->execute([$name, $owner]);
     return (int) db()->lastInsertId();
 }
 
@@ -3911,7 +3961,7 @@ function rpc_prayer_deck_by_pool(string $poolName, array $user = []): array
 {
     $personIds = array_flip(array_map(
         static fn(array $m): string => rpc_str($m['personId'] ?? ''),
-        rpc_prayer_pool_members($poolName)
+        rpc_prayer_pool_members($poolName, $user)
     ));
     if (!$personIds) {
         return [];
@@ -3929,28 +3979,33 @@ function rpc_prayer_deck_by_pool(string $poolName, array $user = []): array
 
 function rpc_prayer_pools(array $user = []): array
 {
-    rpc_ensure_prayer_pool('Kranke');
-    $rows = db()->query(
+    $defaultName = rpc_default_prayer_pool_name();
+    $owner = rpc_prayer_pool_owner($user);
+    rpc_ensure_prayer_pool($defaultName, $user);
+    $rows = fetch_all_prepared_legacy(
         'SELECT pp.pool_name, COUNT(ppm.person_id) AS members_count
          FROM prayer_pools pp
          LEFT JOIN prayer_pool_members ppm ON ppm.pool_id = pp.id
+         WHERE LOWER(COALESCE(pp.created_by_email, "")) = ?
          GROUP BY pp.id, pp.pool_name
-         ORDER BY pp.pool_name'
-    )->fetchAll();
+         ORDER BY CASE WHEN LOWER(pp.pool_name) = LOWER(?) THEN 0 ELSE 1 END, pp.pool_name',
+        [$owner, $defaultName]
+    );
 
-    return array_map(static function (array $row): array {
+    return array_map(static function (array $row) use ($defaultName, $user): array {
         $poolName = rpc_str($row['pool_name'] ?? '');
         return [
             'name' => $poolName,
+            'isDefault' => rpc_lower($poolName) === rpc_lower($defaultName),
             'membersCount' => (int) ($row['members_count'] ?? 0),
             'cardsCount' => count(rpc_prayer_deck_by_pool($poolName, $user)),
         ];
     }, $rows);
 }
 
-function rpc_prayer_pool_members(string $poolName): array
+function rpc_prayer_pool_members(string $poolName, array $user = []): array
 {
-    $poolId = rpc_ensure_prayer_pool($poolName ?: 'Kranke');
+    $poolId = rpc_ensure_prayer_pool($poolName ?: rpc_default_prayer_pool_name(), $user);
     $rows = fetch_all_prepared_legacy(
         'SELECT p.id, p.display_name, p.firstname, p.preferred_name, p.lastname, p.picture_url
          FROM prayer_pool_members ppm
@@ -3972,26 +4027,27 @@ function rpc_prayer_pool_members(string $poolName): array
 
 function rpc_prayer_pool_create(mixed $payload, array $user): array
 {
+    rpc_ensure_prayer_pool_schema();
     $poolName = rpc_str(is_array($payload) ? ($payload['poolName'] ?? '') : $payload);
     if ($poolName === '') {
         return ['ok' => false, 'reason' => 'empty_name'];
     }
-    $existing = rpc_prayer_pool_id($poolName);
+    $existing = rpc_prayer_pool_id($poolName, $user);
     if ($existing > 0) {
         return ['ok' => false, 'reason' => 'pool_exists', 'poolName' => $poolName];
     }
 
     $stmt = db()->prepare('INSERT INTO prayer_pools (pool_name, created_by_email) VALUES (?, ?)');
-    $stmt->execute([$poolName, rpc_str($user['email'] ?? '')]);
+    $stmt->execute([$poolName, rpc_prayer_pool_owner($user)]);
     return ['ok' => true, 'poolName' => $poolName];
 }
 
-function rpc_prayer_pool_delete(string $poolName): array
+function rpc_prayer_pool_delete(string $poolName, array $user = []): array
 {
-    if (rpc_lower($poolName) === 'kranke') {
+    if (rpc_lower($poolName) === rpc_lower(rpc_default_prayer_pool_name()) || rpc_lower($poolName) === 'kranke') {
         return ['ok' => false, 'reason' => 'protected_default_pool'];
     }
-    $poolId = rpc_prayer_pool_id($poolName);
+    $poolId = rpc_prayer_pool_id($poolName, $user);
     if ($poolId <= 0) {
         return ['ok' => true];
     }
@@ -4000,12 +4056,12 @@ function rpc_prayer_pool_delete(string $poolName): array
     return ['ok' => true];
 }
 
-function rpc_prayer_pool_add_members(mixed $payload): array
+function rpc_prayer_pool_add_members(mixed $payload, array $user = []): array
 {
     if (!is_array($payload)) {
         return ['ok' => false, 'reason' => 'invalid_payload'];
     }
-    $poolId = rpc_ensure_prayer_pool(rpc_str($payload['poolName'] ?? 'Kranke') ?: 'Kranke');
+    $poolId = rpc_ensure_prayer_pool(rpc_str($payload['poolName'] ?? rpc_default_prayer_pool_name()) ?: rpc_default_prayer_pool_name(), $user);
     $personIds = is_array($payload['personIds'] ?? null) ? $payload['personIds'] : [];
     $stmt = db()->prepare('INSERT IGNORE INTO prayer_pool_members (pool_id, person_id) VALUES (?, ?)');
     $added = 0;
@@ -4020,12 +4076,12 @@ function rpc_prayer_pool_add_members(mixed $payload): array
     return ['ok' => true, 'added' => $added];
 }
 
-function rpc_prayer_pool_remove_members(mixed $payload): array
+function rpc_prayer_pool_remove_members(mixed $payload, array $user = []): array
 {
     if (!is_array($payload)) {
         return ['ok' => false, 'reason' => 'invalid_payload'];
     }
-    $poolId = rpc_prayer_pool_id(rpc_str($payload['poolName'] ?? 'Kranke') ?: 'Kranke');
+    $poolId = rpc_prayer_pool_id(rpc_str($payload['poolName'] ?? rpc_default_prayer_pool_name()) ?: rpc_default_prayer_pool_name(), $user);
     if ($poolId <= 0) {
         return ['ok' => true, 'removed' => 0];
     }
