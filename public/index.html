@@ -6353,31 +6353,37 @@
 
     .impersonation-banner {
       position: fixed;
-      z-index: 90;
-      left: max(12px, env(safe-area-inset-left));
-      right: max(12px, env(safe-area-inset-right));
+      z-index: 110;
+      left: auto;
+      right: max(10px, env(safe-area-inset-right));
       top: max(10px, env(safe-area-inset-top));
-      max-width: calc(var(--desktop-max) - 24px);
-      margin: 0 auto;
+      width: min(420px, calc(100vw - 20px));
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: 16px;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 14px;
       background: #fff7ed;
       color: #7c2d12;
       border: 1px solid #fed7aa;
-      box-shadow: 0 16px 38px rgba(124,45,18,0.18);
+      box-shadow: 0 10px 28px rgba(124,45,18,0.16);
     }
 
     .impersonation-banner-copy {
+      flex: 1 1 auto;
       min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 1px;
-      font-size: 12px;
-      line-height: 1.25;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .impersonation-banner-copy strong,
+    .impersonation-banner-copy span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .impersonation-banner button {
@@ -6393,9 +6399,52 @@
       cursor: pointer;
     }
 
+    .impersonation-banner .impersonation-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 30px;
+      min-height: 30px;
+      padding: 0;
+      background: rgba(234,88,12,0.12);
+      color: #9a3412;
+    }
+
+    .impersonation-drag-handle {
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .impersonation-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .impersonation-banner.is-collapsed {
+      width: auto;
+      max-width: calc(100vw - 20px);
+      padding: 6px;
+      gap: 6px;
+    }
+
+    .impersonation-banner.is-collapsed .impersonation-banner-copy span,
+    .impersonation-banner.is-collapsed .impersonation-stop-btn {
+      display: none;
+    }
+
+    .impersonation-banner.is-collapsed .impersonation-banner-copy {
+      flex: 0 1 auto;
+      max-width: 120px;
+    }
+
     body.dark .impersonation-banner {
       background: rgba(124,45,18,0.92);
       border-color: rgba(251,146,60,0.45);
+      color: #ffedd5;
+    }
+
+    body.dark .impersonation-banner .impersonation-icon-btn {
+      background: rgba(251,146,60,0.18);
       color: #ffedd5;
     }
         .global-live-banner {
@@ -9270,11 +9319,17 @@
 </div>
 
 <div id="impersonation-banner" class="impersonation-banner" style="display:none;">
+  <button class="impersonation-icon-btn impersonation-drag-handle" type="button" aria-label="Simulationsbanner verschieben">
+    <i class="fas fa-grip-lines"></i>
+  </button>
   <div class="impersonation-banner-copy">
     <strong>Simulation aktiv</strong>
     <span id="impersonation-banner-text"></span>
   </div>
-  <button type="button" onclick="stopAdminImpersonation_()">Zurück zu Super-Admin</button>
+  <button class="impersonation-icon-btn" type="button" onclick="toggleImpersonationBannerCollapsed_()" aria-label="Simulationsbanner einklappen">
+    <i id="impersonation-collapse-icon" class="fas fa-chevron-up"></i>
+  </button>
+  <button class="impersonation-stop-btn" type="button" onclick="stopAdminImpersonation_()">Zurück</button>
 </div>
 
 <div class="shell">
@@ -12153,6 +12208,69 @@
         }
       }
 
+      function applyImpersonationBannerState_() {
+        const banner = document.getElementById('impersonation-banner');
+        if (!banner) return;
+        const collapsed = localStorage.getItem('clz_impersonation_banner_collapsed_v1') === '1';
+        banner.classList.toggle('is-collapsed', collapsed);
+        const icon = document.getElementById('impersonation-collapse-icon');
+        if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+        try {
+          const pos = JSON.parse(localStorage.getItem('clz_impersonation_banner_pos_v1') || 'null');
+          if (pos && Number.isFinite(pos.left) && Number.isFinite(pos.top)) {
+            banner.style.left = Math.max(6, Math.min(pos.left, window.innerWidth - 48)) + 'px';
+            banner.style.top = Math.max(6, Math.min(pos.top, window.innerHeight - 48)) + 'px';
+            banner.style.right = 'auto';
+          }
+        } catch (e) {}
+      }
+
+      function toggleImpersonationBannerCollapsed_() {
+        const banner = document.getElementById('impersonation-banner');
+        const collapsed = !(banner && banner.classList.contains('is-collapsed'));
+        try { localStorage.setItem('clz_impersonation_banner_collapsed_v1', collapsed ? '1' : '0'); } catch (e) {}
+        applyImpersonationBannerState_();
+      }
+
+      function initImpersonationBannerDrag_() {
+        const banner = document.getElementById('impersonation-banner');
+        const handle = banner ? banner.querySelector('.impersonation-drag-handle') : null;
+        if (!banner || !handle || banner.dataset.dragReady === '1') return;
+        banner.dataset.dragReady = '1';
+        handle.addEventListener('pointerdown', function(ev) {
+          const rect = banner.getBoundingClientRect();
+          const startX = ev.clientX;
+          const startY = ev.clientY;
+          const startLeft = rect.left;
+          const startTop = rect.top;
+          const maxLeft = () => Math.max(6, window.innerWidth - banner.offsetWidth - 6);
+          const maxTop = () => Math.max(6, window.innerHeight - banner.offsetHeight - 6);
+
+          const onMove = (moveEv) => {
+            const nextLeft = Math.max(6, Math.min(maxLeft(), startLeft + moveEv.clientX - startX));
+            const nextTop = Math.max(6, Math.min(maxTop(), startTop + moveEv.clientY - startY));
+            banner.style.left = nextLeft + 'px';
+            banner.style.top = nextTop + 'px';
+            banner.style.right = 'auto';
+          };
+          const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            const finalRect = banner.getBoundingClientRect();
+            try {
+              localStorage.setItem('clz_impersonation_banner_pos_v1', JSON.stringify({
+                left: Math.round(finalRect.left),
+                top: Math.round(finalRect.top)
+              }));
+            } catch (e) {}
+          };
+
+          ev.preventDefault();
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+      }
+
       function updateImpersonationBanner_() {
         const banner = document.getElementById('impersonation-banner');
         const text = document.getElementById('impersonation-banner-text');
@@ -12166,6 +12284,8 @@
         const original = info.originalUser || {};
         text.textContent = `${currentLoginEmail || 'Benutzer'} als ${roleLabel_(currentUserRole || 'guest')} · Super-Admin: ${original.email || ''}`;
         banner.style.display = 'flex';
+        initImpersonationBannerDrag_();
+        applyImpersonationBannerState_();
       }
 
       function cacheSet_(key, value, meta = {}) {
