@@ -10482,6 +10482,8 @@
       const DARK_MODE_DARK = "dark";
       const CAL_FILTERS_KEY = "clz_calendar_filters_v1";
       const CAL_LAYOUT_KEY = "clz_calendar_layout_v1";
+      const CAL_RETURN_STATE_KEY = "clz_calendar_return_state_v1";
+      const CAL_RETURN_STATE_TTL_MS = 30 * 60 * 1000;
       const ON_AIR_BANNER_KEY = "clz_on_air_banner_test_v1";
       const BIRTHDAY_MESSAGE_TEMPLATE_KEY = "clz_birthday_message_template_v1";
       const ON_AIR_TEST_VIDEO_ID = "ZmpfGd2BpOk";
@@ -10496,6 +10498,7 @@
       let calendarAgendaProgrammaticScrollTimer = null;
       let calendarAgendaScrollRaf = null;
       let calendarAgendaScrollListenerBound = false;
+      let calendarReturnState_ = null;
       let calendarViewThumbSyncRaf = null;
       let calendarViewThumbSyncTimer = null;
       let calendarMineAssignmentsLoading = false;
@@ -15900,12 +15903,75 @@ function updateBottomNavHighlight_() {
         });
       }
 
+      function readCalendarReturnState_() {
+        if (calendarReturnState_) return calendarReturnState_;
+        try {
+          const parsed = JSON.parse(localStorage.getItem(CAL_RETURN_STATE_KEY) || 'null');
+          calendarReturnState_ = parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+          calendarReturnState_ = null;
+        }
+        return calendarReturnState_;
+      }
+
+      function freshCalendarReturnState_() {
+        const state = readCalendarReturnState_();
+        const ts = Number(state?.ts || 0);
+        if (!state || !Number.isFinite(ts) || Date.now() - ts > CAL_RETURN_STATE_TTL_MS) return null;
+        return state;
+      }
+
+      function writeCalendarReturnState_(state) {
+        calendarReturnState_ = state;
+        try {
+          if (state) localStorage.setItem(CAL_RETURN_STATE_KEY, JSON.stringify(state));
+          else localStorage.removeItem(CAL_RETURN_STATE_KEY);
+        } catch (e) {}
+      }
+
+      function saveCalendarReturnState_() {
+        if (currentTab !== 'calendar') return;
+        const root = getMainScrollRoot_();
+        const detailOpen = !!currentDetailOverlayView && String(currentDetailOverlayView || '').startsWith('calendar');
+        writeCalendarReturnState_({
+          ts: Date.now(),
+          layout: normalizeCalendarLayoutMode_(calendarLayoutMode),
+          dayKey: String(calendarAgendaActiveDayKey || '').trim(),
+          eventId: String(currentData?.meta?.eventId || currentEventId || '').trim(),
+          detailOpen,
+          scrollTop: Math.max(0, Number(root?.scrollTop || 0))
+        });
+      }
+
+      function restoreCalendarReturnState_(state) {
+        const fresh = state || freshCalendarReturnState_();
+        if (!fresh || currentTab !== 'calendar') return false;
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda' && fresh.dayKey) {
+          calendarAgendaActiveDayKey = String(fresh.dayKey || '').trim();
+        }
+        const eventId = String(fresh.eventId || '').trim();
+        if (fresh.detailOpen && eventId && Array.isArray(allEvents) && allEvents.some(ev => String(ev?.id || '') === eventId)) {
+          setTimeout(() => showEventDetails(eventId), 0);
+          return true;
+        }
+        if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda' && fresh.dayKey) {
+          setTimeout(() => positionCalendarAgendaSection_(String(fresh.dayKey || '').trim(), 'auto'), 0);
+          return true;
+        }
+        return false;
+      }
+
       function switchTab(tab) {
+        const leavingTab = String(currentTab || '');
+        if (leavingTab === 'calendar' && tab !== 'calendar') {
+          saveCalendarReturnState_();
+        }
         saveMainTabScroll_();
         if (!canUseTab_(tab)) {
           toast("Für diese Rolle nicht freigeschaltet", 1500);
           return;
         }
+        const calendarReturnState = tab === 'calendar' ? freshCalendarReturnState_() : null;
         closeServicePdfViewer_();
         if (currentDetailOverlayView) {
           closeDetailOverlay();
@@ -15928,7 +15994,7 @@ function updateBottomNavHighlight_() {
         document.getElementById('view-songs').className = (tab === 'songs') ? 'view-active' : 'view-hidden';
         document.getElementById('view-dashboard').className = (tab === 'dashboard') ? 'view-active' : 'view-hidden';
         document.getElementById('view-tools').className = (tab === 'tools') ? 'view-active' : 'view-hidden';
-        if (tab === 'calendar' && normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda') {
+        if (tab === 'calendar' && normalizeCalendarLayoutMode_(calendarLayoutMode) !== 'agenda' && !(calendarReturnState?.detailOpen && calendarReturnState?.eventId)) {
           mainTabScrollPositions_.calendar = 0;
         }
         prepareMainTabScroll_(tab);
@@ -15938,19 +16004,26 @@ function updateBottomNavHighlight_() {
           renderCalendarViewSwitch_();
           renderCalendarLayoutSwitch_();
           if (normalizeCalendarLayoutMode_(calendarLayoutMode) === 'agenda') {
-            if (!calendarAgendaActiveDayKey) {
+            if (calendarReturnState?.dayKey) {
+              calendarAgendaActiveDayKey = String(calendarReturnState.dayKey || '').trim();
+              calendarAgendaStartAtActiveOnNextRender = true;
+            } else if (!calendarAgendaActiveDayKey) {
               calendarAgendaActiveDayKey = calendarDateKeyFromDate_(new Date());
               calendarAgendaStartAtActiveOnNextRender = true;
             }
             if (allEvents.length === 0 || !calendarLoadedRangeCovers_(getCalendarLoadRange_())) {
               showCalendarSkeleton_();
-              loadCalendar();
+              loadCalendar().then(() => restoreCalendarReturnState_(calendarReturnState)).catch(() => {});
             } else {
               filterCalendar({ allowWhileLoading: true });
+              restoreCalendarReturnState_(calendarReturnState);
             }
           } else if (allEvents.length === 0) {
             showCalendarSkeleton_();
-            loadCalendar();
+            loadCalendar().then(() => restoreCalendarReturnState_(calendarReturnState)).catch(() => {});
+          } else {
+            filterCalendar({ allowWhileLoading: true });
+            restoreCalendarReturnState_(calendarReturnState);
           }
         }
         if (tab === 'songs') {
