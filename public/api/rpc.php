@@ -735,7 +735,7 @@ function rpc_prayer_member_role(string $relationship, bool $isSingle): string
 
 function rpc_default_prayer_pool_name(): string
 {
-    return 'Gebetspool';
+    return 'Kranke';
 }
 
 function rpc_prayer_pool_owner(array $user = []): string
@@ -776,6 +776,20 @@ function rpc_ensure_prayer_pool_schema(): void
              WHERE email IS NOT NULL AND email <> ""'
         );
         $stmt->execute([rpc_default_prayer_pool_name()]);
+    } catch (Throwable) {}
+    try {
+        db()->exec(
+            "UPDATE prayer_pools old_pool
+             SET old_pool.pool_name = 'Kranke'
+             WHERE old_pool.pool_name = 'Gebetspool'
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM prayer_pools existing_pool
+                 WHERE existing_pool.created_by_email <=> old_pool.created_by_email
+                   AND LOWER(existing_pool.pool_name) = 'kranke'
+                   AND existing_pool.id <> old_pool.id
+               )"
+        );
     } catch (Throwable) {}
 }
 
