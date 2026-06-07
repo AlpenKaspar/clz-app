@@ -5,44 +5,32 @@ declare(strict_types=1);
 const PEOPLE_EXITED_FIELD_ID = 'custom_060e499a-2df4-4086-b6f8-c91316408393';
 const PEOPLE_EXITED_YES_VALUE_ID = '1e719da4-9558-461e-960d-b84fe6a31bc1';
 
-function import_people(): array
+function import_people(array $options = []): array
 {
     $startedAt = date('Y-m-d H:i:s');
     $runId = import_run_start('people');
+    $smart = !empty($options['smart']) && empty($options['force']);
 
     try {
         $categoryMap = fetch_people_category_map();
         $customDefs = fetch_custom_field_definitions();
         upsert_custom_field_definitions($customDefs);
 
-        $customFieldIds = [];
-        foreach ($customDefs['fields'] as $field) {
-            $id = (string) ($field['field_id'] ?? '');
-            if ($id !== '') {
-                $customFieldIds[] = $id;
-            }
-        }
-        if (!in_array(PEOPLE_EXITED_FIELD_ID, $customFieldIds, true)) {
-            $customFieldIds[] = PEOPLE_EXITED_FIELD_ID;
-        }
-
-        $fields = array_values(array_unique(array_merge([
-            'gender',
-            'birthday',
-            'home_address',
-            'home_city',
-            'home_postcode',
-            'departments',
-        ], $customFieldIds)));
+        $fields = people_import_fields($customDefs);
+        $scanFields = array_values(array_unique([PEOPLE_EXITED_FIELD_ID]));
 
         $pdo = db();
         $pdo->beginTransaction();
-        $pdo->exec('DELETE FROM people_custom_fields');
+        if (!$smart) {
+            $pdo->exec('DELETE FROM people_custom_fields');
+        }
 
         $count = 0;
         $skipped = 0;
+        $unchanged = 0;
         $page = 1;
         $pageSize = 100;
+        $localModified = $smart ? people_local_modified_map() : [];
 
         while (true) {
             $data = elvanto_post('people/getAll.json', [
@@ -50,7 +38,7 @@ function import_people(): array
                 'page_size' => $pageSize,
                 'archived' => 'no',
                 'suspended' => 'no',
-                'fields' => $fields,
+                'fields' => $smart ? $scanFields : $fields,
             ]);
 
             $people = normalize_collection($data['people']['person'] ?? []);
@@ -67,8 +55,27 @@ function import_people(): array
                     continue;
                 }
 
-                upsert_person($person, $categoryMap);
-                upsert_person_custom_fields($person, $customDefs);
+                if ($smart && !person_needs_smart_update($person, $localModified)) {
+                    $unchanged++;
+                    continue;
+                }
+
+                $fullPerson = $smart ? fetch_person_info((string) $person['id'], $fields) : $person;
+                if (!$fullPerson) {
+                    $fullPerson = $person;
+                } elseif ($smart) {
+                    $fullPerson = merge_person_scan_and_detail($person, $fullPerson);
+                }
+                if (!person_is_importable($fullPerson)) {
+                    $skipped++;
+                    continue;
+                }
+
+                if ($smart) {
+                    delete_person_custom_fields((string) $fullPerson['id']);
+                }
+                upsert_person($fullPerson, $categoryMap);
+                upsert_person_custom_fields($fullPerson, $customDefs);
                 $count++;
             }
 
@@ -78,17 +85,24 @@ function import_people(): array
             $page++;
         }
 
-        set_app_setting('DATA_VERSION', (string) time());
-        set_app_setting('IMPORT_PERSONEN_LAST', date('c'));
+        if (!$smart || $count > 0) {
+            set_app_setting('DATA_VERSION', (string) time());
+            set_app_setting('IMPORT_PERSONEN_LAST', date('c'));
+        }
+        set_app_setting('IMPORT_PERSONEN_LAST_CHECK', date('c'));
 
         $pdo->commit();
-        import_run_finish($runId, 'ok', $count, "Imported {$count} people, skipped {$skipped}.");
+        $modeText = $smart ? 'Smart import' : 'Imported';
+        $extraText = $smart ? ", unchanged {$unchanged}" : '';
+        import_run_finish($runId, 'ok', $count, "{$modeText} {$count} people, skipped {$skipped}{$extraText}.");
 
         return [
             'ok' => true,
             'type' => 'people',
+            'mode' => $smart ? 'smart' : 'full',
             'count' => $count,
             'skipped' => $skipped,
+            'unchanged' => $unchanged,
             'startedAt' => $startedAt,
             'finishedAt' => date('Y-m-d H:i:s'),
         ];
@@ -99,6 +113,90 @@ function import_people(): array
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
     }
+}
+
+function people_import_fields(array $customDefs): array
+{
+    $customFieldIds = [];
+    foreach ($customDefs['fields'] as $field) {
+        $id = (string) ($field['field_id'] ?? '');
+        if ($id !== '') {
+            $customFieldIds[] = $id;
+        }
+    }
+    if (!in_array(PEOPLE_EXITED_FIELD_ID, $customFieldIds, true)) {
+        $customFieldIds[] = PEOPLE_EXITED_FIELD_ID;
+    }
+
+    return array_values(array_unique(array_merge([
+        'gender',
+        'birthday',
+        'home_address',
+        'home_city',
+        'home_postcode',
+        'departments',
+    ], $customFieldIds)));
+}
+
+function people_local_modified_map(): array
+{
+    $rows = db()->query('SELECT id, date_modified FROM people')->fetchAll();
+    $map = [];
+    foreach ($rows as $row) {
+        $id = trim((string) ($row['id'] ?? ''));
+        if ($id !== '') {
+            $map[$id] = normalize_modified_value($row['date_modified'] ?? null);
+        }
+    }
+    return $map;
+}
+
+function normalize_modified_value(mixed $value): string
+{
+    return parse_elvanto_datetime($value) ?? '';
+}
+
+function person_needs_smart_update(array $person, array $localModified): bool
+{
+    $id = trim((string) ($person['id'] ?? ''));
+    if ($id === '' || !array_key_exists($id, $localModified)) {
+        return true;
+    }
+    $remoteModified = normalize_modified_value($person['date_modified'] ?? null);
+    if ($remoteModified === '') {
+        return true;
+    }
+    return $remoteModified !== (string) ($localModified[$id] ?? '');
+}
+
+function fetch_person_info(string $id, array $fields): ?array
+{
+    $id = trim($id);
+    if ($id === '') {
+        return null;
+    }
+    try {
+        $data = elvanto_post('people/getInfo.json', [
+            'id' => $id,
+            'fields' => $fields,
+        ]);
+        $person = $data['person'] ?? null;
+        return is_array($person) ? $person : null;
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function merge_person_scan_and_detail(array $scan, array $detail): array
+{
+    $merged = $scan;
+    foreach ($detail as $key => $value) {
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $merged[$key] = $value;
+    }
+    return $merged;
 }
 
 function fetch_people_category_map(): array
@@ -349,6 +447,16 @@ function upsert_person_custom_fields(array $person, array $defs): void
             ':imported_at' => date('Y-m-d H:i:s'),
         ]);
     }
+}
+
+function delete_person_custom_fields(string $personId): void
+{
+    $personId = trim($personId);
+    if ($personId === '') {
+        return;
+    }
+    $stmt = db()->prepare('DELETE FROM people_custom_fields WHERE person_id = ?');
+    $stmt->execute([$personId]);
 }
 
 function normalize_collection(mixed $value): array
