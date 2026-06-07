@@ -378,6 +378,12 @@ function import_calendar_services(string $startStr, string $endStr): int
                 }
                 $seen[$uniqueKey] = true;
 
+                $servicePayload = $service;
+                $servicePayload['_calendar_service_time_id'] = normalize_string($time['id'] ?? '');
+                $servicePayload['_calendar_service_time_label'] = normalize_string($time['name'] ?? ($time['label'] ?? ''));
+                $servicePayload['_calendar_service_time_start'] = $start['datetime'];
+                $servicePayload['_calendar_service_time_end'] = $end['datetime'] ?? null;
+
                 upsert_calendar_event([
                     'elvanto_id' => $elvantoId,
                     'start_date' => $start['date'],
@@ -395,7 +401,7 @@ function import_calendar_services(string $startStr, string $endStr): int
                     'modified_at' => parse_elvanto_datetime($service['date_modified'] ?? ($service['modified_date'] ?? ($service['updated'] ?? ''))),
                     'resources' => extract_resource_names($service),
                     'predigtskript_url' => '',
-                    'raw_json' => json_encode($service, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'raw_json' => json_encode($servicePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ]);
                 $count++;
             }

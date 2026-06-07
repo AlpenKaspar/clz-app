@@ -25729,6 +25729,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
             description: ev.Details || "",
             liveUrl: liveUrlEffective,
             pictureUrl: ev.PictureUrl || "",
+            serviceTimeId: ev.ServiceTimeId || "",
+            serviceTimeLabel: ev.ServiceTimeLabel || "",
             title: ev.Bezeichnung || "",
             isService: /^SERVICE-/i.test(String(ev._elvantoId || ""))
           }

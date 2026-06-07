@@ -1807,6 +1807,9 @@ function rpc_calendar_event(array $row): array
     $id = rpc_str($row['elvanto_id'] ?? '');
     $serviceId = rpc_starts_with($id, 'SERVICE-') ? substr($id, 8) : '';
     $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+    $serviceTime = $serviceId !== ''
+        ? rpc_calendar_service_time_for_event($serviceId, $row, $raw)
+        : ['id' => '', 'label' => ''];
     return [
         'id' => 'evt_' . rpc_str($row['id'] ?? ''),
         'Bezeichnung' => rpc_str($row['title'] ?? ''),
@@ -1828,12 +1831,59 @@ function rpc_calendar_event(array $row): array
         'CreatedByPersonName' => rpc_calendar_person_field($raw, 'name', ['created_by', 'created_by_person']),
         'BookedPersonId' => rpc_calendar_person_field($raw, 'id', ['booked_by', 'booked_by_person', 'booking_person', 'contact', 'person', 'person_id']),
         'BookedPersonName' => rpc_calendar_person_field($raw, 'name', ['booked_by', 'booked_by_person', 'booking_person', 'contact', 'person', 'person_id']),
+        'ServiceTimeId' => $serviceTime['id'],
+        'ServiceTimeLabel' => $serviceTime['label'],
         'displayColor' => rpc_calendar_display_color($row),
         '_elvantoId' => $id,
         '_elvantoUrl' => $serviceId !== '' ? rpc_elvanto_app_url('services/' . rawurlencode($serviceId)) : rpc_elvanto_calendar_url($id),
         'hasServiceFlow' => $serviceId !== '',
         '_serviceLeadInMin' => 0,
     ];
+}
+
+function rpc_calendar_service_time_for_event(string $serviceId, array $row, array $raw): array
+{
+    $rawId = rpc_str($raw['_calendar_service_time_id'] ?? '');
+    if ($rawId !== '') {
+        return [
+            'id' => $rawId,
+            'label' => rpc_str($raw['_calendar_service_time_label'] ?? ''),
+        ];
+    }
+
+    $startDate = rpc_str($row['start_date'] ?? '');
+    $startTime = rpc_time($row['start_time'] ?? '');
+    if ($serviceId === '' || $startDate === '' || $startTime === '') {
+        return ['id' => '', 'label' => ''];
+    }
+
+    try {
+        $stmt = db()->prepare(
+            "SELECT elvanto_time_id, label
+             FROM service_times
+             WHERE service_id = ? AND starts_at = ?
+             ORDER BY
+                CASE
+                    WHEN LOWER(COALESCE(label, '')) LIKE '%ablauf%' THEN 0
+                    WHEN LOWER(COALESCE(label, '')) LIKE '%livestream%' THEN 2
+                    ELSE 1
+                END,
+                label
+             LIMIT 1"
+        );
+        $stmt->execute([$serviceId, $startDate . ' ' . $startTime . ':00']);
+        $time = $stmt->fetch();
+        if (is_array($time)) {
+            return [
+                'id' => rpc_str($time['elvanto_time_id'] ?? ''),
+                'label' => rpc_str($time['label'] ?? ''),
+            ];
+        }
+    } catch (Throwable) {
+        // Calendar rows still work without service-time enrichment.
+    }
+
+    return ['id' => '', 'label' => ''];
 }
 
 function rpc_calendar_person_field(array $raw, string $wanted, ?array $keys = null): string
