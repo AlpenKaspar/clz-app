@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS group_members (
 CREATE TABLE IF NOT EXISTS calendar_events (
   id bigint unsigned NOT NULL AUTO_INCREMENT,
   elvanto_id varchar(120) NOT NULL,
+  service_time_id varchar(120) NOT NULL DEFAULT '',
   start_date date NOT NULL,
   start_time time NULL,
   end_date date NULL,
@@ -191,7 +192,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   raw_json longtext NULL,
   imported_at datetime NOT NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_calendar_unique (elvanto_id, start_date, start_time),
+  UNIQUE KEY uq_calendar_unique (elvanto_id, service_time_id, start_date, start_time),
   KEY idx_calendar_range (start_date, end_date),
   KEY idx_calendar_category (category_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

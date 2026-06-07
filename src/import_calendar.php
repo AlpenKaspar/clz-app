@@ -10,6 +10,7 @@ function import_calendar_basic(bool $force = false): array
     $runId = import_run_start('calendar');
 
     try {
+        ensure_calendar_events_service_time_schema();
         $monthsIntoFuture = 16;
         $start = new DateTimeImmutable('first day of january this year', new DateTimeZone('Europe/Zurich'));
         $end = (new DateTimeImmutable('today', new DateTimeZone('Europe/Zurich')))->modify('+' . $monthsIntoFuture . ' months');
@@ -92,6 +93,21 @@ function import_calendar_basic(bool $force = false): array
         }
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
+    }
+}
+
+function ensure_calendar_events_service_time_schema(): void
+{
+    $column = db()->query("SHOW COLUMNS FROM calendar_events LIKE 'service_time_id'")->fetch();
+    if (!is_array($column)) {
+        db()->exec("ALTER TABLE calendar_events ADD COLUMN service_time_id varchar(120) NOT NULL DEFAULT '' AFTER elvanto_id");
+    }
+
+    $index = db()->query("SHOW INDEX FROM calendar_events WHERE Key_name = 'uq_calendar_unique'")->fetchAll();
+    $columns = array_map(static fn(array $row): string => (string) ($row['Column_name'] ?? ''), is_array($index) ? $index : []);
+    if ($columns !== ['elvanto_id', 'service_time_id', 'start_date', 'start_time']) {
+        db()->exec('ALTER TABLE calendar_events DROP INDEX uq_calendar_unique');
+        db()->exec('ALTER TABLE calendar_events ADD UNIQUE KEY uq_calendar_unique (elvanto_id, service_time_id, start_date, start_time)');
     }
 }
 
@@ -295,6 +311,7 @@ function import_calendar_events(string $startStr, string $endStr, array $calenda
 
             upsert_calendar_event([
                 'elvanto_id' => $elvantoId,
+                'service_time_id' => '',
                 'start_date' => $start['date'],
                 'start_time' => $startTime,
                 'end_date' => $end['date'] ?? $start['date'],
@@ -386,6 +403,7 @@ function import_calendar_services(string $startStr, string $endStr): int
 
                 upsert_calendar_event([
                     'elvanto_id' => $elvantoId,
+                    'service_time_id' => normalize_string($time['id'] ?? ''),
                     'start_date' => $start['date'],
                     'start_time' => $start['time'],
                     'end_date' => $end['date'] ?? $start['date'],
@@ -470,11 +488,11 @@ function upsert_calendar_event(array $row): void
 {
     $stmt = db()->prepare(
         'INSERT INTO calendar_events (
-            elvanto_id, start_date, start_time, end_date, end_time, title, category, location,
+            elvanto_id, service_time_id, start_date, start_time, end_date, end_time, title, category, location,
             details, status, category_color, category_key, modified_raw, modified_at,
             resources, predigtskript_url, raw_json, imported_at
          ) VALUES (
-            :elvanto_id, :start_date, :start_time, :end_date, :end_time, :title, :category, :location,
+            :elvanto_id, :service_time_id, :start_date, :start_time, :end_date, :end_time, :title, :category, :location,
             :details, :status, :category_color, :category_key, :modified_raw, :modified_at,
             :resources, :predigtskript_url, :raw_json, :imported_at
          )
@@ -497,6 +515,7 @@ function upsert_calendar_event(array $row): void
     );
     $stmt->execute([
         ':elvanto_id' => $row['elvanto_id'],
+        ':service_time_id' => $row['service_time_id'] ?? '',
         ':start_date' => $row['start_date'],
         ':start_time' => $row['start_time'],
         ':end_date' => $row['end_date'],

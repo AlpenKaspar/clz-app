@@ -10399,7 +10399,7 @@
       let currentUserPersonName = "";
       let currentUserPersonLinkSource = "";
       let currentUserPreferences = { notifications: { birthdaysToday: false, birthdaysWeek: false, servicesMine: false }, birthdayFrequency: "off", serviceReminderLead: "off", onAirReminderLead: "off", birthdayMessageTemplate: "", birthdayGreetingStyle: "personal", calendarLayoutMode: "list" };
-      let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, publicKey: '', loading: false };
+      let pushNotificationStatus = { supported: false, enabled: false, permission: 'default', subscribed: false, serverSubscriptions: 0, publicKey: '', loading: false };
       let pushActivationInFlight = null;
       let adminUsersCache = [];
       let adminEditingUserId = 0;
@@ -10794,20 +10794,28 @@
           frequencyWeekly.title = 'Wöchentlicher Cron: zeigt Geburtstage diese Woche';
         }
         if (pushBtn) {
+          const needsReconnect = !pushNotificationStatus.subscribed
+            && pushNotificationStatus.enabled
+            && pushNotificationStatus.permission === 'granted'
+            && Number(pushNotificationStatus.serverSubscriptions || 0) > 0;
           const icon = pushNotificationStatus.subscribed ? 'fa-bell-slash' : 'fa-bell';
           const text = pushNotificationStatus.loading
             ? 'Bitte warten...'
-            : (pushNotificationStatus.subscribed ? 'Push deaktivieren' : 'Push aktivieren');
+            : (pushNotificationStatus.subscribed ? 'Push deaktivieren' : (needsReconnect ? 'Push neu verbinden' : 'Push aktivieren'));
           pushBtn.disabled = !!pushNotificationStatus.loading || !pushNotificationStatus.supported || !pushNotificationStatus.enabled;
           pushBtn.innerHTML = `<i class="fas ${icon}"></i><span>${text}</span>`;
         }
         if (status) {
+          const needsReconnect = !pushNotificationStatus.subscribed
+            && pushNotificationStatus.enabled
+            && pushNotificationStatus.permission === 'granted'
+            && Number(pushNotificationStatus.serverSubscriptions || 0) > 0;
           const active = birthdayFrequency === 'daily'
             ? 'Täglich'
             : (birthdayFrequency === 'weekly' ? 'Wöchentlich' : '');
           const pushText = !pushNotificationStatus.supported
             ? 'Push nicht verfügbar'
-            : (!pushNotificationStatus.enabled ? 'Push-Key fehlt' : (pushNotificationStatus.subscribed ? 'Push aktiv' : 'Push aus'));
+            : (!pushNotificationStatus.enabled ? 'Push-Key fehlt' : (pushNotificationStatus.subscribed ? 'Push aktiv' : (needsReconnect ? 'Push neu verbinden' : 'Push aus')));
           status.textContent = `${active ? `Aktiv: ${active}` : 'Pro Login gespeichert'} · ${pushText}`;
         }
         syncBirthdayGreetingStyleUi_();
@@ -10870,8 +10878,9 @@
           const data = await withGsRetry('notifications_getStatus', [], { retries: 1, retryDelay: 500 });
           pushNotificationStatus.enabled = !!data?.enabled;
           pushNotificationStatus.publicKey = String(data?.publicKey || '');
+          pushNotificationStatus.serverSubscriptions = Number(data?.subscriptions || 0);
           if ('serviceWorker' in navigator) {
-            const reg = await serviceWorkerReadyWithTimeout_();
+            const reg = await serviceWorkerReadyWithTimeout_(isIosDevice_() ? 4200 : 1600);
             const sub = reg && reg.pushManager?.getSubscription ? await reg.pushManager.getSubscription() : null;
             pushNotificationStatus.subscribed = !!sub;
           }

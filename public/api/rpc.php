@@ -1843,6 +1843,14 @@ function rpc_calendar_event(array $row): array
 
 function rpc_calendar_service_time_for_event(string $serviceId, array $row, array $raw): array
 {
+    $rowId = rpc_str($row['service_time_id'] ?? '');
+    if ($rowId !== '') {
+        return [
+            'id' => $rowId,
+            'label' => rpc_calendar_service_time_label_by_id($serviceId, $rowId),
+        ];
+    }
+
     $rawId = rpc_str($raw['_calendar_service_time_id'] ?? '');
     if ($rawId !== '') {
         return [
@@ -1884,6 +1892,21 @@ function rpc_calendar_service_time_for_event(string $serviceId, array $row, arra
     }
 
     return ['id' => '', 'label' => ''];
+}
+
+function rpc_calendar_service_time_label_by_id(string $serviceId, string $timeId): string
+{
+    if ($serviceId === '' || $timeId === '') {
+        return '';
+    }
+    try {
+        $stmt = db()->prepare('SELECT label FROM service_times WHERE service_id = ? AND elvanto_time_id = ? LIMIT 1');
+        $stmt->execute([$serviceId, $timeId]);
+        $row = $stmt->fetch();
+        return is_array($row) ? rpc_str($row['label'] ?? '') : '';
+    } catch (Throwable) {
+        return '';
+    }
 }
 
 function rpc_calendar_person_field(array $raw, string $wanted, ?array $keys = null): string
