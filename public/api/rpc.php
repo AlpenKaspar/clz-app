@@ -2442,7 +2442,7 @@ function rpc_service_flow(mixed $meta): array
     $rows = rpc_filter_service_rows_by_time($rows, $timeId);
     $rows = rpc_unique_service_rows($rows, ['title', 'duration_min', 'song_title', 'description', 'item_order']);
     $service = rpc_fetch_service($serviceId);
-    $cursor = rpc_service_start_datetime_from_context($service, $context);
+    $cursor = rpc_service_flow_start_datetime($service, $context, $rows);
     $flow = array_map(static function (array $row) use (&$cursor): array {
         $title = rpc_str($row['title'] ?? '');
         $raw = rpc_decode_json_array($row['raw_json'] ?? null);
@@ -2682,6 +2682,49 @@ function rpc_service_start_datetime_from_context(?array $service, array $context
     return rpc_service_start_datetime($service);
 }
 
+function rpc_service_flow_start_datetime(?array $service, array $context, array $rows): ?DateTimeImmutable
+{
+    $eventStart = $context['eventStart'] ?? null;
+    if ($eventStart instanceof DateTimeImmutable) {
+        $preServiceMinutes = rpc_service_flow_pre_service_minutes($rows);
+        return $preServiceMinutes > 0 ? $eventStart->modify('-' . $preServiceMinutes . ' minutes') : $eventStart;
+    }
+    return rpc_service_start_datetime_from_context($service, $context);
+}
+
+function rpc_service_flow_pre_service_minutes(array $rows): int
+{
+    foreach ($rows as $row) {
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+        $serviceLength = rpc_service_duration_minutes($raw['_plan_service_length'] ?? null);
+        $totalLength = rpc_service_duration_minutes($raw['_plan_total_length'] ?? null);
+        if ($serviceLength !== null && $totalLength !== null && $totalLength > $serviceLength) {
+            return min(180, max(0, $totalLength - $serviceLength));
+        }
+    }
+
+    $sum = 0;
+    foreach ($rows as $row) {
+        $duration = rpc_service_duration_minutes($row['duration_min'] ?? null);
+        $raw = rpc_decode_json_array($row['raw_json'] ?? null);
+        $title = rpc_lower(rpc_str($row['title'] ?? '') . ' ' . rpc_str($row['item_type'] ?? '') . ' ' . rpc_song_scalar($raw['when'] ?? ''));
+        $isHeading = ((int) ($raw['heading'] ?? 0)) === 1 || (($duration ?? 0) === 0 && rpc_str($row['song_title'] ?? '') === '' && rpc_str($row['description'] ?? '') === '');
+        if ($isHeading) {
+            continue;
+        }
+        $isBeforeService = str_contains($title, 'vorprogramm')
+            || str_contains($title, 'pre service')
+            || str_contains($title, 'pre-service')
+            || str_contains($title, 'before service')
+            || str_contains($title, 'before_service');
+        if (!$isBeforeService || $duration === null || $duration <= 0) {
+            break;
+        }
+        $sum += $duration;
+    }
+    return min(180, max(0, $sum));
+}
+
 function rpc_service_id_from_meta(mixed $meta): string
 {
     $meta = is_array($meta) ? $meta : [];
@@ -2696,6 +2739,7 @@ function rpc_service_context(mixed $meta): array
     $times = rpc_service_times($serviceId);
     $timeId = rpc_str($meta['timeId'] ?? ($meta['serviceTimeId'] ?? ''));
     $selected = null;
+    $eventStart = rpc_service_meta_start_datetime($meta);
 
     if ($timeId !== '') {
         foreach ($times as $time) {
@@ -2707,7 +2751,6 @@ function rpc_service_context(mixed $meta): array
     }
 
     if (!$selected) {
-        $eventStart = rpc_service_meta_start_datetime($meta);
         if ($eventStart instanceof DateTimeImmutable) {
             foreach ($times as $time) {
                 try {
@@ -2733,6 +2776,7 @@ function rpc_service_context(mixed $meta): array
         'serviceId' => $serviceId,
         'timeId' => $timeId,
         'time' => $selected,
+        'eventStart' => $eventStart,
     ];
 }
 
