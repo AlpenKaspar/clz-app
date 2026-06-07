@@ -17,7 +17,7 @@ function import_people(array $options = []): array
         upsert_custom_field_definitions($customDefs);
 
         $fields = people_import_fields($customDefs);
-        $scanFields = array_values(array_unique([PEOPLE_EXITED_FIELD_ID]));
+        $scanFields = $fields;
 
         $pdo = db();
         $pdo->beginTransaction();
@@ -32,6 +32,7 @@ function import_people(array $options = []): array
         $page = 1;
         $pageSize = 100;
         $localModified = $smart ? people_local_modified_map() : [];
+        $localCustomFingerprints = $smart ? people_local_custom_fingerprint_map($customDefs) : [];
 
         while (true) {
             $data = elvanto_post('people/getAll.json', [
@@ -57,17 +58,12 @@ function import_people(array $options = []): array
                     continue;
                 }
 
-                if ($smart && !person_needs_smart_update($person, $localModified)) {
+                if ($smart && !person_needs_smart_update($person, $localModified, $localCustomFingerprints, $customDefs)) {
                     $unchanged++;
                     continue;
                 }
 
-                $fullPerson = $smart ? fetch_person_info((string) $person['id'], $fields) : $person;
-                if (!$fullPerson) {
-                    $fullPerson = $person;
-                } elseif ($smart) {
-                    $fullPerson = merge_person_scan_and_detail($person, $fullPerson);
-                }
+                $fullPerson = $person;
                 if (!person_is_importable($fullPerson)) {
                     $skipped++;
                     continue;
@@ -174,12 +170,86 @@ function people_local_modified_map(): array
     return $map;
 }
 
+function people_local_custom_fingerprint_map(array $customDefs): array
+{
+    $rows = db()->query('SELECT person_id, field_id, field_value, option_ids FROM people_custom_fields ORDER BY person_id, field_id')->fetchAll();
+    $knownFields = [];
+    foreach ($customDefs['fields'] as $field) {
+        $fieldId = trim((string) ($field['field_id'] ?? ''));
+        if ($fieldId !== '') {
+            $knownFields[$fieldId] = true;
+        }
+    }
+
+    $values = [];
+    foreach ($rows as $row) {
+        $personId = trim((string) ($row['person_id'] ?? ''));
+        $fieldId = trim((string) ($row['field_id'] ?? ''));
+        if ($personId === '' || $fieldId === '' || !isset($knownFields[$fieldId])) {
+            continue;
+        }
+        $fieldValue = normalize_string($row['field_value'] ?? '');
+        $optionIds = normalize_option_ids_string(normalize_string($row['option_ids'] ?? ''));
+        if ($fieldValue === '' && $optionIds === '') {
+            continue;
+        }
+        $values[$personId][$fieldId] = $fieldValue . '|' . $optionIds;
+    }
+
+    $map = [];
+    foreach ($values as $personId => $personValues) {
+        ksort($personValues);
+        $parts = [];
+        foreach ($personValues as $fieldId => $value) {
+            $parts[] = $fieldId . '=' . $value;
+        }
+        $map[$personId] = implode(';', $parts);
+    }
+    return $map;
+}
+
+function person_custom_fingerprint(array $person, array $customDefs): string
+{
+    $values = [];
+    foreach ($customDefs['fields'] as $field) {
+        $fieldId = trim((string) ($field['field_id'] ?? ''));
+        if ($fieldId === '' || !array_key_exists($fieldId, $person)) {
+            continue;
+        }
+        $raw = $person[$fieldId];
+        $fieldValue = clean_elvanto_value($raw);
+        $optionIds = normalize_option_ids_string(extract_custom_option_ids($raw));
+        if ($fieldValue === '' && $optionIds === '') {
+            continue;
+        }
+        $values[$fieldId] = $fieldValue . '|' . $optionIds;
+    }
+
+    ksort($values);
+    $parts = [];
+    foreach ($values as $fieldId => $value) {
+        $parts[] = $fieldId . '=' . $value;
+    }
+    return implode(';', $parts);
+}
+
+function normalize_option_ids_string(string $value): string
+{
+    $ids = array_values(array_filter(array_map(
+        static fn(string $id): string => trim($id),
+        explode(',', $value)
+    )));
+    $ids = array_values(array_unique($ids));
+    sort($ids, SORT_STRING);
+    return implode(',', $ids);
+}
+
 function normalize_modified_value(mixed $value): string
 {
     return parse_elvanto_datetime($value) ?? '';
 }
 
-function person_needs_smart_update(array $person, array $localModified): bool
+function person_needs_smart_update(array $person, array $localModified, array $localCustomFingerprints, array $customDefs): bool
 {
     $id = trim((string) ($person['id'] ?? ''));
     if ($id === '' || !array_key_exists($id, $localModified)) {
@@ -189,7 +259,10 @@ function person_needs_smart_update(array $person, array $localModified): bool
     if ($remoteModified === '') {
         return true;
     }
-    return $remoteModified !== (string) ($localModified[$id] ?? '');
+    if ($remoteModified !== (string) ($localModified[$id] ?? '')) {
+        return true;
+    }
+    return person_custom_fingerprint($person, $customDefs) !== (string) ($localCustomFingerprints[$id] ?? '');
 }
 
 function fetch_person_info(string $id, array $fields): ?array

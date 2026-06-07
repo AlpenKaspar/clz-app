@@ -19729,8 +19729,8 @@ function updateBottomNavHighlight_() {
               const matchesCount = rawWanted === "3plus" ? teamCount >= 3 : teamCount === Number(rawWanted || "0");
               return String(c.category || "").trim().toLowerCase() === "gemeinde" && !c.isChild && matchesCount;
             }
-            if (key === "kidschurch_any") return hasAnyMultiValueFilter_(c.kidsChurchValues);
-            if (key === "ypg_any") return hasAnyMultiValueFilter_(c.youthYpgValues);
+            if (key === "kidschurch_any" || key === "kidschurch") return hasAnyMultiValueFilter_(c.kidsChurchValues);
+            if (key === "ypg_any" || key === "ypg") return hasAnyMultiValueFilter_(c.youthYpgValues);
 
             if (/^nextstep_missing:/.test(String(key || ""))) {
               const wanted = String(key || "").split(":").slice(1).join(":");
@@ -22935,7 +22935,7 @@ function updateBottomNavHighlight_() {
           return `Filter zeigt aktive Gemeinde-Erwachsene mit dem Next-Step-Eintrag "${wanted}". Personen ohne diesen Eintrag sind nicht dabei.`;
         }
 
-        if (key === "kidschurch_any") {
+        if (key === "kidschurch_any" || key === "kidschurch") {
           return "Filter zeigt Personen mit mindestens einem Eintrag bei Kids & Promiseland. Personen ohne solchen Eintrag sind nicht dabei.";
         }
         if (/^kidschurch:/.test(key)) {
@@ -22943,7 +22943,7 @@ function updateBottomNavHighlight_() {
           return `Filter zeigt Personen mit dem Kids-&-Promiseland-Eintrag "${wanted}". Andere Einträge oder leere Werte sind nicht dabei.`;
         }
 
-        if (key === "ypg_any") {
+        if (key === "ypg_any" || key === "ypg") {
           return "Filter zeigt Personen mit mindestens einem Eintrag bei Junge Erwachsene. Personen ohne solchen Eintrag sind nicht dabei.";
         }
         if (/^ypg:/.test(key)) {
@@ -23562,8 +23562,8 @@ function dashDynamicValueCard_(icon, prefix, item) {
           }));
           box.innerHTML = `
             <div class="dash-grid">
-              ${dashDynamicCard_("fa-child-reaching", "Kids & Promiseland", kidsChurch.total || 0, "kidsChurchTotal", "kidschurch", kidsChurchItems)}
-              ${dashDynamicCard_("fa-users-between-lines", "Junge Erwachsene", youthYpg.total || 0, "youthYpgTotal", "ypg", youthYpgItems)}
+              ${dashDynamicCard_("fa-child-reaching", "Kids & Promiseland", kidsChurch.total || 0, "kidsChurchTotal", "kidschurch_any", kidsChurchItems)}
+              ${dashDynamicCard_("fa-users-between-lines", "Junge Erwachsene", youthYpg.total || 0, "youthYpgTotal", "ypg_any", youthYpgItems)}
             </div>
           `;
           return;
