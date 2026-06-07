@@ -24759,6 +24759,14 @@ function dashDynamicValueCard_(icon, prefix, item) {
         return base;
       }
 
+      function calendarStatusLabel_(status) {
+        const value = String(status || '').trim().toLowerCase();
+        if (value === 'public') return '\u00d6ffentlich';
+        if (value === 'private') return 'Privat';
+        if (value === 'draft') return 'Entwurf';
+        return String(status || '').trim();
+      }
+
       function renderServiceSeriesSwitcher_(extraClass = '') {
         if (!Array.isArray(currentServiceSeries) || currentServiceSeries.length <= 1) return '';
         return `<div class="service-detail-switcher ${escapeAttr(extraClass || '')}">${currentServiceSeries.map((item, index) => `<button type="button" class="service-time-bubble ${index === currentServiceSeriesIndex ? 'is-active' : ''}" onclick="switchServiceSeriesItem(${index})">${escapeHtml(buildServiceBubbleLabel_(item, index, currentServiceSeries))}</button>`).join('')}</div>`;
@@ -25669,6 +25677,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
         if (!ev) return;
         const liveUrlRaw = String(ev.Live_URL || ev.live_url || ev.LIVE_URL || '').trim();
         const liveUrlEffective = liveUrlRaw || (isOnAirBannerTestEnabled_() && /^SERVICE-/i.test(String(ev._elvantoId || '')) ? buildYoutubeWatchUrl_(ON_AIR_TEST_VIDEO_ID) : '');
+        const statusLabel = calendarStatusLabel_(ev.Status || '');
 
         if (!currentServiceSeries.length || !currentServiceSeries.some(item => String(item.id || '') === String(id || ''))) {
           currentServiceSeries = [ev];
@@ -25712,7 +25721,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
                 : ev.BookedPersonName,
               allowHtml: !!ev.BookedPersonId
             } : null,
+            { label: "Status", value: statusLabel },
             { label: "Bemerkung", value: ev.Details || ev.DETAILS || "", preline: true, allowHtml: true },
+            !isGuestRole_() ? { label: "Admin-Notizen", value: ev.AdminNotes || "", preline: true, allowHtml: true } : null,
             { label: "Ressourcen", value: ev.Ressourcen || ev.RESSOURCEN || "", bubbleCsv: true },
             { label: "Livestream", value: liveUrlEffective }
           ].filter(d => d && d.value),
@@ -25725,6 +25736,7 @@ function dashDynamicValueCard_(icon, prefix, item) {
             endDate: ev.EndDatum || "",
             startTime: ev.StartZeit || "",
             endTime: ev.EndZeit || "",
+            status: ev.Status || "",
             location: ev.Ort || "",
             description: ev.Details || "",
             liveUrl: liveUrlEffective,
