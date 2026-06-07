@@ -28,6 +28,7 @@ function import_people(array $options = []): array
         $count = 0;
         $skipped = 0;
         $unchanged = 0;
+        $scanCount = 0;
         $page = 1;
         $pageSize = 100;
         $localModified = $smart ? people_local_modified_map() : [];
@@ -50,6 +51,7 @@ function import_people(array $options = []): array
                 if (!is_array($person) || empty($person['id'])) {
                     continue;
                 }
+                $scanCount++;
                 if (!person_is_importable($person)) {
                     $skipped++;
                     continue;
@@ -85,16 +87,22 @@ function import_people(array $options = []): array
             $page++;
         }
 
+        $scanWarning = $smart ? people_scan_count_warning($scanCount) : '';
         if (!$smart || $count > 0) {
             set_app_setting('DATA_VERSION', (string) time());
             set_app_setting('IMPORT_PERSONEN_LAST', date('c'));
         }
         set_app_setting('IMPORT_PERSONEN_LAST_CHECK', date('c'));
+        if ($smart && $scanWarning === '') {
+            set_app_setting('IMPORT_PERSONEN_SMART_LAST_SCAN_COUNT', (string) $scanCount);
+        }
 
         $pdo->commit();
         $modeText = $smart ? 'Smart import' : 'Imported';
         $extraText = $smart ? ", unchanged {$unchanged}" : '';
-        import_run_finish($runId, 'ok', $count, "{$modeText} {$count} people, skipped {$skipped}{$extraText}.");
+        $scanText = $smart ? ", scanned {$scanCount}" : '';
+        $warningText = $scanWarning !== '' ? " {$scanWarning}" : '';
+        import_run_finish($runId, 'ok', $count, "{$modeText} {$count} people, skipped {$skipped}{$extraText}{$scanText}.{$warningText}");
 
         return [
             'ok' => true,
@@ -103,6 +111,8 @@ function import_people(array $options = []): array
             'count' => $count,
             'skipped' => $skipped,
             'unchanged' => $unchanged,
+            'scanned' => $scanCount,
+            'warning' => $scanWarning,
             'startedAt' => $startedAt,
             'finishedAt' => date('Y-m-d H:i:s'),
         ];
@@ -113,6 +123,19 @@ function import_people(array $options = []): array
         import_run_finish($runId, 'error', 0, $e->getMessage());
         throw $e;
     }
+}
+
+function people_scan_count_warning(int $scanCount): string
+{
+    $previous = (int) app_setting('IMPORT_PERSONEN_SMART_LAST_SCAN_COUNT', '0');
+    if ($previous <= 0 || $scanCount <= 0) {
+        return '';
+    }
+    $tolerance = max(5, (int) floor($previous * 0.03));
+    if ($scanCount + $tolerance < $previous) {
+        return "Warnung: Elvanto lieferte nur {$scanCount} Personen; letzter guter Smart-Scan hatte {$previous}. Lokale Personen wurden nicht gelöscht.";
+    }
+    return '';
 }
 
 function people_import_fields(array $customDefs): array
