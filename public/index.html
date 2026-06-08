@@ -13615,6 +13615,8 @@
           item.kind,
           item.url || item.watchUrl,
           item.songId,
+          item.liveUploadId,
+          item.startSeconds,
           item.videoId,
           item.name,
           item.songTitle
@@ -13973,14 +13975,8 @@
           return parts;
         }
         if (item.kind === 'live') {
-          const links = Array.isArray(item.liveLinks) ? item.liveLinks : [];
-          if (links.length) {
-            parts.push(links.map(link => {
-              const label = String(link?.songTitle || link?.songId || 'Song').trim();
-              const seconds = Math.max(0, Number(link?.startSeconds || 0));
-              return seconds > 0 ? `${label} ab ${formatSongsLiveSeconds_(seconds)}` : label;
-            }).join(' · '));
-          }
+          const startSeconds = Math.max(0, Math.floor(Number(item.startSeconds || 0)));
+          if (startSeconds > 0) parts.push(`ab ${formatSongsLiveSeconds_(startSeconds)}`);
         }
         if (item.name && (!item.songTitle || item.name !== item.songTitle) && !['audio', 'mp3'].includes(String(item.name || '').toLowerCase())) parts.push(item.name);
         if (item.artist) parts.push(item.artist);
@@ -14110,25 +14106,51 @@
 
         (Array.isArray(songsLiveUploads) ? songsLiveUploads : []).forEach((upload) => {
           const url = String(upload?.url || '').trim();
-          if (!url || seenUrls.has(url)) return;
-          seenUrls.add(url);
-          out.push({
+          if (!url) return;
+          const links = Array.isArray(upload?.songLinks) ? upload.songLinks : [];
+          const base = {
             url: url,
             name: String(upload?.name || upload?.title || 'Live Song').trim(),
-            songTitle: String(upload?.title || upload?.name || 'Live Song').trim(),
-            artist: '',
             album: '',
-            arrangementName: '',
-            keyName: '',
-            bpm: '',
-            songId: '',
             sortDate: String(upload?.createdAt || '').trim(),
             fileType: String(upload?.mimeType || 'Audio').trim(),
             fileMode: 'Live',
             extension: songAssetExtension_({ url }),
             kind: 'live',
             liveUploadId: String(upload?.id || '').trim(),
-            liveLinks: Array.isArray(upload?.songLinks) ? upload.songLinks : []
+            liveLinks: links
+          };
+          if (links.length) {
+            links.forEach((link, linkIndex) => {
+              const songId = String(link?.songId || '').trim();
+              const startSeconds = Math.max(0, Math.floor(Number(link?.startSeconds || 0)));
+              out.push({
+                ...base,
+                name: base.name,
+                songTitle: String(link?.songTitle || base.name || 'Live Song').trim(),
+                artist: String(link?.artist || '').trim(),
+                arrangementName: '',
+                keyName: String(link?.keyName || '').trim(),
+                bpm: '',
+                songId,
+                startSeconds,
+                liveLinkIndex: linkIndex
+              });
+            });
+            return;
+          }
+          if (seenUrls.has(url)) return;
+          seenUrls.add(url);
+          out.push({
+            ...base,
+            songTitle: String(upload?.title || upload?.name || 'Live Song').trim(),
+            artist: '',
+            arrangementName: '',
+            keyName: '',
+            bpm: '',
+            songId: '',
+            startSeconds: 0,
+            liveLinkIndex: -1
           });
         });
 
@@ -14296,10 +14318,11 @@
         const nextAction = queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`;
         if (item.kind === 'live') {
           const links = Array.isArray(item.liveLinks) ? item.liveLinks : [];
-          const firstSongId = String(links[0]?.songId || '').trim();
+          const firstSongId = String(item.songId || links[0]?.songId || '').trim();
           menu.innerHTML = `
             <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
             ${isSuperAdminRole_() ? `<button type="button" onclick="openSongsLiveLinkEditor_(${idx})"><i class="fas fa-link"></i><span>Songs zuordnen</span></button>` : ''}
+            <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${firstSongId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
             <button type="button" onclick="openSongsPlayerLinkedSong_('${escapeAttr(firstSongId)}')" ${firstSongId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Verknuepften Song öffnen</span></button>
           `;
         } else {
@@ -14427,6 +14450,7 @@
         }
         renderSongsPlayerNow_(it);
         const isVideo = isSongsPlayerVideoItem_(it);
+        const startPosition = Math.max(0, Number(it.startSeconds || 0));
         if (isVideo) {
           stopSongsPlayerPitch_(true, true);
           stopSongsPlayerAudio_(true);
@@ -14435,9 +14459,9 @@
         } else {
           stopSongsYoutubeVideo_();
           if (autoplay && shouldUseSongsPlayerPitch_(it)) {
-            playSongsPlayerPitchAudio_(it, { position: 0 });
+            playSongsPlayerPitchAudio_(it, { position: startPosition });
           } else if (autoplay) {
-            playSongsPlayerNativeAudio_(it, { autoplay: true, position: 0 });
+            playSongsPlayerNativeAudio_(it, { autoplay: true, position: startPosition });
           } else {
             stopSongsPlayerPitch_(true, true);
             stopSongsPlayerAudio_(true);
