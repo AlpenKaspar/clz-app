@@ -7600,6 +7600,152 @@
       opacity: .42;
       cursor: not-allowed;
     }
+    .songs-live-link-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1320;
+      background: rgba(15,23,42,0.34);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 18px 12px calc(18px + env(safe-area-inset-bottom));
+    }
+    .songs-live-link-overlay[hidden] {
+      display: none !important;
+    }
+    .songs-live-link-modal {
+      width: min(640px, 100%);
+      max-height: min(760px, 88vh);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--card-bg, #fff);
+      border: 1px solid rgba(148,163,184,0.28);
+      border-radius: 22px;
+      box-shadow: 0 28px 70px rgba(15,23,42,0.28);
+    }
+    body.dark .songs-live-link-modal {
+      background: #181c24;
+      border-color: rgba(148,163,184,0.18);
+    }
+    .songs-live-link-head,
+    .songs-live-link-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border, #e5e7eb);
+    }
+    .songs-live-link-footer {
+      justify-content: flex-end;
+      border-top: 1px solid var(--border, #e5e7eb);
+      border-bottom: 0;
+    }
+    body.dark .songs-live-link-head,
+    body.dark .songs-live-link-footer {
+      border-color: rgba(148,163,184,0.16);
+    }
+    .songs-live-link-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 17px;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .songs-live-link-body {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 14px 14px;
+    }
+    .songs-live-link-search {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 14px;
+      padding: 0 12px;
+      background: var(--input-bg, #f8fafc);
+      color: inherit;
+      font: inherit;
+      font-weight: 650;
+    }
+    .songs-live-link-section-title {
+      margin: 14px 0 8px;
+      color: var(--muted, #64748b);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .songs-live-link-selected,
+    .songs-live-link-results {
+      display: grid;
+      gap: 8px;
+    }
+    .songs-live-link-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px 34px;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 14px;
+      background: var(--bg-soft, #f8fafc);
+    }
+    body.dark .songs-live-link-row {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(148,163,184,0.16);
+    }
+    .songs-live-link-row button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(37,99,235,0.10);
+      color: var(--primary);
+      cursor: pointer;
+    }
+    .songs-live-link-row input {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 10px;
+      padding: 0 8px;
+      background: var(--card-bg, #fff);
+      color: inherit;
+      font-weight: 800;
+      text-align: center;
+    }
+    .songs-live-link-song-title {
+      font-size: 14px;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .songs-live-link-song-sub {
+      color: var(--muted, #64748b);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .songs-live-link-empty {
+      padding: 12px;
+      color: var(--muted, #64748b);
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+    }
+    @media (min-width: 720px) {
+      .songs-live-link-overlay {
+        align-items: center;
+      }
+    }
     .songs-player-action-menu.as-sheet {
       left: max(12px, env(safe-area-inset-left)) !important;
       right: max(12px, env(safe-area-inset-right)) !important;
@@ -9988,6 +10134,7 @@
       </div>
     </div>
     <div id="songs-player-action-menu" class="songs-player-action-menu" hidden></div>
+    <div id="songs-live-link-overlay" class="songs-live-link-overlay" hidden onclick="if(event.target===this) closeSongsLiveLinkEditor_()"></div>
     <div id="songs-mini-player" class="songs-mini-player" aria-hidden="true">
       <button id="songs-mini-play" class="songs-player-play-btn" type="button" onclick="toggleSongsPlayerPlayback_(); event.stopPropagation();" aria-label="Abspielen">
         <i class="fas fa-play"></i>
@@ -10528,6 +10675,7 @@
       let filteredCalendarEvents = [];
       let songsLite = [];
       let songsLiveUploads = [];
+      let songsLiveLinkEditor = { uploadId: 0, title: '', query: '', links: [] };
       let songsReady = false;
       let songsLoading = false;
       let songsLoadPromise = null;
@@ -11531,7 +11679,8 @@
           personenUi_getFullDetails: '/api/rpc.php',
           personenUi_getFamily: '/api/rpc.php',
           personenUi_getGroupByName: '/api/rpc.php',
-          personenUi_extendedSearch: '/api/rpc.php'
+          personenUi_extendedSearch: '/api/rpc.php',
+          songLiveLinks_save: '/api/rpc.php'
         };
 
         for (let attempt = 1; attempt <= retries + 1; attempt++) {
@@ -13768,6 +13917,16 @@
           if (item.durationLabel) parts.push(item.durationLabel);
           return parts;
         }
+        if (item.kind === 'live') {
+          const links = Array.isArray(item.liveLinks) ? item.liveLinks : [];
+          if (links.length) {
+            parts.push(links.map(link => {
+              const label = String(link?.songTitle || link?.songId || 'Song').trim();
+              const seconds = Math.max(0, Number(link?.startSeconds || 0));
+              return seconds > 0 ? `${label} ab ${formatSongsLiveSeconds_(seconds)}` : label;
+            }).join(' · '));
+          }
+        }
         if (item.name && (!item.songTitle || item.name !== item.songTitle) && !['audio', 'mp3'].includes(String(item.name || '').toLowerCase())) parts.push(item.name);
         if (item.artist) parts.push(item.artist);
         if (item.arrangementName && item.arrangementName !== item.songTitle) parts.push(item.arrangementName);
@@ -13913,7 +14072,8 @@
             fileMode: 'Live',
             extension: songAssetExtension_({ url }),
             kind: 'live',
-            liveUploadId: String(upload?.id || '').trim()
+            liveUploadId: String(upload?.id || '').trim(),
+            liveLinks: Array.isArray(upload?.songLinks) ? upload.songLinks : []
           });
         });
 
@@ -14079,11 +14239,21 @@
         songsPlayerState.actionMenuIndex = idx;
         const nextLabel = queued ? 'Aus Nächstes entfernen' : 'Als Nächstes abspielen';
         const nextAction = queued ? `removeSongsPlayerNext_(${idx})` : `queueSongsPlayerNext_(${idx})`;
-        menu.innerHTML = `
-          <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
-          <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
-          <button type="button" onclick="openSongsPlayerSongDetail_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Zum Song</span></button>
-        `;
+        if (item.kind === 'live') {
+          const links = Array.isArray(item.liveLinks) ? item.liveLinks : [];
+          const firstSongId = String(links[0]?.songId || '').trim();
+          menu.innerHTML = `
+            <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
+            ${isSuperAdminRole_() ? `<button type="button" onclick="openSongsLiveLinkEditor_(${idx})"><i class="fas fa-link"></i><span>Songs zuordnen</span></button>` : ''}
+            <button type="button" onclick="openSongsPlayerLinkedSong_('${escapeAttr(firstSongId)}')" ${firstSongId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Verknuepften Song öffnen</span></button>
+          `;
+        } else {
+          menu.innerHTML = `
+            <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
+            <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
+            <button type="button" onclick="openSongsPlayerSongDetail_(${idx})" ${songId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Zum Song</span></button>
+          `;
+        }
         if (item.kind === 'livestream') {
           const predigtUrl = String(item?.predigtscriptUrl || '').trim();
           menu.innerHTML = `
@@ -14164,6 +14334,17 @@
         currentSongChordsExpanded = true;
         currentSongTextState = null;
         renderSongDetail_(currentSongData);
+      }
+
+      function openSongsPlayerLinkedSong_(songId) {
+        const id = String(songId || '').trim();
+        closeSongsPlayerItemMenu_();
+        if (!id) {
+          toast('Kein Song verknuepft', 1400);
+          return;
+        }
+        closeSongsPlayer_();
+        openSongDetail_(id);
       }
 
       function songsPlayerCurrentMatchesFilter_() {
@@ -14280,6 +14461,186 @@
           if (input) input.value = '';
         }
       }
+
+      function formatSongsLiveSeconds_(value) {
+        const total = Math.max(0, Math.floor(Number(value || 0)));
+        const min = Math.floor(total / 60);
+        const sec = total % 60;
+        return min > 0 ? `${min}:${String(sec).padStart(2, '0')}` : `${sec}s`;
+      }
+
+      function findSongsLiveUpload_(uploadId) {
+        const id = String(uploadId || '').trim();
+        return (songsLiveUploads || []).find(upload => String(upload?.id || '').trim() === id) || null;
+      }
+
+      function normalizeSongsLiveEditorLink_(link) {
+        const songId = String(link?.songId || '').trim();
+        const song = (songsLite || []).find(item => String(item?.songId || item?.id || '').trim() === songId) || {};
+        return {
+          songId,
+          songTitle: String(link?.songTitle || song.songTitle || song.title || song.arrangementName || songId || 'Song').trim(),
+          artist: String(link?.artist || song.artist || '').trim(),
+          keyName: String(link?.keyName || song.keyName || song.key || '').trim(),
+          startSeconds: Math.max(0, Math.floor(Number(link?.startSeconds || 0)))
+        };
+      }
+
+      function openSongsLiveLinkEditor_(idx) {
+        const item = songsPlayerState.filtered[idx];
+        if (!item || item.kind !== 'live' || !isSuperAdminRole_()) return;
+        closeSongsPlayerItemMenu_();
+        const uploadId = String(item.liveUploadId || '').trim();
+        const upload = findSongsLiveUpload_(uploadId);
+        const links = (Array.isArray(upload?.songLinks) ? upload.songLinks : (Array.isArray(item.liveLinks) ? item.liveLinks : []))
+          .map(normalizeSongsLiveEditorLink_)
+          .filter(link => link.songId);
+        songsLiveLinkEditor = {
+          uploadId: Number(uploadId || 0),
+          title: String(item.songTitle || item.name || upload?.title || 'Live Song').trim(),
+          query: '',
+          links
+        };
+        renderSongsLiveLinkEditor_();
+        const overlay = document.getElementById('songs-live-link-overlay');
+        if (overlay) overlay.hidden = false;
+        setTimeout(() => document.getElementById('songs-live-link-search')?.focus?.(), 80);
+      }
+
+      function closeSongsLiveLinkEditor_() {
+        const overlay = document.getElementById('songs-live-link-overlay');
+        if (overlay) overlay.hidden = true;
+      }
+
+      function setSongsLiveLinkQuery_(value) {
+        songsLiveLinkEditor.query = String(value || '');
+        renderSongsLiveLinkEditor_();
+        const input = document.getElementById('songs-live-link-search');
+        if (input) {
+          input.focus();
+          const len = input.value.length;
+          try { input.setSelectionRange(len, len); } catch (e) {}
+        }
+      }
+
+      function addSongsLiveLinkedSong_(songId) {
+        const id = String(songId || '').trim();
+        if (!id || songsLiveLinkEditor.links.some(link => link.songId === id)) return;
+        songsLiveLinkEditor.links.push(normalizeSongsLiveEditorLink_({ songId: id, startSeconds: 0 }));
+        songsLiveLinkEditor.query = '';
+        renderSongsLiveLinkEditor_();
+      }
+
+      function removeSongsLiveLinkedSong_(songId) {
+        const id = String(songId || '').trim();
+        songsLiveLinkEditor.links = songsLiveLinkEditor.links.filter(link => link.songId !== id);
+        renderSongsLiveLinkEditor_();
+      }
+
+      function updateSongsLiveLinkedStart_(songId, value) {
+        const id = String(songId || '').trim();
+        const target = songsLiveLinkEditor.links.find(link => link.songId === id);
+        if (target) target.startSeconds = Math.max(0, Math.floor(Number(value || 0)));
+      }
+
+      function songsLiveLinkCandidates_() {
+        const selected = new Set(songsLiveLinkEditor.links.map(link => link.songId));
+        const q = String(songsLiveLinkEditor.query || '').trim().toLowerCase();
+        const parts = q.split(/\s+/).filter(Boolean);
+        return (songsLite || [])
+          .filter(song => {
+            const songId = String(song?.songId || song?.id || '').trim();
+            if (!songId || selected.has(songId)) return false;
+            if (!parts.length) return true;
+            const hay = buildSongSearchText_(song);
+            return parts.every(part => hay.includes(part));
+          })
+          .sort((a, b) => {
+            const scoreA = getSongSearchScore_(a, parts);
+            const scoreB = getSongSearchScore_(b, parts);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+            return String(a.songTitle || a.arrangementName || '').localeCompare(String(b.songTitle || b.arrangementName || ''), 'de');
+          })
+          .slice(0, parts.length ? 12 : 8);
+      }
+
+      function renderSongsLiveLinkEditor_() {
+        const overlay = document.getElementById('songs-live-link-overlay');
+        if (!overlay) return;
+        const selectedHtml = songsLiveLinkEditor.links.length
+          ? songsLiveLinkEditor.links.map(link => `
+              <div class="songs-live-link-row">
+                <div>
+                  <div class="songs-live-link-song-title">${escapeHtml(link.songTitle)}</div>
+                  <div class="songs-live-link-song-sub">${escapeHtml([link.artist, link.keyName].filter(Boolean).join(' · ') || 'Start im Audiofile')}</div>
+                </div>
+                <input type="number" min="0" step="1" value="${escapeAttr(link.startSeconds)}" aria-label="Startsekunden" onchange="updateSongsLiveLinkedStart_('${escapeAttr(link.songId)}', this.value)" oninput="updateSongsLiveLinkedStart_('${escapeAttr(link.songId)}', this.value)">
+                <button type="button" onclick="removeSongsLiveLinkedSong_('${escapeAttr(link.songId)}')" aria-label="Song entfernen"><i class="fas fa-xmark"></i></button>
+              </div>
+            `).join('')
+          : '<div class="songs-live-link-empty">Noch kein Song verknuepft.</div>';
+        const candidates = songsLiveLinkCandidates_();
+        const candidateHtml = candidates.length
+          ? candidates.map(song => {
+              const songId = String(song?.songId || song?.id || '').trim();
+              const title = String(song?.songTitle || song?.arrangementName || 'Song').trim();
+              const sub = [song?.artist, song?.keyName, song?.bpm ? `${song.bpm} BPM` : ''].map(v => String(v || '').trim()).filter(Boolean).join(' · ');
+              return `
+                <div class="songs-live-link-row">
+                  <div>
+                    <div class="songs-live-link-song-title">${escapeHtml(title)}</div>
+                    <div class="songs-live-link-song-sub">${escapeHtml(sub || songId)}</div>
+                  </div>
+                  <div class="songs-live-link-song-sub">ab 0s</div>
+                  <button type="button" onclick="addSongsLiveLinkedSong_('${escapeAttr(songId)}')" aria-label="Song hinzufuegen"><i class="fas fa-plus"></i></button>
+                </div>
+              `;
+            }).join('')
+          : '<div class="songs-live-link-empty">Keine weiteren Songs gefunden.</div>';
+        overlay.innerHTML = `
+          <div class="songs-live-link-modal" onclick="event.stopPropagation();" role="dialog" aria-modal="true" aria-labelledby="songs-live-link-title">
+            <div class="songs-live-link-head">
+              <div id="songs-live-link-title" class="songs-live-link-title">${escapeHtml(songsLiveLinkEditor.title || 'Live Song')}</div>
+              <button class="icon-btn" type="button" onclick="closeSongsLiveLinkEditor_()" aria-label="Schliessen"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="songs-live-link-body">
+              <input id="songs-live-link-search" class="songs-live-link-search" type="search" value="${escapeAttr(songsLiveLinkEditor.query)}" placeholder="Song suchen..." oninput="setSongsLiveLinkQuery_(this.value)" autocomplete="off">
+              <div class="songs-live-link-section-title">Ausgewaehlt · Startsekunden</div>
+              <div class="songs-live-link-selected">${selectedHtml}</div>
+              <div class="songs-live-link-section-title">Song hinzufuegen</div>
+              <div class="songs-live-link-results">${candidateHtml}</div>
+            </div>
+            <div class="songs-live-link-footer">
+              <button class="btn btn-secondary" type="button" onclick="closeSongsLiveLinkEditor_()"><i class="fas fa-xmark"></i><span>Abbrechen</span></button>
+              <button class="btn" type="button" onclick="saveSongsLiveLinks_()"><i class="fas fa-check"></i><span>Speichern</span></button>
+            </div>
+          </div>
+        `;
+      }
+
+      async function saveSongsLiveLinks_() {
+        if (!isSuperAdminRole_() || !songsLiveLinkEditor.uploadId) return;
+        try {
+          const payload = {
+            uploadId: songsLiveLinkEditor.uploadId,
+            links: songsLiveLinkEditor.links.map((link, idx) => ({
+              songId: link.songId,
+              startSeconds: Math.max(0, Math.floor(Number(link.startSeconds || 0))),
+              sortOrder: idx
+            }))
+          };
+          const res = await withGsRetry('songLiveLinks_save', [payload], { retries: 1, retryDelay: 500 });
+          if (!res?.ok) throw new Error(res?.error || 'Zuordnung konnte nicht gespeichert werden.');
+          songsLiveUploads = Array.isArray(res?.liveUploads) ? res.liveUploads : songsLiveUploads;
+          songsPlayerState.items = buildSongsPlayerItems_();
+          closeSongsLiveLinkEditor_();
+          renderSongsPlayerList_();
+          toast('Live-Songs zugeordnet', 1400);
+        } catch (err) {
+          toast(normalizeErrMsg_(err), 2200);
+        }
+      }
+
       function clearSongsPlayerSearch_() {
         const inp = document.getElementById('songs-player-search');
         if (inp) inp.value = '';

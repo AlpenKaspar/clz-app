@@ -21,6 +21,21 @@ function song_live_uploads_ensure_schema(): void
             KEY idx_song_live_uploads_uploader (uploaded_by_email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS song_live_upload_links (
+            id bigint unsigned NOT NULL AUTO_INCREMENT,
+            upload_id bigint unsigned NOT NULL,
+            song_id varchar(80) NOT NULL,
+            start_seconds int unsigned NOT NULL DEFAULT 0,
+            sort_order int unsigned NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_song_live_upload_link (upload_id, song_id),
+            KEY idx_song_live_upload_links_upload (upload_id, sort_order),
+            KEY idx_song_live_upload_links_song (song_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
 }
 
 function song_live_uploads_storage_dir(): string
@@ -70,8 +85,10 @@ function song_live_uploads_list(): array
             'uploadedByEmail' => (string) ($row['uploaded_by_email'] ?? ''),
             'createdAt' => (string) ($row['created_at'] ?? ''),
             'kind' => 'live',
+            'songLinks' => [],
         ];
     }
+    song_live_uploads_attach_links($rows);
     return $rows;
 }
 
@@ -109,5 +126,116 @@ function song_live_uploads_insert(array $data): array
         'uploadedByEmail' => (string) ($data['uploaded_by_email'] ?? ''),
         'createdAt' => $createdAt,
         'kind' => 'live',
+        'songLinks' => [],
     ];
+}
+
+function song_live_uploads_attach_links(array &$uploads): void
+{
+    $ids = array_values(array_filter(array_map(static fn ($row) => (int) ($row['id'] ?? 0), $uploads)));
+    if (!$ids) {
+        return;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        "SELECT l.upload_id, l.song_id, l.start_seconds, l.sort_order, s.title, s.artist, s.default_key_name
+         FROM song_live_upload_links l
+         LEFT JOIN songs s ON s.song_id = l.song_id
+         WHERE l.upload_id IN ({$placeholders})
+         ORDER BY l.upload_id, l.sort_order, l.start_seconds, s.title"
+    );
+    $stmt->execute($ids);
+    $linksByUpload = [];
+    foreach ($stmt as $row) {
+        $uploadId = (int) ($row['upload_id'] ?? 0);
+        if ($uploadId <= 0) {
+            continue;
+        }
+        $linksByUpload[$uploadId][] = [
+            'songId' => (string) ($row['song_id'] ?? ''),
+            'songTitle' => (string) ($row['title'] ?? ''),
+            'artist' => (string) ($row['artist'] ?? ''),
+            'keyName' => (string) ($row['default_key_name'] ?? ''),
+            'startSeconds' => (int) ($row['start_seconds'] ?? 0),
+            'sortOrder' => (int) ($row['sort_order'] ?? 0),
+        ];
+    }
+
+    foreach ($uploads as &$upload) {
+        $upload['songLinks'] = $linksByUpload[(int) ($upload['id'] ?? 0)] ?? [];
+    }
+}
+
+function song_live_uploads_save_links(int $uploadId, array $links): array
+{
+    song_live_uploads_ensure_schema();
+    if ($uploadId <= 0) {
+        throw new RuntimeException('Ungueltiger Live-Upload.');
+    }
+
+    $stmt = db()->prepare('SELECT id FROM song_live_uploads WHERE id = ?');
+    $stmt->execute([$uploadId]);
+    if (!$stmt->fetchColumn()) {
+        throw new RuntimeException('Live-Upload nicht gefunden.');
+    }
+
+    $clean = [];
+    $seen = [];
+    foreach ($links as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $songId = trim((string) ($entry['songId'] ?? ''));
+        if ($songId === '' || isset($seen[$songId])) {
+            continue;
+        }
+        $seen[$songId] = true;
+        $startSeconds = max(0, (int) floor((float) ($entry['startSeconds'] ?? 0)));
+        $clean[] = [
+            'songId' => $songId,
+            'startSeconds' => $startSeconds,
+        ];
+    }
+
+    if ($clean) {
+        $songPlaceholders = implode(',', array_fill(0, count($clean), '?'));
+        $songIds = array_column($clean, 'songId');
+        $songStmt = db()->prepare("SELECT song_id FROM songs WHERE song_id IN ({$songPlaceholders})");
+        $songStmt->execute($songIds);
+        $existing = [];
+        foreach ($songStmt as $row) {
+            $existing[(string) ($row['song_id'] ?? '')] = true;
+        }
+        $clean = array_values(array_filter($clean, static fn ($entry) => isset($existing[$entry['songId']])));
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $delete = $pdo->prepare('DELETE FROM song_live_upload_links WHERE upload_id = ?');
+        $delete->execute([$uploadId]);
+        if ($clean) {
+            $insert = $pdo->prepare(
+                'INSERT INTO song_live_upload_links (upload_id, song_id, start_seconds, sort_order, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            );
+            $now = date('Y-m-d H:i:s');
+            foreach ($clean as $idx => $entry) {
+                $insert->execute([$uploadId, $entry['songId'], $entry['startSeconds'], $idx, $now, $now]);
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
+    $uploads = song_live_uploads_list();
+    foreach ($uploads as $upload) {
+        if ((int) ($upload['id'] ?? 0) === $uploadId) {
+            return $upload;
+        }
+    }
+    return ['id' => $uploadId, 'songLinks' => []];
 }

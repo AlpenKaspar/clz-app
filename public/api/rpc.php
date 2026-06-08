@@ -46,6 +46,7 @@ function rpc_dispatch(string $fn, array $args, array $user): array
             (string) ($args[2] ?? '')
         ),
         'app_loadSongsLite' => rpc_songs_lite(),
+        'songLiveLinks_save' => rpc_song_live_links_save($args[0] ?? [], $user),
         'app_loadFilterDefs' => ['ok' => true, 'filters' => rpc_contact_filters(), 'dataVersion' => rpc_data_version()],
         'app_loadDashboardStats' => ['ok' => true, 'dashboard' => rpc_is_guest_role($user) ? [] : rpc_dashboard($user), 'dataVersion' => rpc_data_version()],
         'tools_getSyncStatus' => rpc_sync_status($user),
@@ -2916,6 +2917,17 @@ function rpc_fetch_service(string $serviceId): ?array
     $stmt->execute([$serviceId]);
     $row = $stmt->fetch();
     return is_array($row) ? $row : null;
+}
+
+function rpc_song_live_links_save(mixed $payload, array $user): array
+{
+    rpc_require_real_super_admin($user);
+    $data = is_array($payload) ? $payload : [];
+    $uploadId = (int) ($data['uploadId'] ?? 0);
+    $links = is_array($data['links'] ?? null) ? $data['links'] : [];
+    $upload = song_live_uploads_save_links($uploadId, $links);
+    set_app_setting('DATA_VERSION', (string) time());
+    return ['ok' => true, 'upload' => $upload, 'liveUploads' => song_live_uploads_list(), 'dataVersion' => rpc_data_version()];
 }
 
 function rpc_songs_lite(): array

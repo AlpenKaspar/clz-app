@@ -289,6 +289,20 @@ CREATE TABLE IF NOT EXISTS song_live_uploads (
   KEY idx_song_live_uploads_uploader (uploaded_by_email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS song_live_upload_links (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  upload_id bigint unsigned NOT NULL,
+  song_id varchar(80) NOT NULL,
+  start_seconds int unsigned NOT NULL DEFAULT 0,
+  sort_order int unsigned NOT NULL DEFAULT 0,
+  created_at datetime NOT NULL,
+  updated_at datetime NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_song_live_upload_link (upload_id, song_id),
+  KEY idx_song_live_upload_links_upload (upload_id, sort_order),
+  KEY idx_song_live_upload_links_song (song_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS import_runs (
   id bigint unsigned NOT NULL AUTO_INCREMENT,
   import_type varchar(80) NOT NULL,
