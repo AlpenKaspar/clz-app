@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../../src/bootstrap.php';
+require __DIR__ . '/../../src/song_live_uploads.php';
 
 try {
     $user = require_user();
@@ -2978,12 +2979,12 @@ function rpc_songs_lite(): array
         }
     } catch (Throwable $e) {
         if (defined('APP_DEBUG') && APP_DEBUG) {
-            return ['ok' => false, 'error' => $e->getMessage(), 'songs' => [], 'dataVersion' => rpc_data_version()];
+            return ['ok' => false, 'error' => $e->getMessage(), 'songs' => [], 'liveUploads' => [], 'dataVersion' => rpc_data_version()];
         }
         $songs = [];
     }
 
-    return ['ok' => true, 'songs' => $songs, 'dataVersion' => rpc_data_version()];
+    return ['ok' => true, 'songs' => $songs, 'liveUploads' => song_live_uploads_list(), 'dataVersion' => rpc_data_version()];
 }
 
 function rpc_decode_json_array(mixed $json): array

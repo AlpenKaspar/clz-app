@@ -273,6 +273,22 @@ CREATE TABLE IF NOT EXISTS songs (
   FULLTEXT KEY ft_songs_search (title, artist, category)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS song_live_uploads (
+  id bigint unsigned NOT NULL AUTO_INCREMENT,
+  title varchar(255) NOT NULL,
+  file_name varchar(255) NOT NULL,
+  original_name varchar(255) NOT NULL,
+  mime_type varchar(120) NOT NULL DEFAULT '',
+  file_size bigint unsigned NOT NULL DEFAULT 0,
+  public_url text NOT NULL,
+  uploaded_by bigint unsigned NULL,
+  uploaded_by_email varchar(190) NULL,
+  created_at datetime NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_song_live_uploads_created (created_at),
+  KEY idx_song_live_uploads_uploader (uploaded_by_email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS import_runs (
   id bigint unsigned NOT NULL AUTO_INCREMENT,
   import_type varchar(80) NOT NULL,

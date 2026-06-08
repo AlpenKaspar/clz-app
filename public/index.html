@@ -7414,6 +7414,31 @@
     body.dark .songs-player-tab {
       border-color: #3a4049;
     }
+    .songs-live-upload {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 16px 4px;
+    }
+    .songs-live-upload[hidden] {
+      display: none !important;
+    }
+    .songs-live-upload .btn {
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .songs-live-upload-status {
+      min-width: 0;
+      color: var(--muted, #6b7280);
+      font-size: 12px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .songs-player-list {
       flex: 1 1 auto;
       overflow-y: auto;
@@ -9950,6 +9975,12 @@
           <button class="songs-player-tab" data-filter="audio" type="button" onclick="setSongsPlayerFilter_('audio')">Audio</button>
           <button class="songs-player-tab" data-filter="playback" type="button" onclick="setSongsPlayerFilter_('playback')">Playbacks</button>
           <button class="songs-player-tab" data-filter="tracks" type="button" onclick="setSongsPlayerFilter_('tracks')">Spuren</button>
+          <button class="songs-player-tab" data-filter="live" type="button" onclick="setSongsPlayerFilter_('live')">Live</button>
+        </div>
+        <div id="songs-live-upload" class="songs-live-upload" hidden>
+          <input id="songs-live-upload-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.aif,.aiff" hidden onchange="uploadSongLiveFile_(this.files && this.files[0])">
+          <button class="btn btn-secondary" type="button" onclick="document.getElementById('songs-live-upload-file')?.click()"><i class="fas fa-cloud-arrow-up"></i><span>Live Song hochladen</span></button>
+          <span id="songs-live-upload-status" class="songs-live-upload-status"></span>
         </div>
 
         <div id="songs-player-list" class="songs-player-list"></div>
@@ -10496,6 +10527,7 @@
       let printOverlayContext = null;
       let filteredCalendarEvents = [];
       let songsLite = [];
+      let songsLiveUploads = [];
       let songsReady = false;
       let songsLoading = false;
       let songsLoadPromise = null;
@@ -12653,6 +12685,7 @@
             const res = await withGsRetry('app_loadSongsLite', [], { retries: 2, retryDelay: 700 });
             if (!res?.ok) throw new Error(res?.error || 'Songs konnten nicht geladen werden.');
             songsLite = Array.isArray(res?.songs) ? res.songs : [];
+            songsLiveUploads = Array.isArray(res?.liveUploads) ? res.liveUploads : [];
             songsReady = true;
             renderSongsCategoryChips_();
             runSongsSearch_();
@@ -12917,6 +12950,7 @@
 
       function getSongAssetGroupMeta_(asset) {
         const item = asset && typeof asset === 'object' ? asset : {};
+        if (String(item.kind || '').toLowerCase() === 'live') return { key: 'live', label: 'Live', icon: 'fa-microphone-lines' };
         const type = String(item.type || '').toLowerCase();
         const name = String(item.name || '').toLowerCase();
         const url = String(item.url || '').toLowerCase();
@@ -13044,6 +13078,7 @@
         return !!buildYoutubeEmbedUrl_(asset.embed || asset.url);
       }
       function classifyAudioForPlayer_(asset) {
+        if (String(asset?.kind || '').toLowerCase() === 'live') return 'live';
         const text = [asset?.name, asset?.type, asset?.mode].map(v => String(v || '').toLowerCase()).join(' ');
         if (text.includes('playback') || text.includes('demo')) return 'playback';
         if (text.includes('spur') || text.includes('track') || text.includes('drum') || text.includes('click')) return 'tracks';
@@ -13364,6 +13399,7 @@
       function songsPlayerKindLabel_(item) {
         if (item?.kind === 'playback') return 'Playback';
         if (item?.kind === 'tracks') return 'Spur';
+        if (item?.kind === 'live') return 'Live';
         if (item?.kind === 'livestream') return 'Livestream';
         if (item?.kind === 'video') return 'Video';
         return 'Audio';
@@ -13858,6 +13894,29 @@
           });
         };
 
+        (Array.isArray(songsLiveUploads) ? songsLiveUploads : []).forEach((upload) => {
+          const url = String(upload?.url || '').trim();
+          if (!url || seenUrls.has(url)) return;
+          seenUrls.add(url);
+          out.push({
+            url: url,
+            name: String(upload?.name || upload?.title || 'Live Song').trim(),
+            songTitle: String(upload?.title || upload?.name || 'Live Song').trim(),
+            artist: '',
+            album: '',
+            arrangementName: '',
+            keyName: '',
+            bpm: '',
+            songId: '',
+            sortDate: String(upload?.createdAt || '').trim(),
+            fileType: String(upload?.mimeType || 'Audio').trim(),
+            fileMode: 'Live',
+            extension: songAssetExtension_({ url }),
+            kind: 'live',
+            liveUploadId: String(upload?.id || '').trim()
+          });
+        });
+
         (songsLite || []).forEach((song) => {
           collectSongVideoEmbeds_(song, null).forEach((embed, index) => addVideo(embed, song, null, index ? `YouTube ${index + 1}` : 'YouTube'));
           // 1) Song-Level-Assets
@@ -13925,7 +13984,7 @@
           host.innerHTML = '';
           if (empty) {
             empty.hidden = false;
-            const hasAnySongs = Array.isArray(songsLite) && songsLite.length > 0;
+            const hasAnySongs = (Array.isArray(songsLite) && songsLite.length > 0) || (Array.isArray(songsLiveUploads) && songsLiveUploads.length > 0);
             empty.textContent = hasAnySongs
               ? 'Keine abspielbaren Audio-Dateien gefunden.'
               : 'Songs werden noch geladen...';
@@ -13939,9 +13998,10 @@
           const kindLabel = it.kind === 'livestream' ? 'Live' : songsPlayerKindLabel_(it);
           const title = escapeHtml(it.songTitle || it.name);
           const sub = escapeHtml(songsPlayerSubtitleParts_(it).join(' · '));
+          const iconClass = it.kind === 'live' ? 'fas fa-microphone-lines' : ((it.kind === 'video' || it.kind === 'livestream') ? 'fab fa-youtube' : 'fas fa-music');
           return `
             <div class="songs-player-item${isActive ? ' active' : ''}${queued ? ' queued-next' : ''}" data-idx="${idx}" onclick="onSongsPlayerItemClick_(event, ${idx})" onpointerdown="startSongsPlayerLongPress_(event, ${idx})" onpointermove="moveSongsPlayerLongPress_(event)" onpointerup="cancelSongsPlayerLongPress_()" onpointercancel="cancelSongsPlayerLongPress_()" onpointerleave="cancelSongsPlayerLongPress_()">
-              <span class="songs-player-item-icon${(it.kind === 'video' || it.kind === 'livestream') ? ' video' : ''}"><i class="${(it.kind === 'video' || it.kind === 'livestream') ? 'fab fa-youtube' : 'fas fa-music'}"></i></span>
+              <span class="songs-player-item-icon${(it.kind === 'video' || it.kind === 'livestream') ? ' video' : ''}"><i class="${iconClass}"></i></span>
               <div class="songs-player-item-body">
                 <div class="songs-player-item-title">${title}</div>
                 <div class="songs-player-item-sub">${sub}</div>
@@ -14171,8 +14231,54 @@
         document.getElementById('songs-player-mode-livestream')?.classList.toggle('active', livestreamMode);
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !videoMode);
         if (livestreamMode) loadSongsLivestreamItems_();
+        updateSongsLiveUploadUi_();
         renderSongsPlayerList_();
         updateSongsPlayerPitchControls_();
+      }
+      function updateSongsLiveUploadUi_() {
+        const box = document.getElementById('songs-live-upload');
+        if (!box) return;
+        const visible = normalizeSongsPlayerFilter_(songsPlayerState.currentFilter) === 'live' && isSuperAdminRole_();
+        box.hidden = !visible;
+        if (!visible) {
+          const status = document.getElementById('songs-live-upload-status');
+          if (status) status.textContent = '';
+        }
+      }
+      async function uploadSongLiveFile_(file) {
+        const input = document.getElementById('songs-live-upload-file');
+        const status = document.getElementById('songs-live-upload-status');
+        if (!file) return;
+        if (!isSuperAdminRole_()) {
+          toast('Nur Super-Admins duerfen Live-Songs hochladen.', 1800);
+          if (input) input.value = '';
+          return;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        form.append('title', String(file.name || '').replace(/\.[a-z0-9]+$/i, ''));
+        if (status) status.textContent = 'Upload laeuft...';
+        try {
+          const res = await fetch('/api/song-live-upload.php', {
+            method: 'POST',
+            body: form,
+            credentials: 'same-origin'
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload fehlgeschlagen.');
+          toast('Live Song hochgeladen', 1600);
+          if (status) status.textContent = '';
+          await ensureSongsLiteLoaded_(true);
+          songsPlayerState.items = buildSongsPlayerItems_();
+          songsPlayerState.currentFilter = 'live';
+          updateSongsLiveUploadUi_();
+          renderSongsPlayerList_();
+        } catch (err) {
+          if (status) status.textContent = normalizeErrMsg_(err);
+          toast(normalizeErrMsg_(err), 2400);
+        } finally {
+          if (input) input.value = '';
+        }
       }
       function clearSongsPlayerSearch_() {
         const inp = document.getElementById('songs-player-search');
@@ -14337,6 +14443,7 @@
         document.getElementById('songs-player-mode-audio')?.classList.toggle('active', !openVideoMode);
         if (openVideoMode) songsPlayerPitchState.panelOpen = false;
         if (openLivestreamMode) loadSongsLivestreamItems_();
+        updateSongsLiveUploadUi_();
         renderSongsPlayerList_();
         updateSongsPlayerShuffleButton_();
         updateSongsPlayerPitchControls_();
