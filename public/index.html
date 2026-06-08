@@ -7420,6 +7420,7 @@
       justify-content: center;
       gap: 8px;
       padding: 6px 16px 4px;
+      flex-wrap: wrap;
     }
     .songs-live-upload[hidden] {
       display: none !important;
@@ -7438,6 +7439,32 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .songs-live-dropzone {
+      flex: 1 1 260px;
+      min-height: 44px;
+      border: 1px dashed rgba(37,99,235,0.34);
+      border-radius: 16px;
+      background: rgba(37,99,235,0.06);
+      color: var(--muted, #64748b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      transition: background .16s ease, border-color .16s ease, color .16s ease;
+    }
+    .songs-live-dropzone.is-dragging {
+      background: rgba(37,99,235,0.14);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    body.dark .songs-live-dropzone {
+      background: rgba(96,165,250,0.10);
+      border-color: rgba(147,197,253,0.34);
     }
     .songs-player-list {
       flex: 1 1 auto;
@@ -7685,7 +7712,7 @@
     }
     .songs-live-link-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 96px 34px;
+      grid-template-columns: minmax(0, 1fr) 148px 34px;
       align-items: center;
       gap: 8px;
       padding: 9px 10px;
@@ -7719,6 +7746,31 @@
       color: inherit;
       font-weight: 800;
       text-align: center;
+    }
+    .songs-live-link-time {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .songs-live-link-time label {
+      display: grid;
+      gap: 3px;
+      color: var(--muted, #64748b);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .songs-live-link-time input {
+      min-height: 32px;
+      font-size: 13px;
+    }
+    @media (max-width: 430px) {
+      .songs-live-link-row {
+        grid-template-columns: minmax(0, 1fr) 126px 34px;
+      }
+      .songs-live-link-time {
+        gap: 4px;
+      }
     }
     .songs-live-link-song-title {
       font-size: 14px;
@@ -10124,8 +10176,11 @@
           <button class="songs-player-tab" data-filter="live" type="button" onclick="setSongsPlayerFilter_('live')">Live</button>
         </div>
         <div id="songs-live-upload" class="songs-live-upload" hidden>
-          <input id="songs-live-upload-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.aif,.aiff" hidden onchange="uploadSongLiveFile_(this.files && this.files[0])">
+          <input id="songs-live-upload-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,.opus,.flac,.aif,.aiff" multiple hidden onchange="uploadSongLiveFiles_(this.files)">
           <button class="btn btn-secondary" type="button" onclick="document.getElementById('songs-live-upload-file')?.click()"><i class="fas fa-cloud-arrow-up"></i><span>Live Song hochladen</span></button>
+          <div id="songs-live-dropzone" class="songs-live-dropzone" ondragenter="onSongsLiveDrag_(event, true)" ondragover="onSongsLiveDrag_(event, true)" ondragleave="onSongsLiveDrag_(event, false)" ondrop="dropSongsLiveFiles_(event)">
+            <i class="fas fa-arrow-down-to-bracket"></i><span>Audio hier ablegen</span>
+          </div>
           <span id="songs-live-upload-status" class="songs-live-upload-status"></span>
         </div>
 
@@ -14426,7 +14481,28 @@
           if (status) status.textContent = '';
         }
       }
-      async function uploadSongLiveFile_(file) {
+      function onSongsLiveDrag_(event, active) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const zone = document.getElementById('songs-live-dropzone');
+        if (zone) zone.classList.toggle('is-dragging', !!active);
+      }
+
+      function dropSongsLiveFiles_(event) {
+        onSongsLiveDrag_(event, false);
+        const files = event?.dataTransfer?.files || [];
+        uploadSongLiveFiles_(files);
+      }
+
+      async function uploadSongLiveFiles_(files) {
+        const list = Array.from(files || []).filter(Boolean);
+        if (!list.length) return;
+        for (let i = 0; i < list.length; i += 1) {
+          await uploadSongLiveFile_(list[i], { index: i + 1, total: list.length });
+        }
+      }
+
+      async function uploadSongLiveFile_(file, progress = {}) {
         const input = document.getElementById('songs-live-upload-file');
         const status = document.getElementById('songs-live-upload-status');
         if (!file) return;
@@ -14438,7 +14514,9 @@
         const form = new FormData();
         form.append('file', file);
         form.append('title', String(file.name || '').replace(/\.[a-z0-9]+$/i, ''));
-        if (status) status.textContent = 'Upload laeuft...';
+        const total = Number(progress.total || 1);
+        const index = Number(progress.index || 1);
+        if (status) status.textContent = total > 1 ? `Upload ${index}/${total} laeuft...` : 'Upload laeuft...';
         try {
           const res = await fetch('/api/song-live-upload.php', {
             method: 'POST',
@@ -14543,6 +14621,20 @@
         if (target) target.startSeconds = Math.max(0, Math.floor(Number(value || 0)));
       }
 
+      function updateSongsLiveLinkedStartPart_(songId, part, value) {
+        const id = String(songId || '').trim();
+        const target = songsLiveLinkEditor.links.find(link => link.songId === id);
+        if (!target) return;
+        const current = Math.max(0, Math.floor(Number(target.startSeconds || 0)));
+        const minutes = Math.floor(current / 60);
+        const seconds = current % 60;
+        if (part === 'minutes') {
+          target.startSeconds = Math.max(0, Math.floor(Number(value || 0))) * 60 + seconds;
+        } else {
+          target.startSeconds = minutes * 60 + Math.min(59, Math.max(0, Math.floor(Number(value || 0))));
+        }
+      }
+
       function songsLiveLinkCandidates_() {
         const selected = new Set(songsLiveLinkEditor.links.map(link => link.songId));
         const q = String(songsLiveLinkEditor.query || '').trim().toLowerCase();
@@ -14568,16 +14660,24 @@
         const overlay = document.getElementById('songs-live-link-overlay');
         if (!overlay) return;
         const selectedHtml = songsLiveLinkEditor.links.length
-          ? songsLiveLinkEditor.links.map(link => `
+          ? songsLiveLinkEditor.links.map(link => {
+              const start = Math.max(0, Math.floor(Number(link.startSeconds || 0)));
+              const minutes = Math.floor(start / 60);
+              const seconds = start % 60;
+              return `
               <div class="songs-live-link-row">
                 <div>
                   <div class="songs-live-link-song-title">${escapeHtml(link.songTitle)}</div>
                   <div class="songs-live-link-song-sub">${escapeHtml([link.artist, link.keyName].filter(Boolean).join(' · ') || 'Start im Audiofile')}</div>
                 </div>
-                <input type="number" min="0" step="1" value="${escapeAttr(link.startSeconds)}" aria-label="Startsekunden" onchange="updateSongsLiveLinkedStart_('${escapeAttr(link.songId)}', this.value)" oninput="updateSongsLiveLinkedStart_('${escapeAttr(link.songId)}', this.value)">
+                <div class="songs-live-link-time">
+                  <label>Min.<input type="number" min="0" step="1" value="${escapeAttr(minutes)}" aria-label="Start Minuten" onchange="updateSongsLiveLinkedStartPart_('${escapeAttr(link.songId)}','minutes', this.value)" oninput="updateSongsLiveLinkedStartPart_('${escapeAttr(link.songId)}','minutes', this.value)"></label>
+                  <label>Sek.<input type="number" min="0" max="59" step="1" value="${escapeAttr(seconds)}" aria-label="Start Sekunden" onchange="updateSongsLiveLinkedStartPart_('${escapeAttr(link.songId)}','seconds', this.value)" oninput="updateSongsLiveLinkedStartPart_('${escapeAttr(link.songId)}','seconds', this.value)"></label>
+                </div>
                 <button type="button" onclick="removeSongsLiveLinkedSong_('${escapeAttr(link.songId)}')" aria-label="Song entfernen"><i class="fas fa-xmark"></i></button>
               </div>
-            `).join('')
+            `;
+            }).join('')
           : '<div class="songs-live-link-empty">Noch kein Song verknuepft.</div>';
         const candidates = songsLiveLinkCandidates_();
         const candidateHtml = candidates.length
