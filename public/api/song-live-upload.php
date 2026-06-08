@@ -12,8 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $user = require_user();
 $role = strtolower(trim((string) ($user['role'] ?? '')));
 $originalRole = strtolower(trim((string) ($user['impersonating']['originalUser']['role'] ?? '')));
-if ($role !== 'super_admin' && $originalRole !== 'super_admin') {
-    json_error('Nur Super-Admins duerfen Live-Songs hochladen.', 403);
+if (!in_array($role, ['admin', 'super_admin'], true) && !in_array($originalRole, ['admin', 'super_admin'], true)) {
+    json_error('Nur Admins duerfen Live-Songs hochladen.', 403);
 }
 
 $file = $_FILES['file'] ?? null;

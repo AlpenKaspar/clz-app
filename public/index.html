@@ -14321,7 +14321,7 @@
           const firstSongId = String(item.songId || links[0]?.songId || '').trim();
           menu.innerHTML = `
             <button type="button" onclick="${nextAction}"><i class="fas ${queued ? 'fa-circle-minus' : 'fa-forward-step'}"></i><span>${nextLabel}</span></button>
-            ${isSuperAdminRole_() ? `<button type="button" onclick="openSongsLiveLinkEditor_(${idx})"><i class="fas fa-link"></i><span>Songs zuordnen</span></button>` : ''}
+            ${isAdminRole_() ? `<button type="button" onclick="openSongsLiveLinkEditor_(${idx})"><i class="fas fa-link"></i><span>Songs zuordnen</span></button>` : ''}
             <button type="button" onclick="openSongsPlayerSongText_(${idx})" ${firstSongId ? '' : 'disabled'}><i class="fas fa-align-left"></i><span>Songtext anzeigen</span></button>
             <button type="button" onclick="openSongsPlayerLinkedSong_('${escapeAttr(firstSongId)}')" ${firstSongId ? '' : 'disabled'}><i class="fas fa-arrow-up-right-from-square"></i><span>Verknuepften Song öffnen</span></button>
           `;
@@ -14498,7 +14498,7 @@
       function updateSongsLiveUploadUi_() {
         const box = document.getElementById('songs-live-upload');
         if (!box) return;
-        const visible = normalizeSongsPlayerFilter_(songsPlayerState.currentFilter) === 'live' && isSuperAdminRole_();
+        const visible = normalizeSongsPlayerFilter_(songsPlayerState.currentFilter) === 'live' && isAdminRole_();
         box.hidden = !visible;
         if (!visible) {
           const status = document.getElementById('songs-live-upload-status');
@@ -14530,8 +14530,8 @@
         const input = document.getElementById('songs-live-upload-file');
         const status = document.getElementById('songs-live-upload-status');
         if (!file) return;
-        if (!isSuperAdminRole_()) {
-          toast('Nur Super-Admins duerfen Live-Songs hochladen.', 1800);
+        if (!isAdminRole_()) {
+          toast('Nur Admins duerfen Live-Songs hochladen.', 1800);
           if (input) input.value = '';
           return;
         }
@@ -14590,7 +14590,7 @@
 
       function openSongsLiveLinkEditor_(idx) {
         const item = songsPlayerState.filtered[idx];
-        if (!item || item.kind !== 'live' || !isSuperAdminRole_()) return;
+        if (!item || item.kind !== 'live' || !isAdminRole_()) return;
         closeSongsPlayerItemMenu_();
         const uploadId = String(item.liveUploadId || '').trim();
         const upload = findSongsLiveUpload_(uploadId);
@@ -14743,7 +14743,7 @@
       }
 
       async function saveSongsLiveLinks_() {
-        if (!isSuperAdminRole_() || !songsLiveLinkEditor.uploadId) return;
+        if (!isAdminRole_() || !songsLiveLinkEditor.uploadId) return;
         try {
           const payload = {
             uploadId: songsLiveLinkEditor.uploadId,

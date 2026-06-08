@@ -2921,7 +2921,7 @@ function rpc_fetch_service(string $serviceId): ?array
 
 function rpc_song_live_links_save(mixed $payload, array $user): array
 {
-    rpc_require_real_super_admin($user);
+    rpc_require_real_admin($user);
     $data = is_array($payload) ? $payload : [];
     $uploadId = (int) ($data['uploadId'] ?? 0);
     $links = is_array($data['links'] ?? null) ? $data['links'] : [];
