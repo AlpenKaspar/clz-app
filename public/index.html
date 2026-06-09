@@ -13424,14 +13424,46 @@
             return words.length >= 2 && hits >= Math.min(3, words.length);
           }) || null;
         };
-        return items.map(item => {
+        const findPredigtBySequence = (item, usedKeys, beforeDate) => {
+          const itemTitle = normTitle(item?.songTitle || item?.fullTitle || item?.name || '');
+          if (!itemTitle || !beforeDate) return null;
+          return predigtRows.find(row => {
+            const key = String(row?.key || row?.url || '').trim();
+            if (key && usedKeys.has(key)) return false;
+            const date = String(row?.date || '').trim();
+            if (!date || date >= beforeDate) return false;
+            const speaker = normTitle(row?.speaker || '');
+            if (speaker && !itemTitle.includes(speaker)) return false;
+            return true;
+          }) || null;
+        };
+        const usedPredigtKeys = new Set();
+        const enriched = items.map(item => {
           const videoId = String(item?.videoId || '').trim();
           const youtube = videoId ? youtubeByVideo.get(videoId) : null;
           const predigt = (youtube?.date ? predigtByDate.get(youtube.date) : null) || findPredigtByTitle(item);
+          if (predigt) usedPredigtKeys.add(String(predigt?.key || predigt?.url || '').trim());
           if (!youtube && !predigt) return item;
           return Object.assign({}, item, {
-            serviceDate: youtube?.date || item.serviceDate || '',
+            serviceDate: youtube?.date || predigt?.date || item.serviceDate || '',
             scheduledAt: youtube?.scheduledAt || item.scheduledAt || '',
+            predigtscriptUrl: predigt?.url || '',
+            predigtscriptTitle: predigt?.title || ''
+          });
+        });
+        let anchorDate = '';
+        return enriched.map(item => {
+          if (item?.predigtscriptUrl && item?.serviceDate) {
+            anchorDate = String(item.serviceDate || '');
+            return item;
+          }
+          if (item?.predigtscriptUrl) return item;
+          const predigt = findPredigtBySequence(item, usedPredigtKeys, anchorDate);
+          if (!predigt) return item;
+          usedPredigtKeys.add(String(predigt?.key || predigt?.url || '').trim());
+          anchorDate = String(predigt?.date || anchorDate || '');
+          return Object.assign({}, item, {
+            serviceDate: predigt?.date || item.serviceDate || '',
             predigtscriptUrl: predigt?.url || '',
             predigtscriptTitle: predigt?.title || ''
           });
@@ -26278,6 +26310,9 @@ function dashDynamicValueCard_(icon, prefix, item) {
         try {
           const parsed = new URL(cleanUrl, window.location.href);
           if (parsed.origin === window.location.origin) return parsed.href;
+          if (/^https:$/.test(parsed.protocol) && /^(www\.)?clzspiez\.ch$/i.test(parsed.hostname) && /\.pdf$/i.test(parsed.pathname)) {
+            return `/api/pdf-proxy.php?url=${encodeURIComponent(parsed.href)}`;
+          }
           return `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(parsed.href)}`;
         } catch (e) {
           return cleanUrl;
