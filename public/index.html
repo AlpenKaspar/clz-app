@@ -8032,6 +8032,30 @@
       text-overflow: ellipsis;
     }
 
+    .service-pdf-pagebar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-soft);
+    }
+
+    .service-pdf-pagebar .icon-btn {
+      width: 38px;
+      height: 38px;
+      min-height: 38px;
+    }
+
+    .service-pdf-page-label {
+      min-width: 86px;
+      text-align: center;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 950;
+    }
+
     .service-pdf-frame {
       flex: 1 1 auto;
       width: 100%;
@@ -26319,6 +26343,14 @@ function dashDynamicValueCard_(icon, prefix, item) {
         }
       }
 
+      function servicePdfPageSrc_(baseSrc, page) {
+        const cleanSrc = String(baseSrc || '').trim();
+        const pageNum = Math.max(1, Math.floor(Number(page || 1)));
+        if (!cleanSrc) return '';
+        const hash = `page=${pageNum}&view=FitH`;
+        return cleanSrc.split('#')[0] + `#${hash}`;
+      }
+
       function openServicePdfViewer_(url, title) {
         const cleanUrl = String(url || '').trim();
         if (!cleanUrl) return;
@@ -26331,16 +26363,38 @@ function dashDynamicValueCard_(icon, prefix, item) {
           overlay.hidden = true;
           document.body.appendChild(overlay);
         }
+        const initialPage = 1;
+        const frameSrc = servicePdfPageSrc_(viewerUrl || cleanUrl, initialPage);
         overlay.innerHTML = `
           <div class="service-pdf-head">
             <button class="icon-btn" type="button" onclick="closeServicePdfViewer_()" aria-label="Schliessen" title="Schliessen"><i class="fas fa-xmark"></i></button>
             <div class="service-pdf-title">${escapeHtml(title || 'PDF')}</div>
             <a class="icon-btn" href="${escapeAttr(cleanUrl)}" target="_blank" rel="noopener" aria-label="Extern oeffnen" title="Extern oeffnen"><i class="fas fa-arrow-up-right-from-square"></i></a>
           </div>
-          <iframe class="service-pdf-frame" src="${escapeAttr(viewerUrl || cleanUrl)}" title="${escapeAttr(title || 'PDF')}"></iframe>
+          <div class="service-pdf-pagebar">
+            <button id="service-pdf-prev" class="icon-btn" type="button" onclick="changeServicePdfPage_(-1)" aria-label="Vorherige Seite" title="Vorherige Seite" disabled><i class="fas fa-chevron-left"></i></button>
+            <div id="service-pdf-page-label" class="service-pdf-page-label">Seite ${initialPage}</div>
+            <button id="service-pdf-next" class="icon-btn" type="button" onclick="changeServicePdfPage_(1)" aria-label="Naechste Seite" title="Naechste Seite"><i class="fas fa-chevron-right"></i></button>
+          </div>
+          <iframe id="service-pdf-frame" class="service-pdf-frame" src="${escapeAttr(frameSrc)}" data-base-src="${escapeAttr(viewerUrl || cleanUrl)}" data-page="${initialPage}" title="${escapeAttr(title || 'PDF')}"></iframe>
         `;
         overlay.hidden = false;
         document.body.classList.add('detail-open');
+      }
+
+      function changeServicePdfPage_(delta) {
+        const frame = document.getElementById('service-pdf-frame');
+        if (!frame) return;
+        const baseSrc = String(frame.getAttribute('data-base-src') || '').trim();
+        const current = Math.max(1, Math.floor(Number(frame.getAttribute('data-page') || 1)));
+        const next = Math.max(1, current + Math.round(Number(delta || 0)));
+        if (!baseSrc || next === current) return;
+        frame.setAttribute('data-page', String(next));
+        frame.src = servicePdfPageSrc_(baseSrc, next);
+        const label = document.getElementById('service-pdf-page-label');
+        if (label) label.textContent = `Seite ${next}`;
+        const prev = document.getElementById('service-pdf-prev');
+        if (prev) prev.disabled = next <= 1;
       }
 
       function closeServicePdfViewer_() {
