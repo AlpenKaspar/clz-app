@@ -114,7 +114,8 @@ function parse_service_media_youtube_streams(string $html): array
             $title = service_media_decode_js_string($titleMatch[1]);
         }
 
-        $scheduledAt = service_media_parse_youtube_planned_at($after);
+        $dateInfo = service_media_parse_youtube_date_info($after);
+        $scheduledAt = $dateInfo['date'] ?? null;
         $videoId = service_media_nearest_youtube_video_id($prefix);
         if ($videoId === '' && preg_match('/"videoId"\s*:\s*"([A-Za-z0-9_-]{6,})"/', $around, $videoMatch)) {
             $videoId = $videoMatch[1];
@@ -130,15 +131,15 @@ function parse_service_media_youtube_streams(string $html): array
                 'resource_type' => 'youtube',
                 'resource_key' => $videoId,
                 'service_date' => $scheduledAt->format('Y-m-d'),
-                'service_time' => $scheduledAt->format('H:i:s'),
+                'service_time' => !empty($dateInfo['has_time']) ? $scheduledAt->format('H:i:s') : null,
                 'title' => $title !== '' ? $title : 'Livestream',
                 'speaker' => service_media_extract_speaker_from_title($title),
                 'url' => 'https://www.youtube.com/watch?v=' . $videoId,
                 'video_id' => $videoId,
                 'thumbnail_url' => $thumbnail,
-                'scheduled_at' => $scheduledAt->format('Y-m-d H:i:s'),
+                'scheduled_at' => !empty($dateInfo['has_time']) ? $scheduledAt->format('Y-m-d H:i:s') : null,
                 'source' => SERVICE_MEDIA_YOUTUBE_STREAMS_URL,
-                'raw_json' => json_encode(['title' => $title, 'videoId' => $videoId], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'raw_json' => json_encode(['title' => $title, 'videoId' => $videoId, 'dateText' => $dateInfo['matched_text'] ?? ''], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
         }
 
@@ -168,6 +169,93 @@ function service_media_nearest_youtube_video_id(string $prefix): string
     }
 
     return '';
+}
+
+function service_media_parse_youtube_date_info(string $chunk): array
+{
+    $plain = service_media_clean_youtube_date_text($chunk);
+    $timezone = new DateTimeZone(env('APP_TIMEZONE', 'Europe/Zurich') ?: 'Europe/Zurich');
+    $now = new DateTimeImmutable('now', $timezone);
+
+    if (preg_match('/(?:Geplant\s+f(?:Ã¼r|uer|ur|für|\\\\u00fcr):?\s*)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:,?\s*(\d{1,2}):(\d{2}))?/iu', $plain, $match)) {
+        $year = (int) $match[3];
+        if ($year < 100) {
+            $year += 2000;
+        }
+        $hour = isset($match[4]) && $match[4] !== '' ? (int) $match[4] : 0;
+        $minute = isset($match[5]) && $match[5] !== '' ? (int) $match[5] : 0;
+        return [
+            'date' => new DateTimeImmutable(sprintf('%04d-%02d-%02d %02d:%02d:00', $year, (int) $match[2], (int) $match[1], $hour, $minute), $timezone),
+            'has_time' => isset($match[4]) && $match[4] !== '',
+            'matched_text' => $match[0],
+        ];
+    }
+
+    if (preg_match('/(\d{1,2})\.?\s+([A-Za-zÃ¤Ã¶Ã¼Ã„Ã–ÃœÄÖÜäöüéèÉÈ]+)\s+(\d{4})(?:,?\s*(\d{1,2}):(\d{2}))?/u', $plain, $match)) {
+        $month = service_media_month_number($match[2]);
+        if ($month) {
+            $hour = isset($match[4]) && $match[4] !== '' ? (int) $match[4] : 0;
+            $minute = isset($match[5]) && $match[5] !== '' ? (int) $match[5] : 0;
+            return [
+                'date' => new DateTimeImmutable(sprintf('%04d-%02d-%02d %02d:%02d:00', (int) $match[3], $month, (int) $match[1], $hour, $minute), $timezone),
+                'has_time' => isset($match[4]) && $match[4] !== '',
+                'matched_text' => $match[0],
+            ];
+        }
+    }
+
+    if (preg_match('/\bheute\b/iu', $plain, $match)) {
+        return ['date' => $now->setTime(0, 0), 'has_time' => false, 'matched_text' => $match[0]];
+    }
+
+    if (preg_match('/\bgestern\b/iu', $plain, $match)) {
+        return ['date' => $now->modify('-1 day')->setTime(0, 0), 'has_time' => false, 'matched_text' => $match[0]];
+    }
+
+    if (preg_match('/vor\s+(\d+)\s+(tag|tagen|woche|wochen|monat|monaten|jahr|jahren)\b/iu', $plain, $match)) {
+        $amount = max(1, (int) $match[1]);
+        $unit = mb_strtolower($match[2], 'UTF-8');
+        $modifier = str_starts_with($unit, 'tag') ? "-{$amount} day"
+            : (str_starts_with($unit, 'woche') ? "-{$amount} week"
+            : (str_starts_with($unit, 'monat') ? "-{$amount} month" : "-{$amount} year"));
+        return ['date' => $now->modify($modifier)->setTime(0, 0), 'has_time' => false, 'matched_text' => $match[0]];
+    }
+
+    return ['date' => null, 'has_time' => false, 'matched_text' => ''];
+}
+
+function service_media_clean_youtube_date_text(string $chunk): string
+{
+    $decoded = str_replace(
+        ['\\"', '\\u0026', '\\u003d', '\\u002F', '\\/', '\\u00fc', '\\u00e4', '\\u00f6', '\\u00dc', '\\u00c4', '\\u00d6'],
+        ['"', '&', '=', '/', '/', 'ü', 'ä', 'ö', 'Ü', 'Ä', 'Ö'],
+        $chunk
+    );
+    return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($decoded), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
+}
+
+function service_media_month_number(string $monthName): ?int
+{
+    $months = [
+        'januar' => 1,
+        'februar' => 2,
+        'maerz' => 3,
+        'marz' => 3,
+        'märz' => 3,
+        'mÃ¤rz' => 3,
+        'april' => 4,
+        'mai' => 5,
+        'juni' => 6,
+        'juli' => 7,
+        'august' => 8,
+        'september' => 9,
+        'oktober' => 10,
+        'november' => 11,
+        'dezember' => 12,
+    ];
+    $key = mb_strtolower(trim($monthName), 'UTF-8');
+    $key = str_replace(['ä', 'ö', 'ü', 'Ã¤', 'Ã¶', 'Ã¼'], ['ae', 'oe', 'ue', 'ae', 'oe', 'ue'], $key);
+    return $months[$key] ?? null;
 }
 
 function service_media_parse_youtube_planned_at(string $chunk): ?DateTimeImmutable

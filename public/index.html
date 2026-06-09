@@ -13383,6 +13383,8 @@
             album: playlistTitle,
             arrangementName: '',
             durationLabel: String(row?.duration || '').trim(),
+            serviceDate: String(row?.serviceDate || '').trim(),
+            dateLabel: String(row?.dateLabel || '').trim(),
             keyName: '',
             bpm: '',
             songId: '',
@@ -13465,11 +13467,14 @@
         const enriched = items.map(item => {
           const videoId = String(item?.videoId || '').trim();
           const youtube = videoId ? youtubeByVideo.get(videoId) : null;
-          const predigt = (youtube?.date ? predigtByDate.get(youtube.date) : null) || findPredigtByTitle(item);
+          const itemDate = String(item?.serviceDate || '').trim();
+          const predigt = (youtube?.date ? predigtByDate.get(youtube.date) : null)
+            || (itemDate ? predigtByDate.get(itemDate) : null)
+            || findPredigtByTitle(item);
           if (predigt) usedPredigtKeys.add(String(predigt?.key || predigt?.url || '').trim());
           if (!youtube && !predigt) return item;
           return Object.assign({}, item, {
-            serviceDate: youtube?.date || predigt?.date || item.serviceDate || '',
+            serviceDate: youtube?.date || itemDate || predigt?.date || item.serviceDate || '',
             scheduledAt: youtube?.scheduledAt || item.scheduledAt || '',
             predigtscriptUrl: predigt?.url || '',
             predigtscriptTitle: predigt?.title || ''

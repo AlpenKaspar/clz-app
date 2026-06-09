@@ -62,12 +62,16 @@ try {
         if ($itemTitle === '') {
             $itemTitle = 'Livestream';
         }
+        $dateLabel = youtube_playlist_find_date_text($renderer);
+        $serviceDate = youtube_playlist_parse_date_label($dateLabel);
         $index = (int) ($renderer['navigationEndpoint']['watchEndpoint']['index'] ?? count($items));
         $items[] = [
             'videoId' => $itemVideoId,
             'title' => $itemTitle,
             'channel' => youtube_playlist_text($renderer['longBylineText'] ?? null),
             'duration' => youtube_playlist_text($renderer['lengthText'] ?? null),
+            'dateLabel' => $dateLabel,
+            'serviceDate' => $serviceDate,
             'index' => max(0, $index),
             'selected' => (bool) ($renderer['selected'] ?? false),
             'thumbnail' => youtube_playlist_thumbnail($renderer['thumbnail'] ?? null),
@@ -187,4 +191,84 @@ function youtube_playlist_thumbnail(mixed $value): string
     $thumbs = $value['thumbnails'];
     $last = end($thumbs);
     return is_array($last) && isset($last['url']) && is_string($last['url']) ? $last['url'] : '';
+}
+
+function youtube_playlist_find_date_text(mixed $value): string
+{
+    if (is_string($value)) {
+        $text = trim($value);
+        return youtube_playlist_text_looks_like_date($text) ? $text : '';
+    }
+    if (!is_array($value)) {
+        return '';
+    }
+    foreach (['publishedTimeText', 'dateText', 'upcomingEventData', 'thumbnailOverlays'] as $key) {
+        if (array_key_exists($key, $value)) {
+            $text = youtube_playlist_text($value[$key]);
+            if (youtube_playlist_text_looks_like_date($text)) return $text;
+            $nested = youtube_playlist_find_date_text($value[$key]);
+            if ($nested !== '') return $nested;
+        }
+    }
+    foreach ($value as $child) {
+        $nested = youtube_playlist_find_date_text($child);
+        if ($nested !== '') return $nested;
+    }
+    return '';
+}
+
+function youtube_playlist_text_looks_like_date(string $text): bool
+{
+    return (bool) preg_match('/(\d{1,2}\.\d{1,2}\.\d{2,4}|\d{1,2}\.?\s+[A-Za-zÄÖÜäöüéèÉÈ]+\s+\d{4}|\bheute\b|\bgestern\b|vor\s+\d+\s+(?:tag|tagen|woche|wochen|monat|monaten|jahr|jahren))/iu', $text);
+}
+
+function youtube_playlist_parse_date_label(string $text): string
+{
+    $plain = trim($text);
+    if ($plain === '') return '';
+    $timezone = new DateTimeZone(env('APP_TIMEZONE', 'Europe/Zurich') ?: 'Europe/Zurich');
+    $now = new DateTimeImmutable('now', $timezone);
+    if (preg_match('/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/u', $plain, $match)) {
+        $year = (int) $match[3];
+        if ($year < 100) $year += 2000;
+        return sprintf('%04d-%02d-%02d', $year, (int) $match[2], (int) $match[1]);
+    }
+    if (preg_match('/(\d{1,2})\.?\s+([A-Za-zÄÖÜäöüéèÉÈ]+)\s+(\d{4})/u', $plain, $match)) {
+        $month = youtube_playlist_month_number($match[2]);
+        return $month ? sprintf('%04d-%02d-%02d', (int) $match[3], $month, (int) $match[1]) : '';
+    }
+    if (preg_match('/\bheute\b/iu', $plain)) return $now->format('Y-m-d');
+    if (preg_match('/\bgestern\b/iu', $plain)) return $now->modify('-1 day')->format('Y-m-d');
+    if (preg_match('/vor\s+(\d+)\s+(tag|tagen|woche|wochen|monat|monaten|jahr|jahren)\b/iu', $plain, $match)) {
+        $amount = max(1, (int) $match[1]);
+        $unit = mb_strtolower($match[2], 'UTF-8');
+        $modifier = str_starts_with($unit, 'tag') ? "-{$amount} day"
+            : (str_starts_with($unit, 'woche') ? "-{$amount} week"
+            : (str_starts_with($unit, 'monat') ? "-{$amount} month" : "-{$amount} year"));
+        return $now->modify($modifier)->format('Y-m-d');
+    }
+    return '';
+}
+
+function youtube_playlist_month_number(string $monthName): ?int
+{
+    $months = [
+        'januar' => 1,
+        'februar' => 2,
+        'maerz' => 3,
+        'marz' => 3,
+        'märz' => 3,
+        'april' => 4,
+        'mai' => 5,
+        'juni' => 6,
+        'juli' => 7,
+        'august' => 8,
+        'september' => 9,
+        'oktober' => 10,
+        'november' => 11,
+        'dezember' => 12,
+    ];
+    $key = mb_strtolower(trim($monthName), 'UTF-8');
+    $key = str_replace(['ä', 'ö', 'ü'], ['ae', 'oe', 'ue'], $key);
+    return $months[$key] ?? null;
 }
