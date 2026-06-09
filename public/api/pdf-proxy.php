@@ -46,8 +46,36 @@ if (strncmp($data, '%PDF', 4) !== 0) {
 }
 
 $filename = basename($path) ?: 'predigtscript.pdf';
+$length = strlen($data);
+$range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
+
 header('Content-Type: application/pdf');
-header('Content-Length: ' . strlen($data));
 header('Content-Disposition: inline; filename="' . str_replace('"', '', $filename) . '"');
 header('Cache-Control: public, max-age=3600');
-echo $data;
+header('Accept-Ranges: bytes');
+
+if (preg_match('/^bytes=(\d*)-(\d*)$/', $range, $match)) {
+    $start = $match[1] !== '' ? (int) $match[1] : 0;
+    $end = $match[2] !== '' ? (int) $match[2] : $length - 1;
+    if ($match[1] === '' && $match[2] !== '') {
+        $suffixLength = max(0, (int) $match[2]);
+        $start = max(0, $length - $suffixLength);
+        $end = $length - 1;
+    }
+    $start = max(0, min($start, max(0, $length - 1)));
+    $end = max($start, min($end, max(0, $length - 1)));
+    $chunkLength = $end - $start + 1;
+
+    http_response_code(206);
+    header("Content-Range: bytes {$start}-{$end}/{$length}");
+    header('Content-Length: ' . $chunkLength);
+    if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') {
+        echo substr($data, $start, $chunkLength);
+    }
+    exit;
+}
+
+header('Content-Length: ' . $length);
+if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') {
+    echo $data;
+}
